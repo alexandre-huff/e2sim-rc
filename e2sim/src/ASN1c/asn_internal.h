@@ -54,11 +54,11 @@ int asn_debug_indent;
 #define ASN_DEBUG_INDENT_ADD(i) do { asn_debug_indent += i; } while(0)
 #endif	/* ASN_THREAD_SAFE */
 #if defined(BELL_LABS) /* Bell Labs version */
-extern int logAsn1c(const char *filename, int linenumber, const char *format, ...);  
+extern int logAsn1c(const char *filename, int linenumber, const char *format, ...);
 #define	ASN_DEBUG(fmt, args...)	do {		        \
     (void) logAsn1c(__FILE__, __LINE__, fmt, ##args);	\
   } while(0)
-#else  
+#else
 #define	ASN_DEBUG(fmt, args...)	do {			\
 		int adi = asn_debug_indent;		\
 		while(adi--) fprintf(stderr, " ");	\
@@ -66,7 +66,7 @@ extern int logAsn1c(const char *filename, int linenumber, const char *format, ..
 		fprintf(stderr, " (%s:%d)\n",		\
 			__FILE__, __LINE__);		\
 	} while(0)
-#endif /* BELL_LABS */  
+#endif /* BELL_LABS */
 #else	/* !C99 */
 void CC_PRINTFLIKE(1, 2) ASN_DEBUG_f(const char *fmt, ...);
 #define	ASN_DEBUG	ASN_DEBUG_f

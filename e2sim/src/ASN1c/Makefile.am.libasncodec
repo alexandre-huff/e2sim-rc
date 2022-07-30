@@ -65,6 +65,9 @@ ASN_MODULE_SRCS=	\
 	RANfunctionIDcause-Item.c	\
 	RICserviceUpdateFailure.c	\
 	RICserviceQuery.c	\
+	E2RemovalRequest.c	\
+	E2RemovalResponse.c	\
+	E2RemovalFailure.c	\
 	AMFName.c	\
 	Cause.c	\
 	CauseE2node.c	\
@@ -213,6 +216,9 @@ ASN_MODULE_HDRS=	\
 	RANfunctionIDcause-Item.h	\
 	RICserviceUpdateFailure.h	\
 	RICserviceQuery.h	\
+	E2RemovalRequest.h	\
+	E2RemovalResponse.h	\
+	E2RemovalFailure.h	\
 	AMFName.h	\
 	Cause.h	\
 	CauseE2node.h	\

@@ -35,18 +35,17 @@ using namespace std;
 
 int client_fd = 0;
 
-std::unordered_map<long, OCTET_STRING_t*> E2Sim::getRegistered_ran_functions() {
+std::unordered_map<long, encoded_ran_function_t *> E2Sim::getRegistered_ran_functions() {
   return ran_functions_registered;
 }
 
 void E2Sim::register_subscription_callback(long func_id, SubscriptionCallback cb) {
-  fprintf(stderr,"%%%%about to register callback for subscription for func_id %d\n", func_id);
+  fprintf(stderr,"about to register callback for subscription for func id %ld\n", func_id);
   subscription_callbacks[func_id] = cb;
-  
 }
 
 SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
-  fprintf(stderr, "%%%%we are getting the subscription callback for func id %d\n", func_id);
+  fprintf(stderr, "we are getting the subscription callback for func id %ld\n", func_id);
   SubscriptionCallback cb;
 
   try {
@@ -58,14 +57,14 @@ SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
 
 }
 
-void E2Sim::register_e2sm(long func_id, OCTET_STRING_t *ostr) {
+void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func) {
 
   //Error conditions:
   //If we already have an entry for func_id
-  
-  printf("%%%%about to register e2sm func desc for %d\n", func_id);
 
-  ran_functions_registered[func_id] = ostr;
+  printf("about to register e2sm func id %ld\n", func_id);
+
+  ran_functions_registered[func_id] = ran_func;
 
 }
 
@@ -99,29 +98,29 @@ void E2Sim::generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu, lo
   encoding::generate_e2apv1_subscription_response_success(e2ap_pdu, reqActionIdsAccepted, reqActionIdsRejected, accept_size, reject_size, reqRequestorId, reqInstanceId);
 }
 
-void E2Sim::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu, long requestorId, long instanceId, long ranFunctionId, long actionId, long seqNum, uint8_t *ind_header_buf, int header_length, uint8_t *ind_message_buf, int message_length) {
-  encoding::generate_e2apv1_indication_request_parameterized(e2ap_pdu, requestorId, instanceId, ranFunctionId, actionId, seqNum, ind_header_buf, header_length, ind_message_buf, message_length);
+void E2Sim::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu, e_RICindicationType indicationType, long requestorId, long instanceId, long ranFunctionId, long actionId, long seqNum, uint8_t *ind_header_buf, int header_length, uint8_t *ind_message_buf, int message_length) {
+  encoding::generate_e2apv1_indication_request_parameterized(e2ap_pdu, indicationType, requestorId, instanceId, ranFunctionId, actionId, seqNum, ind_header_buf, header_length, ind_message_buf, message_length);
 
 }
 
 int E2Sim::run_loop(int argc, char* argv[]){
 
-  printf("Start E2 Agent (E2 Simulator\n");
+  printf("Start E2 Agent (E2 Simulator)\n");
 
-  ifstream simfile;
-  string line;
+  // ifstream simfile;
+  // string line;
 
-  simfile.open("simulation.txt", ios::in);
+  // simfile.open("simulation.txt", ios::in);
 
-  if (simfile.is_open()) {
+  // if (simfile.is_open()) {
 
-    while (getline(simfile, line)) {
-      cout << line << "\n";
-    }
+  //   while (getline(simfile, line)) {
+  //     cout << line << "\n";
+  //   }
 
-    simfile.close();
+  //   simfile.close();
 
-  }
+  // }
 
   bool xmlenc = false;
 
@@ -137,28 +136,28 @@ int E2Sim::run_loop(int argc, char* argv[]){
 
   printf("After starting client\n");
   printf("client_fd value is %d\n", client_fd);
-  
+
   std::vector<encoding::ran_func_info> all_funcs;
-  RANfunctionOID_t *ranFunctionOIDe = (RANfunctionOID_t*)calloc(1,sizeof(RANfunctionOID_t));
-  uint8_t *buf = (uint8_t*)"OID123";
-  ranFunctionOIDe->buf = (uint8_t*)calloc(1,strlen((char*)buf)+1);
-  memcpy(ranFunctionOIDe->buf, buf, strlen((char*)buf)+1);
-  ranFunctionOIDe->size = strlen((char*)buf);
+  // RANfunctionOID_t *ranFunctionOIDe = (RANfunctionOID_t*)calloc(1,sizeof(RANfunctionOID_t));
+  // uint8_t *buf = (uint8_t*)"OID123";
+  // ranFunctionOIDe->buf = (uint8_t*)calloc(1,strlen((char*)buf)+1);
+  // memcpy(ranFunctionOIDe->buf, buf, strlen((char*)buf)+1);
+  // ranFunctionOIDe->size = strlen((char*)buf);
 
   //Loop through RAN function definitions that are registered
 
-  for (std::pair<long, OCTET_STRING_t*> elem : ran_functions_registered) {
+  for (std::pair<long, encoded_ran_function_t *> elem : ran_functions_registered) {
     printf("looping through ran func\n");
     encoding::ran_func_info next_func;
 
     next_func.ranFunctionId = elem.first;
-    next_func.ranFunctionDesc = elem.second;
+    next_func.ranFunctionDesc = &elem.second->ran_function_ostr;
     next_func.ranFunctionRev = (long)2;
-    next_func.ranFunctionOId = ranFunctionOIDe;
+    next_func.ranFunctionOId = &elem.second->oid;
 
     all_funcs.push_back(next_func);
   }
-    
+
   printf("about to call setup request encode\n");
   generate_e2apv1_setup_request_parameterized(pdu_setup, all_funcs);
 
@@ -170,21 +169,21 @@ int E2Sim::run_loop(int argc, char* argv[]){
 
   auto buffer_size = MAX_SCTP_BUFFER;
   unsigned char buffer[MAX_SCTP_BUFFER];
-  
+
   sctp_buffer_t data;
 
   char error_buf[300] = {0, };
   size_t errlen = 0;
 
   asn_check_constraints(&asn_DEF_E2AP_PDU, pdu_setup, error_buf, &errlen);
-  printf("error length %d\n", errlen);
+  printf("error length %ld\n", errlen);
   printf("error buf %s\n", error_buf);
 
   auto er = asn_encode_to_buffer(nullptr, ATS_ALIGNED_BASIC_PER, &asn_DEF_E2AP_PDU, pdu_setup, buffer, buffer_size);
 
   data.len = er.encoded;
 
-  fprintf(stderr, "er encded is %d\n", er.encoded);
+  fprintf(stderr, "er encded is %ld\n", er.encoded);
 
   memcpy(data.buffer, buffer, er.encoded);
 

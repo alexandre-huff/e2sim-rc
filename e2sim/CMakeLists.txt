@@ -119,7 +119,7 @@ if( DEV_PKG )
    			       VERSION ${major_version}.${minor_version}.${patch_level}
 	)
 
-	target_include_directories( e2sim_static PUBLIC "src/DEF" "src/SCTP" "src/messagerouting" "src/base" "src/encoding" )	
+	target_include_directories( e2sim_static PUBLIC "src/DEF" "src/SCTP" "src/messagerouting" "src/base" "src/encoding" )
 endif()
 
 

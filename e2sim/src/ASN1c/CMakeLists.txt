@@ -29,9 +29,9 @@ add_library( asn1_objects OBJECT ${SOURCES})
 target_include_directories (asn1_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
-  PRIVATE src)
+  PUBLIC src)
 
-if( DEV_PKG )                                   
+if( DEV_PKG )
   install( FILES
     ${HEADERS}
     DESTINATION ${install_inc}

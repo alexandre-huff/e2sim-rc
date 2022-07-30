@@ -123,6 +123,6 @@ CMD kpm_sim 10.110.102.29 36422
 Create instance of simulator :
 ```
 $ docker run <simulator-image-name>
-``` 
+```
 
 It will connect to specified e2t instance.
