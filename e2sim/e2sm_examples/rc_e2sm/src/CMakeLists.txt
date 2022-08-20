@@ -17,9 +17,9 @@
 
 add_executable( e2sim-rc rc_callbacks.cpp encode_rc.cpp )
 
-add_dependencies( e2sim-rc asn1_objects )
+# add_dependencies( e2sim-rc asn1_objects )
 
-target_include_directories(e2sim-rc PRIVATE ../ASN1c /usr/local/include/e2sim)
+target_include_directories( e2sim-rc PRIVATE ../ASN1c /usr/local/include/e2sim )
 
 target_link_libraries( e2sim-rc e2sim )
 target_link_libraries( e2sim-rc asn1_objects )

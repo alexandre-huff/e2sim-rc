@@ -30,10 +30,10 @@ int sctp_start_client(const char *server_ip_str, const int server_port);
 
 int sctp_accept_connection(const char *server_ip_str, const int server_fd);
 
-int sctp_send_data(int &socket_fd, sctp_buffer_t &data);
+int sctp_send_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts);
 
 int sctp_send_data_X2AP(int &socket_fd, sctp_buffer_t &data);
 
-int sctp_receive_data(int &socket_fd, sctp_buffer_t &data);
+int sctp_receive_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts);
 
 #endif

@@ -98,6 +98,44 @@ long encoding::get_function_id_from_subscription(E2AP_PDU_t *e2ap_pdu) {
 
 }
 
+long encoding::get_function_id_from_control(E2AP_PDU_t *e2ap_pdu) {
+
+  RICcontrolRequest_t orig_req =
+    e2ap_pdu->choice.initiatingMessage->value.choice.RICcontrolRequest;
+
+  int count = orig_req.protocolIEs.list.count;
+  int size = orig_req.protocolIEs.list.size;
+
+  RICcontrolRequest_IEs_t **ies = (RICcontrolRequest_IEs_t**)orig_req.protocolIEs.list.array;
+
+  fprintf(stderr, "count%d\n", count);
+  fprintf(stderr, "size%d\n", size);
+
+  RICcontrolRequest_IEs__value_PR pres;
+
+  long func_id;
+
+  for (int i=0; i < count; i++) {
+    RICcontrolRequest_IEs_t *next_ie = ies[i];
+    pres = next_ie->value.present;
+
+    fprintf(stderr, "next present value %d\n", pres);
+    fprintf(stderr, "value of pres ranfuncid is %d\n", RICcontrolRequest_IEs__value_PR_RANfunctionID);
+
+    if (pres == RICcontrolRequest_IEs__value_PR_RANfunctionID) {
+      fprintf(stderr, "equal pres to ranfuncid\n");
+      func_id = next_ie->value.choice.RANfunctionID;
+      break;
+    }
+
+  }
+
+  fprintf(stderr, "After loop, func_id is %ld\n", func_id);
+
+  return func_id;
+
+}
+
 void encoding::generate_e2apv1_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<encoding::ran_func_info> all_funcs) {
   char* ran_function_op_type = getenv("RAN_FUNCTION_OP_TYPE");
   LOG_D("Ran funciton : %s", ran_function_op_type);
@@ -593,8 +631,6 @@ void encoding::generate_e2apv1_subscription_request(E2AP_PDU *e2ap_pdu) {
 
 }
 
-// FIXME Huff: needs to implement subscription_response_faile when no RICAction is admitted
-// Check E2AP specification
 void encoding::generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[],
 						   long reqActionIdsRejected[], int accept_size, int reject_size,
 						   long reqRequestorId, long reqInstanceId) {
@@ -710,6 +746,69 @@ void encoding::generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu,
   printf("done printing xer of subscription response\n");
 
 
+}
+
+/*
+  for now we do not use criticality diagnostics since it is optional, any value is accepted
+*/
+void encoding::generate_e2ap_subscription_response_failure(E2AP_PDU *e2ap_pdu, long reqRequestorId,
+               long reqInstanceId, long func_id,
+               Cause_t *cause, CriticalityDiagnostics_t *crit_diagnostics) {
+  RICsubscriptionFailure_IEs_t *req_id_ie = (RICsubscriptionFailure_IEs_t *) calloc(1, sizeof(RICsubscriptionFailure_IEs_t));
+  RICsubscriptionFailure_IEs_t *func_id_ie = (RICsubscriptionFailure_IEs_t *) calloc(1, sizeof(RICsubscriptionFailure_IEs_t));
+  RICsubscriptionFailure_IEs_t *cause_ie = (RICsubscriptionFailure_IEs_t *) calloc(1, sizeof(RICsubscriptionFailure_IEs_t));
+  RICsubscriptionFailure_IEs_t *crit_diag_ie = (RICsubscriptionFailure_IEs_t *) calloc(1, sizeof(RICsubscriptionFailure_IEs_t));
+
+  // RIC Request ID
+  req_id_ie->id = ProtocolIE_ID_id_RICrequestID;
+  req_id_ie->criticality = Criticality_reject;
+  req_id_ie->value.present = RICsubscriptionFailure_IEs__value_PR_RICrequestID;
+  req_id_ie->value.choice.RICrequestID.ricRequestorID = reqRequestorId;
+  req_id_ie->value.choice.RICrequestID.ricInstanceID = reqInstanceId;
+
+  // RAN Function ID
+  func_id_ie->id = ProtocolIE_ID_id_RANfunctionID;
+  func_id_ie->criticality = Criticality_reject;
+  func_id_ie->value.present = RICsubscriptionFailure_IEs__value_PR_RANfunctionID;
+  func_id_ie->value.choice.RANfunctionID = func_id;
+
+  // Cause
+  cause_ie->id = ProtocolIE_ID_id_Cause;
+  cause_ie->criticality = Criticality_reject;
+  cause_ie->value.present = RICsubscriptionFailure_IEs__value_PR_Cause;
+  cause_ie->value.choice.Cause = *cause;
+
+  // Criticality Diagnostics (optional)
+  crit_diag_ie->id = ProtocolIE_ID_id_CriticalityDiagnostics;
+  crit_diag_ie->criticality = Criticality_ignore;
+  crit_diag_ie->value.present = RICsubscriptionFailure_IEs__value_PR_NOTHING; // fow now we do not use criticality
+
+  UnsuccessfulOutcome_t *outcome = (UnsuccessfulOutcome_t *) calloc(1, sizeof(UnsuccessfulOutcome_t));
+  outcome->procedureCode = ProcedureCode_id_RICsubscription;
+  outcome->criticality = Criticality_reject;
+  outcome->value.present = UnsuccessfulOutcome__value_PR_RICsubscriptionFailure;
+
+  RICsubscriptionFailure_t *subs_failure = &outcome->value.choice.RICsubscriptionFailure;
+  ASN_SEQUENCE_ADD(&subs_failure->protocolIEs.list, req_id_ie);
+  ASN_SEQUENCE_ADD(&subs_failure->protocolIEs.list, func_id_ie);
+  ASN_SEQUENCE_ADD(&subs_failure->protocolIEs.list, cause_ie);
+  ASN_SEQUENCE_ADD(&subs_failure->protocolIEs.list, crit_diag_ie);
+
+  e2ap_pdu->present = E2AP_PDU_PR_unsuccessfulOutcome;
+  e2ap_pdu->choice.unsuccessfulOutcome->criticality = Criticality_reject;
+  e2ap_pdu->choice.unsuccessfulOutcome->procedureCode = ProcedureCode_id_RICsubscription;
+  e2ap_pdu->choice.unsuccessfulOutcome = outcome;
+
+  char error_buf[300] = {0, };
+  size_t errlen = 0;
+
+  asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf, &errlen);
+  printf("error length %lu\n", errlen);
+  printf("error buf %s\n", error_buf);
+
+  printf("now printing xer of subscription response failure\n");
+  xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
+  printf("done printing xer of subscription response failure\n");
 }
 
 void encoding::generate_e2apv1_subscription_response(E2AP_PDU *e2ap_pdu, E2AP_PDU *sub_req_pdu) {
@@ -1042,7 +1141,8 @@ void encoding::generate_e2ap_indication_request_parameterized(E2AP_PDU_t *e2ap_p
 								uint8_t *ind_header_buf,
 								int header_length,
 								uint8_t *ind_message_buf,
-								int message_length) {
+								int message_length,
+                OCTET_STRING_t *call_proc_id) {
 
   // Implements E2AP-v02.01
 
@@ -1111,22 +1211,22 @@ void encoding::generate_e2ap_indication_request_parameterized(E2AP_PDU_t *e2ap_p
   message->value.present = RICindication_IEs__value_PR_RICindicationMessage;
   ASN_SEQUENCE_ADD(&ric_indication->protocolIEs.list, message);
 
-  uint8_t *cpid_buf = (uint8_t *) "cpid"; // current implementation uses a constant
-  size_t cpid_len = strlen((char *) cpid_buf);
-
+  // uint8_t *cpid_buf = (uint8_t *) "cpid"; // current implementation uses a constant
+  // size_t cpid_len = strlen((char *) cpid_buf);
   RICindication_IEs_t *cpid = (RICindication_IEs_t *) calloc(1, sizeof(RICindication_IEs_t));
   cpid->id = ProtocolIE_ID_id_RICcallProcessID;
   cpid->criticality = Criticality_reject;
-  cpid->value.choice.RICcallProcessID.buf = (uint8_t *) calloc(cpid_len, sizeof(uint8_t));
-  cpid->value.choice.RICcallProcessID.size = cpid_len;
-  memcpy(message->value.choice.RICcallProcessID.buf, cpid_buf, cpid_len);
+  cpid->value.choice.RICcallProcessID = *call_proc_id;
+  // cpid->value.choice.RICcallProcessID.buf = (uint8_t *) calloc(cpid_len, sizeof(uint8_t));
+  // cpid->value.choice.RICcallProcessID.size = cpid_len;
+  // memcpy(message->value.choice.RICcallProcessID.buf, cpid_buf, cpid_len);
   cpid->value.present = RICindication_IEs__value_PR_RICcallProcessID;
   ASN_SEQUENCE_ADD(&ric_indication->protocolIEs.list, cpid);
 
   char error_buf[300] = {0, };
   size_t errlen = 0;
 
-  asn_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
+  // asn_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
 
   int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf, &errlen);
   printf("check_constraints return %d\n", ret);

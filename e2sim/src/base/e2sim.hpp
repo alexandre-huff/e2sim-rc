@@ -36,16 +36,16 @@ typedef struct {
 
 typedef void (*SubscriptionCallback)(E2AP_PDU_t*);
 
+typedef void (*ControlCallback)(E2AP_PDU_t*, struct timespec *ts);
+
 class E2Sim;
 class E2Sim {
 
 private:
 
-  // FIXME Huff on next line: add a struct with 2 fields (ran_function_oid, and OCTET_STRING_T with current ran_function_registered_data)
-  // the idea is to replace the current octet_string_t with the struct to allow getting ran_function_oid from any service model
-  // std::unordered_map<long, OCTET_STRING_t*> ran_functions_registered;
   std::unordered_map<long, encoded_ran_function_t *> ran_functions_registered;
   std::unordered_map<long, SubscriptionCallback> subscription_callbacks;
+  std::unordered_map<long, ControlCallback> control_callbacks;
 
   void wait_for_sctp_data();
 
@@ -59,11 +59,15 @@ public:
 
   SubscriptionCallback get_subscription_callback(long func_id);
 
+  ControlCallback get_control_callback(long func_id);
+
   void register_e2sm(long func_id, encoded_ran_function_t* ran_func);
 
   void register_subscription_callback(long func_id, SubscriptionCallback cb);
 
-  void encode_and_send_sctp_data(E2AP_PDU_t* pdu);
+  void register_control_callback(long func_id, ControlCallback cb);
+
+  void encode_and_send_sctp_data(E2AP_PDU_t* pdu, struct timespec *ts);
 
   int run_loop(int argc, char* argv[]);
 

@@ -66,6 +66,8 @@ add_definitions(
 	-DDEBUG=${debugging}
 )
 
+add_definitions( -DASN_DISABLE_OER_SUPPORT )
+
 # Compiler flags
 #
 set( CMAKE_POSITION_INDEPENDENT_CODE ON )

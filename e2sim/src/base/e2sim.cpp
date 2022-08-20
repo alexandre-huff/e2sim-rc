@@ -44,12 +44,30 @@ void E2Sim::register_subscription_callback(long func_id, SubscriptionCallback cb
   subscription_callbacks[func_id] = cb;
 }
 
+void E2Sim::register_control_callback(long func_id, ControlCallback cb) {
+  fprintf(stderr,"about to register callback for control for func id %ld\n", func_id);
+  control_callbacks[func_id] = cb;
+}
+
 SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
   fprintf(stderr, "we are getting the subscription callback for func id %ld\n", func_id);
   SubscriptionCallback cb;
 
   try {
     cb = subscription_callbacks.at(func_id);
+  } catch(const std::out_of_range& e) {
+    throw std::out_of_range("Function ID is not registered");
+  }
+  return cb;
+
+}
+
+ControlCallback E2Sim::get_control_callback(long func_id) {
+  fprintf(stderr, "we are getting the control callback for func id %ld\n", func_id);
+  ControlCallback cb;
+
+  try {
+    cb = control_callbacks.at(func_id);
   } catch(const std::out_of_range& e) {
     throw std::out_of_range("Function ID is not registered");
   }
@@ -69,7 +87,7 @@ void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func) {
 }
 
 
-void E2Sim::encode_and_send_sctp_data(E2AP_PDU_t* pdu)
+void E2Sim::encode_and_send_sctp_data(E2AP_PDU_t* pdu, struct timespec *ts)
 {
   uint8_t       *buf;
   sctp_buffer_t data;
@@ -78,17 +96,18 @@ void E2Sim::encode_and_send_sctp_data(E2AP_PDU_t* pdu)
   memcpy(data.buffer, buf, min(data.len, MAX_SCTP_BUFFER));
   if (buf) free(buf);
 
-  sctp_send_data(client_fd, data);
+  sctp_send_data(client_fd, data, ts);
 }
 
 
 void E2Sim::wait_for_sctp_data()
 {
+  struct timespec ts; // timestamp of the received message
   sctp_buffer_t recv_buf;
-  if(sctp_receive_data(client_fd, recv_buf) > 0)
+  if(sctp_receive_data(client_fd, recv_buf, &ts) > 0)
   {
     LOG_I("[SCTP] Received new data of size %d", recv_buf.len);
-    e2ap_handle_sctp_data(client_fd, recv_buf, false, this);
+    e2ap_handle_sctp_data(client_fd, recv_buf, false, this, &ts);
   }
 }
 
@@ -187,7 +206,7 @@ int E2Sim::run_loop(int argc, char* argv[]){
 
   memcpy(data.buffer, buffer, er.encoded);
 
-  if(sctp_send_data(client_fd, data) > 0) {
+  if(sctp_send_data(client_fd, data, NULL) > 0) {
     LOG_I("[SCTP] Sent E2-SETUP-REQUEST");
   } else {
     LOG_E("[SCTP] Unable to send E2-SETUP-REQUEST to peer");
@@ -197,14 +216,16 @@ int E2Sim::run_loop(int argc, char* argv[]){
 
   LOG_I("[SCTP] Waiting for SCTP data");
 
+  struct timespec ts; // timestamp of the received message
+
   while(1) //constantly looking for data on SCTP interface
   {
-    if(sctp_receive_data(client_fd, recv_buf) <= 0)
+    if(sctp_receive_data(client_fd, recv_buf, &ts) <= 0)
       break;
 
     LOG_I("[SCTP] Received new data of size %d", recv_buf.len);
 
-    e2ap_handle_sctp_data(client_fd, recv_buf, xmlenc, this);
+    e2ap_handle_sctp_data(client_fd, recv_buf, xmlenc, this, &ts);
     if (xmlenc) xmlenc = false;
   }
 

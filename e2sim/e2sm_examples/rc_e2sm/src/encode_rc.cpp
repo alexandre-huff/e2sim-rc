@@ -137,53 +137,104 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg) {
 
     ASN_STRUCT_RESET(asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
 
-    ind_msg->ric_indicationMessage_formats.choice.indicationMessage_Format5 =
-            (E2SM_RC_IndicationMessage_Format5_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format5_t));
-    ASN_STRUCT_RESET(asn_DEF_E2SM_RC_IndicationMessage_Format5, ind_msg->ric_indicationMessage_formats.choice.indicationMessage_Format5);
+    ind_msg->ric_indicationMessage_formats.present = E2SM_RC_IndicationMessage__ric_indicationMessage_formats_PR_indicationMessage_Format5;
+    E2SM_RC_IndicationMessage_Format5_t *indicationMessage_Format5 = (E2SM_RC_IndicationMessage_Format5_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format5_t));
+    ind_msg->ric_indicationMessage_formats.choice.indicationMessage_Format5 = indicationMessage_Format5;
 
-    ind_msg->ric_indicationMessage_formats.present =
-            E2SM_RC_IndicationMessage__ric_indicationMessage_formats_PR_indicationMessage_Format5;
     E2SM_RC_IndicationMessage_Format5_Item_t *format_item =
             (E2SM_RC_IndicationMessage_Format5_Item_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format5_Item_t));
-    ASN_STRUCT_RESET(asn_DEF_E2SM_RC_IndicationMessage_Format5_Item, format_item);
-    ASN_SEQUENCE_ADD(&ind_msg->ric_indicationMessage_formats.choice.indicationMessage_Format5->ranP_Requested_List.list, format_item);
+    ASN_SEQUENCE_ADD(&indicationMessage_Format5->ranP_Requested_List.list, format_item);
 
-    format_item->ranParameter_ID = 1; // NR CGI as in E2SM-RC v01.02 section 8.4.5.1
-    format_item->ranParameter_valueType.choice.ranP_Choice_ElementFalse =
+    format_item->ranParameter_ID = 1; // Primary Cell ID as in E2SM-RC v01.02 section 8.4.5.1
+    format_item->ranParameter_valueType.present = RANParameter_ValueType_PR_ranP_Choice_Structure;
+    format_item->ranParameter_valueType.choice.ranP_Choice_Structure =
+            (RANParameter_ValueType_Choice_Structure_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_Structure_t));
+
+    RANParameter_STRUCTURE_t *ranp_struct_item1 =
+            (RANParameter_STRUCTURE_t *) calloc(1, sizeof(RANParameter_STRUCTURE_t));
+    format_item->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure = ranp_struct_item1;
+
+    ranp_struct_item1->sequence_of_ranParameters = (struct RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters *)
+                                    calloc(1, sizeof(struct RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters));
+
+    RANParameter_STRUCTURE_Item_t *ranp_struct_item2 = (RANParameter_STRUCTURE_Item_t *) calloc(1, sizeof(RANParameter_STRUCTURE_Item_t));
+    ASN_SEQUENCE_ADD(&ranp_struct_item1->sequence_of_ranParameters->list, ranp_struct_item2);
+
+    ranp_struct_item2->ranParameter_ID = 2; // CHOICE Primary Cell as in E2SM-RC v01.02 section 8.4.5.1
+    ranp_struct_item2->ranParameter_valueType = (RANParameter_ValueType_t *) calloc(1, sizeof(RANParameter_ValueType_t));
+    ranp_struct_item2->ranParameter_valueType->present = RANParameter_ValueType_PR_ranP_Choice_Structure;
+    ranp_struct_item2->ranParameter_valueType->choice.ranP_Choice_Structure =
+            (RANParameter_ValueType_Choice_Structure_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_Structure_t));
+
+    RANParameter_STRUCTURE_t *ranp_struct2 = (RANParameter_STRUCTURE_t *) calloc(1, sizeof(RANParameter_STRUCTURE_t));
+    ranp_struct_item2->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure = ranp_struct2;
+
+    ranp_struct2->sequence_of_ranParameters =
+            (struct RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters *) calloc(1, sizeof(struct RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters));
+
+    RANParameter_STRUCTURE_Item *ranp_struct_item3 =
+            (RANParameter_STRUCTURE_Item *) calloc(1, sizeof(RANParameter_STRUCTURE_Item));
+    ASN_SEQUENCE_ADD(&ranp_struct2->sequence_of_ranParameters->list, ranp_struct_item3);
+
+    ranp_struct_item3->ranParameter_ID = 3; // NR Cell as in E2SM-RC v01.02 section 8.4.5.1
+    ranp_struct_item3->ranParameter_valueType = (RANParameter_ValueType_t *) calloc(1, sizeof(RANParameter_ValueType_t));
+    ranp_struct_item3->ranParameter_valueType->present = RANParameter_ValueType_PR_ranP_Choice_Structure;
+    ranp_struct_item3->ranParameter_valueType->choice.ranP_Choice_Structure =
+            (RANParameter_ValueType_Choice_Structure_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_Structure_t));
+
+    RANParameter_STRUCTURE_t *ranp_struct3 = (RANParameter_STRUCTURE_t *) calloc(1, sizeof(RANParameter_STRUCTURE_t));
+    ranp_struct_item3->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure = ranp_struct3;
+
+    ranp_struct3->sequence_of_ranParameters =
+            (struct RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters *) calloc(1, sizeof(struct RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters));
+
+    RANParameter_STRUCTURE_Item_t *ranp_struct_item4 = (RANParameter_STRUCTURE_Item_t *) calloc(1, sizeof(RANParameter_STRUCTURE_Item_t));
+    ASN_SEQUENCE_ADD(&ranp_struct3->sequence_of_ranParameters->list, ranp_struct_item4);
+
+    ranp_struct_item4->ranParameter_ID = 4; // NR CGI as in E2SM-RC v01.02 section 8.4.5.1
+    ranp_struct_item4->ranParameter_valueType = (RANParameter_ValueType_t *) calloc(1, sizeof(RANParameter_ValueType_t));
+    ranp_struct_item4->ranParameter_valueType->choice.ranP_Choice_ElementFalse =
             (RANParameter_ValueType_Choice_ElementFalse_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_ElementFalse_t));
-    format_item->ranParameter_valueType.present = RANParameter_ValueType_PR_ranP_Choice_ElementFalse;
 
-    format_item->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value =
+    ranp_struct_item4->ranParameter_valueType->present = RANParameter_ValueType_PR_ranP_Choice_ElementFalse;
+
+    ranp_struct_item4->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value =
             (RANParameter_Value_t *) calloc(1, sizeof(RANParameter_Value_t));
-    ASN_STRUCT_RESET(asn_DEF_RANParameter_Value, format_item->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value);
 
-    format_item->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->present = RANParameter_Value_PR_valueOctS;
+    ranp_struct_item4->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value->present = RANParameter_Value_PR_valueOctS;
 
     NR_CGI_t *nr_cgi = (NR_CGI_t *) calloc(1, sizeof(NR_CGI_t));
 
     uint8_t *plmnid = (uint8_t *) "747";   // TODO it seems that we should get this from e2sim base class
-    nr_cgi->pLMNIdentity.size = strlen((char *) plmnid);
-    nr_cgi->pLMNIdentity.buf = (uint8_t *) calloc(nr_cgi->pLMNIdentity.size, sizeof(uint8_t));
-    memcpy(nr_cgi->pLMNIdentity.buf, plmnid, nr_cgi->pLMNIdentity.size);
+    OCTET_STRING_fromBuf(&nr_cgi->pLMNIdentity, (char *) plmnid, strlen((char *) plmnid));
 
-    nr_cgi->nRCellIdentity.buf = (uint8_t *) calloc(5, sizeof(uint8_t)); // required to have room for 36 bits
-    nr_cgi->nRCellIdentity.size = 5;
-    nr_cgi->nRCellIdentity.bits_unused = 4; // 40-36
-    nr_cgi->nRCellIdentity.buf[0] = 0xB5; // TODO it seems that we should get this from e2sim base class
-    nr_cgi->nRCellIdentity.buf[1] = 0xC6;
-    nr_cgi->nRCellIdentity.buf[2] = 0x77;
-    nr_cgi->nRCellIdentity.buf[3] = 0x88; // here we use 32 bits for gNB to avoid rotating bits and to keep things simple for now
-    nr_cgi->nRCellIdentity.buf[4] = 0x05 << 4; // this is a dummy value (rotated to use only the 4 most significant bits)
+    unsigned long lNRCellId = 89; // TODO Huff: dummy Cell ID - it seems that we should get this from e2sim base class
+    BIT_STRING_t *nr_cell_id = (BIT_STRING_t*) calloc(1, sizeof(BIT_STRING_t));
+    if(nr_cell_id) {
+        nr_cell_id->buf = (uint8_t*)calloc(1,5); // required to have room for 36 bits
+        if(nr_cell_id->buf) {
+            nr_cell_id->size = 5;
+            nr_cell_id->buf[0] = ((lNRCellId & 0X0FF0000000) >> 28);
+            nr_cell_id->buf[1] = ((lNRCellId & 0X000FF00000) >> 20);
+            nr_cell_id->buf[2] = ((lNRCellId & 0X00000FF000) >> 12);
+            nr_cell_id->buf[3] = ((lNRCellId & 0X0000000FF0) >> 4);
+            nr_cell_id->buf[4] = (lNRCellId & 0X000000000F) << 4;
+            nr_cell_id->bits_unused = 4;  // 40-36
 
-    // memset(error_buf, 0, sizeof(error_buf));    // ensuring it is clean
-    // errlen = 0;
+            nr_cgi->nRCellIdentity = *nr_cell_id;
+        }
+    }
 
-    // ret = asn_check_constraints(&asn_DEF_NR_CGI, nr_cgi, error_buf, &errlen);
-    // assert(ret == 0);
-    // printf("error length %lu\n", errlen);
-    // printf("error buf %s\n", error_buf);
+    memset(error_buf, 0, sizeof(error_buf));    // ensuring it is clean
+    errlen = 0;
 
-    xer_fprint(stderr, &asn_DEF_NR_CGI, nr_cgi);
+    fprintf(stderr, "INFO %s:%d - about to check constraints of NR_CGI\n", __FILE__, __LINE__);
+    ret = asn_check_constraints(&asn_DEF_NR_CGI, nr_cgi, error_buf, &errlen);
+    assert(ret == 0);
+    printf("error length %lu\n", errlen);
+    printf("error buf %s\n", error_buf);
+
+//     xer_fprint(stderr, &asn_DEF_NR_CGI, nr_cgi);
 
     fprintf(stderr, "NR_CGI set up\n");
 
@@ -201,27 +252,31 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg) {
     fprintf(stderr, "er encded is %ld\n", er.encoded);
     fprintf(stderr, "after encoding NR_CGI\n");
 
-    OCTET_STRING_t *ostr = &format_item->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueOctS;
-    ostr->size = er.encoded;
-    ostr->buf = (uint8_t *) calloc(er.encoded, sizeof(uint8_t));
-    memcpy(ostr->buf, nr_cgi_buffer, er.encoded);
+    OCTET_STRING_t *ostr = &ranp_struct_item4->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueOctS;
+    OCTET_STRING_fromBuf(ostr, (char *) nr_cgi_buffer, er.encoded);
 
-    fprintf(stderr, "here is the NR_CGI ostr: %s\n", ostr->buf);
-    fprintf(stderr, "after printing NR_CGI ostr\n");
+//     fprintf(stderr, "here is the NR_CGI ostr: %s\n", ostr->buf);
+//     fprintf(stderr, "after printing NR_CGI ostr\n");
 
-    asn_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage_Format5_Item, format_item);
+    // asn_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage_Format5_Item, format_item);
 
     // memset(error_buf, 0, sizeof(error_buf));    // ensuring it is clean
     // errlen = 0;
+    // fprintf(stderr, "INFO %s:%d - about to check constraints of E2SM_RC_IndicationMessage_Format5_Item\n", __FILE__, __LINE__);
     // ret = asn_check_constraints(&asn_DEF_E2SM_RC_IndicationMessage_Format5_Item, format_item, error_buf, &errlen);
-    // assert(ret == 0);
-
-    // asn_check_constraints(&asn_DEF_E2SM_RC_IndicationMessage, ind_msg, error_buf, &errlen);
-    // assert(ret == 0);
     // printf("error length %lu\n", errlen);
     // printf("error buf %s\n", error_buf);
+    // assert(ret == 0);
 
-    asn_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
+    // memset(error_buf, 0, sizeof(error_buf));    // ensuring it is clean
+    // errlen = 0;
+    // fprintf(stderr, "INFO %s:%d - about to check constraints of E2SM_RC_IndicationMessage\n", __FILE__, __LINE__);
+    // asn_check_constraints(&asn_DEF_E2SM_RC_IndicationMessage, ind_msg, error_buf, &errlen);
+    // printf("error length %lu\n", errlen);
+    // printf("error buf %s\n", error_buf);
+    // assert(ret == 0);
+
+    // asn_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
 
     fprintf(stderr, "E2SM_RC_IndicationMessage set up\n");
 
@@ -250,9 +305,7 @@ void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header) {
     ueid_gnb->amf_UE_NGAP_ID.size = sizeof(uint8_t);
 
     uint8_t *plmnid = (uint8_t *) "747";   // TODO it seems that we should get this from e2sim base class
-    ueid_gnb->guami.pLMNIdentity.size = strlen((char *) plmnid);
-    ueid_gnb->guami.pLMNIdentity.buf = (uint8_t *) calloc(ueid_gnb->guami.pLMNIdentity.size, sizeof(uint8_t));
-    memcpy(ueid_gnb->guami.pLMNIdentity.buf, plmnid, ueid_gnb->guami.pLMNIdentity.size);
+    OCTET_STRING_fromBuf(&ueid_gnb->guami.pLMNIdentity, (char *) plmnid, strlen((char *) plmnid));
 
     ueid_gnb->guami.aMFRegionID.buf = (uint8_t *) calloc(1, sizeof(uint8_t)); // (8 bits)
     ueid_gnb->guami.aMFRegionID.buf[0] = (uint8_t) 128; // this is a dummy value
@@ -275,9 +328,11 @@ void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header) {
     char error_buf[300] = {0, };
     size_t errlen = 0;
 
-    asn_check_constraints(&asn_DEF_E2SM_RC_IndicationHeader, ind_header, error_buf, &errlen);
+    fprintf(stderr, "INFO %s:%d - about to check constraints of E2SM_RC_IndicationHeader\n", __FILE__, __LINE__);
+    int ret = asn_check_constraints(&asn_DEF_E2SM_RC_IndicationHeader, ind_header, error_buf, &errlen);
     printf("error length %lu\n", errlen);
     printf("error buf %s\n", error_buf);
+    assert(ret == 0);
 
     fprintf(stderr, "E2SM_RC_IndicationHeader set up\n");
 

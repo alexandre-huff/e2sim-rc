@@ -38,6 +38,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 int sctp_start_server(const char *server_ip_str, const int server_port)
 {
@@ -230,11 +231,15 @@ int sctp_accept_connection(const char *server_ip_str, const int server_fd)
   return client_fd;
 }
 
-int sctp_send_data(int &socket_fd, sctp_buffer_t &data)
+int sctp_send_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts)
 {
   fprintf(stderr,"in sctp send data func\n");
   fprintf(stderr,"data.len is %d\n", data.len);
+  if(ts != NULL) {
+    clock_gettime(CLOCK_REALTIME, ts);
+  }
   int sent_len = send(socket_fd, (void*)(&(data.buffer[0])), data.len, 0);
+
   fprintf(stderr,"after getting sent_len\n");
 
   if(sent_len == -1) {
@@ -266,7 +271,7 @@ Outcome of recv()
 0: close the connection
 +: new data
 */
-int sctp_receive_data(int &socket_fd, sctp_buffer_t &data)
+int sctp_receive_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts)
 {
   //clear out the data before receiving
   fprintf(stderr, "receive data1\n");
@@ -276,6 +281,13 @@ int sctp_receive_data(int &socket_fd, sctp_buffer_t &data)
 
   //receive data from the socket
   int recv_len = recv(socket_fd, &(data.buffer), sizeof(data.buffer), 0);
+  if(ts != NULL) {
+    if(recv_len > 0) {
+      clock_gettime(CLOCK_REALTIME, ts);
+    } else {
+      memset(ts, 0, sizeof(struct timespec));
+    }
+  }
   fprintf(stderr, "receive data3\n");
 
   if(recv_len == -1)

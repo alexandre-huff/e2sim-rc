@@ -20,6 +20,21 @@
 
 #include "e2sim.hpp"
 
+// helper for RTT latency measurements
+typedef struct {
+    struct timespec sent;
+    struct timespec recv;
+} timestamp_t;
+
+unsigned long num2send; // number of messages to send in the simulation
+timestamp_t *ts_list;   // array containing the send and received timestamps of the corresponding INSERT and CONTROL messages
+
 void callback_rc_subscription_request(E2AP_PDU_t *pdu);
 
+void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts);
+
 void run_insert_loop(long requestorId, long instanceId, long ranFunctionId, long actionId);
+
+void save_timestamp_report();
+
+void test_decoding(E2AP_PDU_t *pdu);    // FIXME Huff: for debugging
