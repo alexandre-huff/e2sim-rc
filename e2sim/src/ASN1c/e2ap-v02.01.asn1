@@ -164,7 +164,7 @@ E2AP-ELEMENTARY-PROCEDURES-CLASS-2 E2AP-ELEMENTARY-PROCEDURE ::= {
 --
 -- **************************************************************
 
--- New for v01.01
+-- New for v01.01
 e2connectionUpdate		E2AP-ELEMENTARY-PROCEDURE ::= {
 	INITIATING MESSAGE		E2connectionUpdate
 	SUCCESSFUL OUTCOME		E2connectionUpdateAcknowledge
@@ -181,7 +181,7 @@ e2nodeConfigurationUpdate	E2AP-ELEMENTARY-PROCEDURE ::= {
 	CRITICALITY				reject
 }
 
--- New for v02.01
+-- New for v02.01
 e2removal	E2AP-ELEMENTARY-PROCEDURE ::= {
 	INITIATING MESSAGE		E2RemovalRequest
 	SUCCESSFUL OUTCOME		E2RemovalResponse
