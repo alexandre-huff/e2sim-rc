@@ -23,6 +23,7 @@
 // #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include "logger.h"
 
 #define VERSION             "1.2.0"      //May 2019
 #define DEFAULT_SCTP_IP     "127.0.0.1"
@@ -32,15 +33,15 @@
 #define MAX_SCTP_BUFFER     10000
 #define WORKDIR_ENV         "E2SIM_DIR" //environment variable
 
-char* time_stamp(void);
+// char* time_stamp(void);
 
 // #define LOG_I(...) {printf("[%s]", time_stamp()); printf(__VA_ARGS__); printf("\n");}
 // #define LOG_E(...) {printf("[%s]", time_stamp()); printf(__VA_ARGS__); printf("\n");}
 // #define LOG_D(...) {printf("[%s]", time_stamp()); printf(__VA_ARGS__); printf("\n");}
 
-#define LOG_I(...) {printf(__VA_ARGS__); printf("\n");}
-#define LOG_E(...) {printf(__VA_ARGS__); printf("\n");}
-#define LOG_D(...) {printf(__VA_ARGS__); printf("\n");}
+// #define LOG_I(...) {printf(__VA_ARGS__); printf("\n");}
+// #define LOG_E(...) {printf(__VA_ARGS__); printf("\n");}
+// #define LOG_D(...) {printf(__VA_ARGS__); printf("\n");}
 
 typedef struct SCTP_DATA {
   unsigned char *data;

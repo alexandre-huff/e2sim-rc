@@ -74,14 +74,14 @@ options_t read_input_options_old(int argc, char* argv[])
           options.server_port = atoi(optarg);
           if(options.server_port < 1 || options.server_port > 65535)
           {
-            LOG_E("Invalid port number (%d). Valid values are between 1 and 65535.\n",
+            logger_fatal("Invalid port number (%d). Valid values are between 1 and 65535.",
                                                               options.server_port);
             exit(1);
           }
           break;
 
         default:
-          LOG_E("Error: unknown input option: %c\n", optopt);
+          logger_fatal("unknown input option: %c", optopt);
           exit(1);
       }
     }
@@ -101,7 +101,7 @@ options_t read_input_options(int argc, char *argv[])
     options.server_ip = argv[1];
     options.server_port = atoi(argv[2]);
     if(options.server_port < 1 || options.server_port > 65535) {
-      LOG_E("Invalid port number (%d). Valid values are between 1 and 65535.\n",
+      logger_fatal("Invalid port number (%d). Valid values are between 1 and 65535.",
                                   options.server_port);
       exit(1);
     }
@@ -116,8 +116,8 @@ options_t read_input_options(int argc, char *argv[])
   }
   else
   {
-    LOG_I("Unrecognized option.\n");
-    LOG_I("Usage: %s [SERVER IP ADDRESS] [SERVER PORT]\n", argv[0]);
+    logger_error("Unrecognized option.");
+    logger_fatal("Usage: %s [SERVER IP ADDRESS] [SERVER PORT]", argv[0]);
     exit(1);
   }
 

@@ -28,6 +28,7 @@
 
 #include "e2sim_sctp.hpp"
 // #include "e2sim_defs.h"
+#include "logger.h"
 
 
 #include <sys/types.h>
@@ -43,7 +44,7 @@
 int sctp_start_server(const char *server_ip_str, const int server_port)
 {
   if(server_port < 1 || server_port > 65535) {
-      LOG_E("Invalid port number (%d). Valid values are between 1 and 65535.\n", server_port);
+      logger_error("Invalid port number (%d). Valid values are between 1 and 65535.", server_port);
       exit(1);
   }
 
@@ -108,7 +109,7 @@ int sctp_start_server(const char *server_ip_str, const int server_port)
 
   assert(server_fd != 0);
 
-  LOG_I("[SCTP] Server started on %s:%d", server_ip_str, server_port);
+  logger_info("[SCTP] Server started on %s:%d", server_ip_str, server_port);
 
   return server_fd;
 }
@@ -178,28 +179,29 @@ int sctp_start_client(const char *server_ip_str, const int server_port)
   client6_addr.sin6_port   = htons(RIC_SCTP_SRC_PORT);
   client6_addr.sin6_addr   = in6addr_any;
 
-  LOG_I("[SCTP] Binding client socket to source port %d", RIC_SCTP_SRC_PORT);
+  logger_info("[SCTP] Binding client socket to source port %d", RIC_SCTP_SRC_PORT);
   if(bind(client_fd, (struct sockaddr*)&client6_addr, sizeof(client6_addr)) == -1) {
     perror("bind");
     exit(1);
   }
   // end binding ---------------------
 
-  LOG_I("[SCTP] Connecting to server at %s:%d ...", server_ip_str, server_port);
+  logger_info("[SCTP] Connecting to server at %s:%d ...", server_ip_str, server_port);
   if(connect(client_fd, server_addr, addr_len) == -1) {
     perror("connect");
     exit(1);
   }
   assert(client_fd != 0);
 
-  LOG_I("[SCTP] Connection established");
+  logger_info("[SCTP] Connection established");
+  logger_debug("[SCTP] client_fd value is %d", client_fd);
 
   return client_fd;
 }
 
 int sctp_accept_connection(const char *server_ip_str, const int server_fd)
 {
-  LOG_I("[SCTP] Waiting for new connection...");
+  logger_info("[SCTP] Waiting for new connection...");
 
   struct sockaddr client_addr;
   socklen_t       client_addr_size;
@@ -207,7 +209,7 @@ int sctp_accept_connection(const char *server_ip_str, const int server_fd)
 
   //Blocking call
   client_fd = accept(server_fd, &client_addr, &client_addr_size);
-  fprintf(stderr, "client fd is %d\n", client_fd);
+  logger_debug("client fd is %d", client_fd);
   if(client_fd == -1){
     perror("accept()");
     close(client_fd);
@@ -220,12 +222,12 @@ int sctp_accept_connection(const char *server_ip_str, const int server_fd)
   {
     struct sockaddr_in6* client_ipv6 = (struct sockaddr_in6*)&client_addr;
     inet_ntop(AF_INET6, &(client_ipv6->sin6_addr), client_ip6_addr, INET6_ADDRSTRLEN);
-    LOG_I("[SCTP] New client connected from %s", client_ip6_addr);
+    logger_info("[SCTP] New client connected from %s", client_ip6_addr);
   }
   else {
     struct sockaddr_in* client_ipv4 = (struct sockaddr_in*)&client_addr;
     inet_ntop(AF_INET, &(client_ipv4->sin_addr), client_ip4_addr, INET_ADDRSTRLEN);
-    LOG_I("[SCTP] New client connected from %s", client_ip4_addr);
+    logger_info("[SCTP] New client connected from %s", client_ip4_addr);
   }
 
   return client_fd;
@@ -233,14 +235,14 @@ int sctp_accept_connection(const char *server_ip_str, const int server_fd)
 
 int sctp_send_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts)
 {
-  fprintf(stderr,"in sctp send data func\n");
-  fprintf(stderr,"data.len is %d\n", data.len);
+  logger_trace("in func %s", __func__);
+  logger_debug("data.len is %d", data.len);
   if(ts != NULL) {
     clock_gettime(CLOCK_REALTIME, ts);
   }
   int sent_len = send(socket_fd, (void*)(&(data.buffer[0])), data.len, 0);
 
-  fprintf(stderr,"after getting sent_len\n");
+  logger_trace("after getting sent_len");
 
   if(sent_len == -1) {
     perror("[SCTP] sctp_send_data");
@@ -274,9 +276,8 @@ Outcome of recv()
 int sctp_receive_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts)
 {
   //clear out the data before receiving
-  fprintf(stderr, "receive data1\n");
+  logger_trace("in func %s", __func__);
   memset(data.buffer, 0, sizeof(data.buffer));
-  fprintf(stderr, "receive data2\n");
   data.len = 0;
 
   //receive data from the socket
@@ -288,7 +289,7 @@ int sctp_receive_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts)
       memset(ts, 0, sizeof(struct timespec));
     }
   }
-  fprintf(stderr, "receive data3\n");
+  logger_debug("[SCTP] received %d bytes", recv_len);
 
   if(recv_len == -1)
   {
@@ -297,7 +298,7 @@ int sctp_receive_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts)
   }
   else if (recv_len == 0)
   {
-    LOG_I("[SCTP] Connection closed by remote peer");
+    logger_info("[SCTP] Connection closed by remote peer");
     if(close(socket_fd) == -1)
     {
       perror("[SCTP] close");

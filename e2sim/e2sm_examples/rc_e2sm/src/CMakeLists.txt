@@ -23,7 +23,7 @@ target_include_directories( e2sim-rc PRIVATE ../ASN1c /usr/local/include/e2sim )
 
 target_link_libraries( e2sim-rc e2sim )
 target_link_libraries( e2sim-rc asn1_objects )
-target_link_libraries( e2sim-rc pthread)
+target_link_libraries( e2sim-rc pthread )
 
 install(
     TARGETS e2sim-rc

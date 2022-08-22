@@ -1,7 +1,6 @@
-/*****************************************************************************
+#/*****************************************************************************
 #                                                                            *
 # Copyright 2020 AT&T Intellectual Property                                  *
-# Copyright 2022 Alexandre Huff                                              *
 #                                                                            *
 # Licensed under the Apache License, Version 2.0 (the "License");            *
 # you may not use this file except in compliance with the License.           *
@@ -15,27 +14,22 @@
 # See the License for the specific language governing permissions and        *
 # limitations under the License.                                             *
 #                                                                            *
-******************************************************************************/
+#******************************************************************************/
+
+# For clarity: this generates object, not a lib as the CM command implies.
+#
+add_library( logger_objects OBJECT logger.c)
+
+target_include_directories (logger_objects PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  PRIVATE src)
 
 
-#include "e2sim.hpp"
-#include "logger.h"
-
-// helper for RTT latency measurements
-typedef struct {
-    struct timespec sent;
-    struct timespec recv;
-} timestamp_t;
-
-unsigned long num2send; // number of messages to send in the simulation
-timestamp_t *ts_list;   // array containing the send and received timestamps of the corresponding INSERT and CONTROL messages
-
-void callback_rc_subscription_request(E2AP_PDU_t *pdu);
-
-void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts);
-
-void run_insert_loop(long requestorId, long instanceId, long ranFunctionId, long actionId);
-
-void save_timestamp_report();
-
-void test_decoding(E2AP_PDU_t *pdu);    // FIXME Huff: for debugging
+if( DEV_PKG )
+  install( FILES
+    logger.h
+    DESTINATION ${install_inc}
+    )
+endif()
+# ---------------------------------------------------------------------------

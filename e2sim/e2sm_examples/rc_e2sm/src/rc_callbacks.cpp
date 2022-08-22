@@ -64,7 +64,7 @@ E2Sim e2sim;
 int main(int argc, char *argv[])
 {
 
-    fprintf(stderr, "Starting E2 Simulator for RC service model\n");
+    logger_force(LOGGER_INFO, "Starting E2 Simulator for RC service model");
 
     // run_insert_loop(123, 1, 1, 1);   // FIXME Huff: only for debugging purposes
     // exit(1);
@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 
     ts_list = (timestamp_t *) calloc(num2send, sizeof(timestamp_t));
     if(ts_list == NULL) {
-        fprintf(stderr, "unable to allocate memory for the timestamp list\n");
+        logger_fatal("unable to allocate memory for the timestamp list");
         exit(1);
     }
 
@@ -103,9 +103,9 @@ int main(int argc, char *argv[])
                              &asn_DEF_E2SM_RC_RANFunctionDefinition,
                              ranfunc_def, e2smbuffer, e2smbuffer_size);
 
-    fprintf(stderr, "er encoded is %ld\n", er.encoded);
-    fprintf(stderr, "after encoding message\n");
-    fprintf(stderr, "here is encoded message %s\n", e2smbuffer);
+    logger_debug("er encoded is %ld", er.encoded);
+    logger_trace("after encoding message");
+    logger_debug("here is encoded message %s", e2smbuffer);
 
     encoded_ran_function_t *reg_func = (encoded_ran_function_t *) calloc(1, sizeof(encoded_ran_function_t));
     reg_func->oid.size = ranfunc_def->ranFunction_Name.ranFunction_E2SM_OID.size;
@@ -153,7 +153,7 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
     uint16_t seqNum = 0;
     unsigned int cpid = 0;
 
-    fprintf(stderr, "in %s function\n", __func__);
+    logger_trace("in %s function", __func__);
 
     while (cpid < num2send) {
 
@@ -177,8 +177,8 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
                     &asn_DEF_E2SM_RC_IndicationHeader,
                     ind_header, e2sm_header_buffer, e2sm_header_buffer_size);
 
-        fprintf(stderr, "er encded is %ld\n", er_header.encoded);
-        fprintf(stderr, "after encoding header\n");
+        logger_debug("er encded is %ld", er_header.encoded);
+        logger_trace("after encoding header");
 
         // ASN_STRUCT_FREE(asn_DEF_E2SM_RC_IndicationHeader, ind_header);
 
@@ -191,8 +191,8 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
                     &asn_DEF_E2SM_RC_IndicationMessage,
                     ind_msg, e2sm_msg_buffer, e2sm_msg_buffer_size);
 
-        fprintf(stderr, "er encded is %ld\n", er_msg.encoded);
-        fprintf(stderr, "after encoding message\n");
+        logger_debug("er encded is %ld", er_msg.encoded);
+        logger_trace("after encoding message");
 
         // ASN_STRUCT_FREE(asn_DEF_E2SM_RC_IndicationHeader, ind_header);
 
@@ -219,7 +219,7 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
         // asn_fprint(stderr, &asn_DEF_E2AP_PDU, pdu);
 
-        fprintf(stderr, "E2AP indication request PDU encoded\n");
+        logger_info("E2AP indication request PDU encoded");
 
         // test_decoding(pdu);  // FIXME Huff: only for debugging
 
@@ -233,7 +233,7 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    fprintf(stderr, "%s has finished\n", __func__);
+    logger_debug("%s has finished", __func__);
 
     std::this_thread::sleep_for(std::chrono::seconds(2));   // wait for all messages coming back
     save_timestamp_report();
@@ -248,7 +248,7 @@ void save_timestamp_report() {
 
     io_file.open("/tmp/timestamp_report.log", std::ios::in|std::ios::out|std::ios::trunc);
     if (!io_file) {
-        fprintf(stderr, "unable to open file to store the latency report\n");
+        logger_error("unable to open file to store the latency report: %s", strerror(errno));
         return;
     }
 
@@ -259,7 +259,7 @@ void save_timestamp_report() {
 
         latency = (recv - sent) / 1000;     // converting to mu-sec
 
-        fprintf(stderr, "\nsent: %lu, recv: %lu, latency: %lu\n", sent, recv, latency);
+        logger_debug("sent: %lu, recv: %lu, latency: %lu", sent, recv, latency);
 
         io_file << i << "\t" << latency << endl;
     }
@@ -273,35 +273,39 @@ void test_decoding(E2AP_PDU_t *pdu) {
     // first, we have to enconde those things
     len = aper_encode_to_new_buffer(&asn_DEF_E2AP_PDU, 0, pdu, (void **)&buf);
     if (len < 0) {
-        printf("[E2AP ASN] Unable to aper encode");
+        logger_fatal("[E2AP ASN] Unable to aper encode");
         exit(1);
     } else {
-        printf("[E2AP ASN] Encoded succesfully, encoded size = %d\n", len);
+        logger_debug("[E2AP ASN] Encoded succesfully, encoded size = %d", len);
     }
 
     E2AP_PDU_t *msg = NULL;
     asn_transfer_syntax syntax = ATS_ALIGNED_BASIC_PER;
-    fprintf(stderr, "\nDEBUG - about to decode ASN.1 message\n\n");
+    logger_trace("about to decode ASN.1 message");
     asn_dec_rval_t rval = asn_decode(0, syntax, &asn_DEF_E2AP_PDU, (void **)&msg, buf, len);
-    fprintf(stderr, "\nDEBUG - after decoding ASN.1 message\n\n");
+    logger_trace("after decoding ASN.1 message");
     if (rval.code != RC_OK) {
-      fprintf(stderr, "ERROR %s:%d - unable to decode ASN.1 message\n", __FILE__, __LINE__);
+      logger_error("unable to decode ASN.1 message");
     }
-    xer_fprint(stderr, &asn_DEF_E2AP_PDU, msg);
+    if (LOGGER_LEVEL > LOGGER_INFO) {
+        xer_fprint(stderr, &asn_DEF_E2AP_PDU, msg);
+    }
 
     for (int i = 0; i < msg->choice.initiatingMessage->value.choice.RICindication.protocolIEs.list.count; i++) {
         RICindication_IEs *ind_ie = msg->choice.initiatingMessage->value.choice.RICindication.protocolIEs.list.array[i];
         if (ind_ie->value.present == RICindication_IEs__value_PR_RICindicationMessage) {
             E2SM_RC_IndicationMessage_t *ind_msg = NULL;
-            fprintf(stderr, "\nDEBUG - about to decode E2SM_RC_IndicationMessage\n\n");
+            logger_trace("about to decode E2SM_RC_IndicationMessage");
             asn_dec_rval_t ret = asn_decode(NULL, syntax, &asn_DEF_E2SM_RC_IndicationMessage, (void **)&ind_msg,
                                  ind_ie->value.choice.RICindicationMessage.buf, ind_ie->value.choice.RICindicationMessage.size);
-            fprintf(stderr, "\nDEBUG - after decoding E2SM_RC_IndicationMessage\n\n");
+            logger_trace("after decoding E2SM_RC_IndicationMessage");
             if (ret.code != RC_OK) {
-                fprintf(stderr, "ERROR %s:%d - unable to decode E2SM_RC_IndicationMessage, ret.code=%d\n\n", __FILE__, __LINE__, ret.code);
+                logger_error("unable to decode E2SM_RC_IndicationMessage, ret.code=%d", ret.code);
             }
-            asn_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
-            // xer_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
+            if (LOGGER_LEVEL > LOGGER_INFO) {
+                asn_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
+                // xer_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
+            }
 
         }
     }
@@ -311,7 +315,7 @@ void test_decoding(E2AP_PDU_t *pdu) {
 void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
 {
 
-    fprintf(stderr, "Calling callback_rc_subscription_request\n");
+    logger_trace("Calling callback_rc_subscription_request");
 
     // Record RIC Request ID
     // Go through RIC action to be Setup List
@@ -330,8 +334,8 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
 
     RICsubscriptionRequest_IEs_t **ies = (RICsubscriptionRequest_IEs_t **)orig_req.protocolIEs.list.array;
 
-    fprintf(stderr, "count%d\n", count);
-    fprintf(stderr, "size%d\n", size);
+    logger_debug("count %d", count);
+    logger_debug("size %d", size);
 
     RICsubscriptionRequest_IEs__value_PR pres;
 
@@ -348,18 +352,16 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
         RICsubscriptionRequest_IEs_t *next_ie = ies[i];
         pres = next_ie->value.present;
 
-        fprintf(stderr, "The next present value %d\n", pres);
+        logger_debug("The next present value %d", pres);
 
         switch (pres)
         {
             case RICsubscriptionRequest_IEs__value_PR_RICrequestID:
             {
-                fprintf(stderr, "in case request id\n");
+               logger_trace("in case request id");
                 RICrequestID_t reqId = next_ie->value.choice.RICrequestID;
                 long requestorId = reqId.ricRequestorID;
                 long instanceId = reqId.ricInstanceID;
-                fprintf(stderr, "requestorId %ld\n", requestorId);
-                fprintf(stderr, "instanceId %ld\n", instanceId);
                 reqRequestorId = requestorId;
                 reqInstanceId = instanceId;
 
@@ -367,7 +369,7 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
             }
             case RICsubscriptionRequest_IEs__value_PR_RANfunctionID:
             {
-                fprintf(stderr, "in case ran func id\n");
+                logger_trace("in case ran func id");
                 RANfunctionID_t funcId = next_ie->value.choice.RANfunctionID;
                 reqFunctionId = funcId;
 
@@ -375,20 +377,17 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
             }
             case RICsubscriptionRequest_IEs__value_PR_RICsubscriptionDetails:
             {
-                fprintf(stderr, "in case subscription details\n");
+                logger_trace("in case subscription details");
                 RICsubscriptionDetails_t subDetails = next_ie->value.choice.RICsubscriptionDetails;
-                fprintf(stderr, "in case subscription details 1\n");
                 RICeventTriggerDefinition_t triggerDef = subDetails.ricEventTriggerDefinition;
-                fprintf(stderr, "in case subscription details 2\n");
                 RICactions_ToBeSetup_List_t actionList = subDetails.ricAction_ToBeSetup_List;
-                fprintf(stderr, "in case subscription details 3\n");
                 // We are ignoring the trigger definition
 
                 // We identify the first action whose type is INSERT
                 // That is the only one accepted; all others are rejected
 
                 int actionCount = actionList.list.count;
-                fprintf(stderr, "action count%d\n", actionCount);
+                logger_debug("action count %d", actionCount);
 
                 auto **item_array = actionList.list.array;
 
@@ -405,13 +404,13 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
                     {
                         reqActionId = actionId;
                         actionIdsAccept.push_back(reqActionId);
-                        printf("adding accept\n");
+                        logger_trace("adding accept");
                         foundAction = true;
                     }
                     else
                     {
                         reqActionId = actionId;
-                        printf("adding reject\n");
+                        logger_trace("adding reject");
                         actionIdsReject.push_back(reqActionId);
                     }
                 }
@@ -420,25 +419,24 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
             }
             default:
             {
-                fprintf(stderr, "in case default\n");
+                logger_trace("in case default");
                 break;
             }
         }
     }
 
-    fprintf(stderr, "After Processing Subscription Request\n");
+    logger_trace("After Processing Subscription Request");
 
-    fprintf(stderr, "requestorId %ld\n", reqRequestorId);
-    fprintf(stderr, "instanceId %ld\n", reqInstanceId);
+    logger_debug("requestorId %ld\tinstanceId %ld", reqRequestorId, reqInstanceId);
 
     for (int i = 0; i < actionIdsAccept.size(); i++)
     {
-        fprintf(stderr, "Accepted Action ID %d %ld\n", i, actionIdsAccept.at(i));
+        logger_debug("Accepted Action ID %d %ld", i, actionIdsAccept.at(i));
     }
 
     for (int i = 0; i < actionIdsReject.size(); i++)
     {
-        fprintf(stderr, "Rejected Action ID %d %ld\n", i, actionIdsReject.at(i));
+        logger_warn("Rejected Action ID %d %ld", i, actionIdsReject.at(i));
     }
 
     E2AP_PDU *e2ap_pdu = (E2AP_PDU *)calloc(1, sizeof(E2AP_PDU));
@@ -454,7 +452,7 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
     }
     else
     {
-        fprintf(stderr, "RIC subscription error. Cause: action id not supported.\n\n");
+        logger_error("RIC subscription error. Cause: action id not supported.");
         Cause_t cause;
         cause.present = Cause_PR_ricRequest;
         cause.choice.ricRequest = CauseRICrequest_action_not_supported;
@@ -470,14 +468,14 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
 
     // long funcId = 0;
     //   run_report_loop(reqRequestorId, reqInstanceId, funcId, reqActionId);
-    fprintf(stderr, "callback_rc_subscription_request has finished\n");
+    logger_trace("callback_rc_subscription_request has finished");
 
 
     if (accept_size > 0) {  // we only call the simulation if the RIC subscription has succeeded
-        fprintf(stderr, "about to call run_insert_loop thread\n");
+        logger_trace("about to call run_insert_loop thread");
         std::thread th(run_insert_loop, reqRequestorId, reqInstanceId, reqFunctionId, reqActionId);
         th.detach();
-        fprintf(stderr, "run_insert_loop thread has spawned\n");
+        logger_trace("run_insert_loop thread has spawned");
         // run_insert_loop(reqRequestorId, reqInstanceId, reqFunctionId, reqActionId);
     }
 
@@ -485,7 +483,7 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
 }
 
 void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv_ts) {
-    fprintf(stderr, "Calling callback_rc_control_request\n");
+    logger_trace("Calling callback_rc_control_request");
 
     RICcontrolRequest_t orig_req =
         ctrl_req_pdu->choice.initiatingMessage->value.choice.RICcontrolRequest;
@@ -495,8 +493,7 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
 
     RICcontrolRequest_IEs_t **ies = (RICcontrolRequest_IEs_t **)orig_req.protocolIEs.list.array;
 
-    fprintf(stderr, "count%d\n", count);
-    fprintf(stderr, "size%d\n", size);
+    logger_debug("count %d\tsize %d", count, size);
 
     RICcontrolRequest_IEs__value_PR pres;
 
@@ -513,20 +510,22 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
         RICcontrolRequest_IEs_t *next_ie = ies[i];
         pres = next_ie->value.present;
 
-        fprintf(stderr, "The next present value %d\n", pres);
+        logger_debug("The next present value %d", pres);
 
         switch (pres)
         {
             case RICcontrolRequest_IEs__value_PR_RICcallProcessID:
             {
-                fprintf(stderr, "in case call process id\n");
+                logger_trace("in case call process id");
                 RICcallProcessID_t processId = next_ie->value.choice.RICcallProcessID;
-                fprintf(stderr, "call process id is ");
-                asn_fprint(stderr, &asn_DEF_RICcallProcessID, &processId);
+                if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+                    logger_debug("call process id is below");
+                    asn_fprint(stderr, &asn_DEF_RICcallProcessID, &processId);
+                }
 
                 unsigned int cpid;
                 mempcpy(&cpid, processId.buf, processId.size);
-                fprintf(stderr, "cpid is %u\n", cpid);
+                logger_debug("cpid is %u", cpid);
 
                 /*
                     we copy all the timespec content since it comes from the base e2sim, which
@@ -538,22 +537,22 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
             }
             case RICcontrolRequest_IEs__value_PR_RICcontrolAckRequest:
             {
-                fprintf(stderr, "in case control ack request\n");
+                logger_trace("in case control ack request");
                 RICcontrolAckRequest_t ack = next_ie->value.choice.RICcontrolAckRequest;
-                fprintf(stderr, "control ack request is %ld\n", ack);
+                logger_debug("control ack request is %ld", ack);
                 if (ack == RICcontrolAckRequest_ack) {
-                    fprintf(stderr, "should send control request ack to RIC. Not yet implemented.\n.");
+                    logger_warn("should send control request ack to RIC. Not yet implemented..");
                 }
 
                 break;
             }
             default:
             {
-                fprintf(stderr, "in case default\n");
+                logger_trace("in case default");
                 break;
             }
         }
     }
 
-    fprintf(stderr, "After Processing Control Request\n");
+    logger_trace("After Processing Control Request");
 }

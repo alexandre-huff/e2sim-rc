@@ -40,17 +40,17 @@ std::unordered_map<long, encoded_ran_function_t *> E2Sim::getRegistered_ran_func
 }
 
 void E2Sim::register_subscription_callback(long func_id, SubscriptionCallback cb) {
-  fprintf(stderr,"about to register callback for subscription for func id %ld\n", func_id);
+  logger_debug("about to register callback for subscription for func id %ld", func_id);
   subscription_callbacks[func_id] = cb;
 }
 
 void E2Sim::register_control_callback(long func_id, ControlCallback cb) {
-  fprintf(stderr,"about to register callback for control for func id %ld\n", func_id);
+  logger_debug("about to register callback for control for func id %ld", func_id);
   control_callbacks[func_id] = cb;
 }
 
 SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
-  fprintf(stderr, "we are getting the subscription callback for func id %ld\n", func_id);
+  logger_debug("we are getting the subscription callback for func id %ld", func_id);
   SubscriptionCallback cb;
 
   try {
@@ -63,7 +63,7 @@ SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
 }
 
 ControlCallback E2Sim::get_control_callback(long func_id) {
-  fprintf(stderr, "we are getting the control callback for func id %ld\n", func_id);
+  logger_debug("we are getting the control callback for func id %ld", func_id);
   ControlCallback cb;
 
   try {
@@ -80,7 +80,7 @@ void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func) {
   //Error conditions:
   //If we already have an entry for func_id
 
-  printf("about to register e2sm func id %ld\n", func_id);
+  logger_debug("about to register e2sm func id %ld", func_id);
 
   ran_functions_registered[func_id] = ran_func;
 
@@ -106,7 +106,7 @@ void E2Sim::wait_for_sctp_data()
   sctp_buffer_t recv_buf;
   if(sctp_receive_data(client_fd, recv_buf, &ts) > 0)
   {
-    LOG_I("[SCTP] Received new data of size %d", recv_buf.len);
+    logger_info("[SCTP] Received new data of size %d", recv_buf.len);
     e2ap_handle_sctp_data(client_fd, recv_buf, false, this, &ts);
   }
 }
@@ -124,7 +124,7 @@ void E2Sim::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu,
 
 int E2Sim::run_loop(int argc, char* argv[]){
 
-  printf("Start E2 Agent (E2 Simulator)\n");
+  logger_force(LOGGER_INFO, "Start E2 Agent (E2 Simulator)");
 
   // ifstream simfile;
   // string line;
@@ -145,16 +145,16 @@ int E2Sim::run_loop(int argc, char* argv[]){
 
   options_t ops = read_input_options(argc, argv);
 
-  printf("After reading input options\n");
+  logger_trace("After reading input options");
 
   //E2 Agent will automatically restart upon sctp disconnection
   //  int server_fd = sctp_start_server(ops.server_ip, ops.server_port);
 
   client_fd = sctp_start_client(ops.server_ip, ops.server_port);
-  E2AP_PDU_t* pdu_setup = (E2AP_PDU_t*)calloc(1,sizeof(E2AP_PDU));
 
-  printf("After starting client\n");
-  printf("client_fd value is %d\n", client_fd);
+  logger_trace("After starting SCTP client");
+
+  E2AP_PDU_t* pdu_setup = (E2AP_PDU_t*)calloc(1,sizeof(E2AP_PDU));
 
   std::vector<encoding::ran_func_info> all_funcs;
   // RANfunctionOID_t *ranFunctionOIDe = (RANfunctionOID_t*)calloc(1,sizeof(RANfunctionOID_t));
@@ -166,7 +166,7 @@ int E2Sim::run_loop(int argc, char* argv[]){
   //Loop through RAN function definitions that are registered
 
   for (std::pair<long, encoded_ran_function_t *> elem : ran_functions_registered) {
-    printf("looping through ran func\n");
+   logger_trace("looping through ran func");
     encoding::ran_func_info next_func;
 
     next_func.ranFunctionId = elem.first;
@@ -177,14 +177,16 @@ int E2Sim::run_loop(int argc, char* argv[]){
     all_funcs.push_back(next_func);
   }
 
-  printf("about to call setup request encode\n");
+  logger_trace("about to call setup request encode");
   generate_e2apv1_setup_request_parameterized(pdu_setup, all_funcs);
 
-  printf("After generating e2setup req\n");
+  logger_trace("After generating e2setup req");
 
-  xer_fprint(stderr, &asn_DEF_E2AP_PDU, pdu_setup);
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    xer_fprint(stderr, &asn_DEF_E2AP_PDU, pdu_setup);
+  }
 
-  printf("After XER Encoding\n");
+  logger_trace("After XER Encoding");
 
   auto buffer_size = MAX_SCTP_BUFFER;
   unsigned char buffer[MAX_SCTP_BUFFER];
@@ -194,27 +196,28 @@ int E2Sim::run_loop(int argc, char* argv[]){
   char error_buf[300] = {0, };
   size_t errlen = 0;
 
-  asn_check_constraints(&asn_DEF_E2AP_PDU, pdu_setup, error_buf, &errlen);
-  printf("error length %ld\n", errlen);
-  printf("error buf %s\n", error_buf);
+  int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, pdu_setup, error_buf, &errlen);
+  if (ret != 0) {
+    logger_error("E2AP_PDU check constraints failed. error length = %ld, error buf %s", errlen, error_buf);
+  }
 
-  auto er = asn_encode_to_buffer(nullptr, ATS_ALIGNED_BASIC_PER, &asn_DEF_E2AP_PDU, pdu_setup, buffer, buffer_size);
+  auto er = asn_encode_to_buffer(NULL, ATS_ALIGNED_BASIC_PER, &asn_DEF_E2AP_PDU, pdu_setup, buffer, buffer_size);
 
   data.len = er.encoded;
 
-  fprintf(stderr, "er encded is %ld\n", er.encoded);
+  logger_debug("er encded is %ld", er.encoded);
 
   memcpy(data.buffer, buffer, er.encoded);
 
   if(sctp_send_data(client_fd, data, NULL) > 0) {
-    LOG_I("[SCTP] Sent E2-SETUP-REQUEST");
+    logger_info("[SCTP] Sent E2-SETUP-REQUEST");
   } else {
-    LOG_E("[SCTP] Unable to send E2-SETUP-REQUEST to peer");
+    logger_error("[SCTP] Unable to send E2-SETUP-REQUEST to peer");
   }
 
   sctp_buffer_t recv_buf;
 
-  LOG_I("[SCTP] Waiting for SCTP data");
+  logger_info("[SCTP] Waiting for SCTP data");
 
   struct timespec ts; // timestamp of the received message
 
@@ -223,7 +226,7 @@ int E2Sim::run_loop(int argc, char* argv[]){
     if(sctp_receive_data(client_fd, recv_buf, &ts) <= 0)
       break;
 
-    LOG_I("[SCTP] Received new data of size %d", recv_buf.len);
+    logger_debug("[SCTP] Received new data of size %d", recv_buf.len);
 
     e2ap_handle_sctp_data(client_fd, recv_buf, xmlenc, this, &ts);
     if (xmlenc) xmlenc = false;

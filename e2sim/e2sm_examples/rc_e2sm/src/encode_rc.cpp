@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "encode_rc.hpp"
+#include "logger.h"
 
 using namespace std;
 
@@ -31,7 +32,7 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     int ret;    // Temporary return value
     size_t len; // Temporary length to avoid unnecessary strlen calls
 
-    fprintf(stderr, "in %s function\n", __func__);
+    logger_trace("in %s function", __func__);
 
     uint8_t *buf = (uint8_t*)"ORAN-E2SM-RC";	// short name
     uint8_t *buf2 = (uint8_t*)"RAN Control";	// ran function description
@@ -57,7 +58,7 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
 
     ranfunc_def->ranFunction_Name.ranFunction_Instance = &inst;
 
-    fprintf(stderr, "ranFunction_Name set up\n");
+    logger_trace("ranFunction_Name set up");
 
     ranfunc_def->ranFunctionDefinition_EventTrigger =
             (RANFunctionDefinition_EventTrigger_t *) calloc(1, sizeof(RANFunctionDefinition_EventTrigger_t));
@@ -71,7 +72,7 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     style_item->ric_EventTriggerStyle_Name.size = len;
     style_item->ric_EventTriggerFormat_Type = 2;
     ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_EventTrigger->ric_EventTriggerStyle_List.list, style_item);
-    fprintf(stderr, "ranFunction_EventTrigger set up\n");
+    logger_trace("ranFunction_EventTrigger set up");
 
     ranfunc_def->ranFunctionDefinition_Insert =
             (RANFunctionDefinition_Insert_t *) calloc(1, sizeof(RANFunctionDefinition_Insert_t));
@@ -92,7 +93,7 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     insert_item->ric_CallProcessIDFormat_Type = 1;
 
     ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Insert->ric_InsertStyle_List.list, insert_item);
-    fprintf(stderr, "ranFunction_Definition_Insert set up\n");
+    logger_trace("ranFunction_Definition_Insert set up");
 
     ranfunc_def->ranFunctionDefinition_Control =
             (RANFunctionDefinition_Control_t *) calloc(1, sizeof(RANFunctionDefinition_Control_t));
@@ -121,15 +122,17 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     ASN_SEQUENCE_ADD(&ctrl_item->ric_ControlAction_List->list, ctrl_act_item);
 
     ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Control->ric_ControlStyle_List.list, ctrl_item);
-    fprintf(stderr, "ranFunction_Definition_Control set up\n");
+    logger_trace("ranFunction_Definition_Control set up");
 
-    xer_fprint(stderr, &asn_DEF_E2SM_RC_RANFunctionDefinition, ranfunc_def);
+    if(LOGGER_LEVEL >= LOGGER_DEBUG) {
+        xer_fprint(stderr, &asn_DEF_E2SM_RC_RANFunctionDefinition, ranfunc_def);
+    }
 
-    fprintf(stderr, "end of %s\n", __func__);
+    logger_trace("end of %s", __func__);
 }
 
 void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg) {
-    fprintf(stderr, "in %s function\n", __func__);
+    logger_trace("in %s function", __func__);
 
     char error_buf[300] = {0, };
     size_t errlen = 0;
@@ -228,15 +231,13 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg) {
     memset(error_buf, 0, sizeof(error_buf));    // ensuring it is clean
     errlen = 0;
 
-    fprintf(stderr, "INFO %s:%d - about to check constraints of NR_CGI\n", __FILE__, __LINE__);
+    logger_trace("about to check constraints of NR_CGI");
     ret = asn_check_constraints(&asn_DEF_NR_CGI, nr_cgi, error_buf, &errlen);
-    assert(ret == 0);
-    printf("error length %lu\n", errlen);
-    printf("error buf %s\n", error_buf);
+    if(ret != 0) {
+        logger_error("NR_CGI check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+    }
 
-//     xer_fprint(stderr, &asn_DEF_NR_CGI, nr_cgi);
-
-    fprintf(stderr, "NR_CGI set up\n");
+    logger_trace("NR_CGI set up");
 
     asn_codec_ctx_t *opt_cod;
 
@@ -249,8 +250,8 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg) {
                 &asn_DEF_NR_CGI,
                 nr_cgi, nr_cgi_buffer, nr_cgi_buffer_size);
 
-    fprintf(stderr, "er encded is %ld\n", er.encoded);
-    fprintf(stderr, "after encoding NR_CGI\n");
+    logger_debug("er encded is %ld", er.encoded);
+    logger_trace("after encoding NR_CGI");
 
     OCTET_STRING_t *ostr = &ranp_struct_item4->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueOctS;
     OCTET_STRING_fromBuf(ostr, (char *) nr_cgi_buffer, er.encoded);
@@ -278,15 +279,17 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg) {
 
     // asn_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
 
-    fprintf(stderr, "E2SM_RC_IndicationMessage set up\n");
+    logger_trace("E2SM_RC_IndicationMessage set up");
 
-    xer_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
+    if(LOGGER_LEVEL >= LOGGER_DEBUG) {
+        xer_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
+    }
 
-    fprintf(stderr, "end of %s\n", __func__);
+    logger_trace("end of %s", __func__);
 }
 
 void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header) {
-    fprintf(stderr, "in %s function\n", __func__);
+    logger_trace("in %s function", __func__);
 
     ind_header->ric_indicationHeader_formats.choice.indicationHeader_Format2 =
             (E2SM_RC_IndicationHeader_Format2_t *) calloc(1, sizeof(E2SM_RC_IndicationHeader_Format2_t));
@@ -328,15 +331,17 @@ void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header) {
     char error_buf[300] = {0, };
     size_t errlen = 0;
 
-    fprintf(stderr, "INFO %s:%d - about to check constraints of E2SM_RC_IndicationHeader\n", __FILE__, __LINE__);
+    logger_trace("about to check constraints of E2SM_RC_IndicationHeader");
     int ret = asn_check_constraints(&asn_DEF_E2SM_RC_IndicationHeader, ind_header, error_buf, &errlen);
-    printf("error length %lu\n", errlen);
-    printf("error buf %s\n", error_buf);
-    assert(ret == 0);
+    if(ret != 0) {
+        printf("E2SM_RC_IndicationHeader check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+    }
 
-    fprintf(stderr, "E2SM_RC_IndicationHeader set up\n");
+    logger_trace("E2SM_RC_IndicationHeader set up");
 
-    xer_fprint(stderr, &asn_DEF_E2SM_RC_IndicationHeader, ind_header);
+    if(LOGGER_LEVEL >= LOGGER_DEBUG) {
+        xer_fprint(stderr, &asn_DEF_E2SM_RC_IndicationHeader, ind_header);
+    }
 
-    fprintf(stderr, "end of %s\n", __func__);
+    logger_trace("end of %s", __func__);
 }

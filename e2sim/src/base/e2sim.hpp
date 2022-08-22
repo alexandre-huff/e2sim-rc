@@ -21,6 +21,7 @@
 #define E2SIM_HPP
 
 #include <unordered_map>
+#include "logger.h"
 
 extern "C" {
   #include "E2AP-PDU.h"
