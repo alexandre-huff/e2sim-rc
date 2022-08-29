@@ -18,7 +18,7 @@ endif()
 include ( GNUInstallDirs )
 
 add_definitions("-D ASN_DISABLE_OER_SUPPORT")
-add_definitions("-DLOGGER_LEVEL=LOGGER_DEBUG") # NONE, FATAL, ERROR, WARN, INFO, DEBUG, TRACE
+add_definitions("-DLOGGER_LEVEL=LOGGER_INFO") # NONE, FATAL, ERROR, WARN, INFO, DEBUG, TRACE
 
 if( NOT CMAKE_INSTALL_LIBDIR )
 	set( CMAKE_INSTALL_LIBDIR "lib" )

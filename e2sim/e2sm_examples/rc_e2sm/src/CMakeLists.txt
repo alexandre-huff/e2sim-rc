@@ -15,6 +15,8 @@
 #==================================================================================
 #
 
+find_package(prometheus-cpp CONFIG REQUIRED)
+
 add_executable( e2sim-rc rc_callbacks.cpp encode_rc.cpp )
 
 # add_dependencies( e2sim-rc asn1_objects )
@@ -24,6 +26,15 @@ target_include_directories( e2sim-rc PRIVATE ../ASN1c /usr/local/include/e2sim )
 target_link_libraries( e2sim-rc e2sim )
 target_link_libraries( e2sim-rc asn1_objects )
 target_link_libraries( e2sim-rc pthread )
+
+# Prometheus
+target_include_directories( e2sim-rc PRIVATE /usr/include/prometheus )
+if(PROMETHEUS_CPP_ENABLE_PUSH)
+    target_link_libraries(e2sim-rc prometheus-cpp::push)
+endif()
+if(PROMETHEUS_CPP_ENABLE_PULL)
+    target_link_libraries(e2sim-rc prometheus-cpp::pull)
+endif()
 
 install(
     TARGETS e2sim-rc

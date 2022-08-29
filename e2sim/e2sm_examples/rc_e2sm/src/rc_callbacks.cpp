@@ -45,6 +45,7 @@ extern "C"
 #include "rc_callbacks.hpp"
 #include "encode_rc.hpp"
 #include "e2sim.hpp"
+#include "e2sim_defs.h"
 
 #include "encode_e2apv1.hpp"
 
@@ -56,26 +57,33 @@ extern "C"
 
 // using json = nlohmann::json;
 
+#include <prometheus/registry.h>
+#include <prometheus/exposer.h>
+#include <prometheus/histogram.h>
+#include <memory.h>
+#include <getopt.h>
+
 using namespace std;
+using namespace prometheus;
+
 class E2Sim;
 
 E2Sim e2sim;
 
+args_t cmd_args;        // command line arguments
+timestamp_t *ts_list;   // array containing the send and received timestamps of the corresponding INSERT and CONTROL messages
+metrics_t metrics;
+
 int main(int argc, char *argv[])
 {
+    cmd_args = parse_input_options(argc, argv);
 
     logger_force(LOGGER_INFO, "Starting E2 Simulator for RC service model");
 
     // run_insert_loop(123, 1, 1, 1);   // FIXME Huff: only for debugging purposes
     // exit(1);
 
-    num2send = 5;
-    if(argc == 4) { // user provided IP, PORT, and NUM2SEND
-        num2send = atoi(argv[3]);
-        argc--; // we do not use number of simulation messages in the base e2sim
-    }
-
-    ts_list = (timestamp_t *) calloc(num2send, sizeof(timestamp_t));
+    ts_list = (timestamp_t *) calloc(cmd_args.num2send, sizeof(timestamp_t));
     if(ts_list == NULL) {
         logger_fatal("unable to allocate memory for the timestamp list");
         exit(1);
@@ -120,9 +128,90 @@ int main(int argc, char *argv[])
     e2sim.register_subscription_callback(1, &callback_rc_subscription_request);
     e2sim.register_control_callback(1, &callback_rc_control_request);
 
-    e2sim.run_loop(argc, argv);
+    init_prometheus(metrics);
+
+    e2sim.run_loop(cmd_args.server_ip.c_str(), cmd_args.server_port);
 
     free(ts_list);
+}
+
+args_t parse_input_options(int argc, char *argv[]) {
+    args_t args;
+    args.server_ip = DEFAULT_SCTP_IP;
+    args.server_port = E2AP_SCTP_PORT;
+    args.loop_interval = DEFAULT_LOOP_INTERVAL;
+    args.report_wait = DEFAULT_REPORT_WAIT;
+    args.num2send = 5;
+
+    static struct option long_options[] =
+    {
+        {"ip", required_argument, 0, 'i'},
+        {"port", required_argument, 0, 'p'},
+        {"loop_interval", required_argument, 0, 'l'},
+        {"wait_report", required_argument, 0, 'w'},
+        {"num2send", required_argument, 0, 'n'},
+        {0, 0, 0, 0}
+    };
+
+    int c;
+    while(1) {
+        int option_index = 0;
+        c = getopt_long(argc, argv, "i:p:l:w:n:", long_options, &option_index);
+        if (c == -1)
+            break;
+
+        switch(c) {
+            case 'i':
+                args.server_ip = optarg;
+                break;
+            case 'p':
+                args.server_port = atoi(optarg);
+                break;
+            case 'l':
+                args.loop_interval = strtoul(optarg, NULL, 10);
+                break;
+            case 'w':
+                args.report_wait = atoi(optarg);
+                break;
+            case 'n':
+                args.num2send = atoi(optarg);
+                break;
+            case '?':
+            default:
+                fprintf(stderr,
+                    "\nUsage: %s [-i|--ip server_ip] [-p|--port server_port] [-l|--loop_interval milliseconds] [-w|--wait_report seconds] [-n|--num2send messages]\n\n", argv[0]);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    return args;
+}
+
+/*
+    Builds the prometheus configuration and exposes its metrics on port 8080
+*/
+void init_prometheus(metrics_t &metrics) {
+    std::string podName = "unknown-e2sim";
+    char *pod_env = std::getenv("POD_NAME");
+    if(pod_env != NULL) {
+        podName = pod_env;
+    }
+
+    metrics.registry = std::make_shared<Registry>();
+    metrics.family = &BuildHistogram()
+                            .Name("rc_control_loop_seconds")
+                            .Help("E2SM-RC Insert-Control Loop metrics")
+                            .Labels({{"POD_NAME", podName}})
+                            .Register(*metrics.registry);
+
+    metrics.exposer = new Exposer("0.0.0.0:8080", 1);
+    metrics.exposer->RegisterCollectable(metrics.registry);
+
+    metrics.buckets = new Histogram::BucketBoundaries(
+        {0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01, 0.02, 0.05, 0.1});
+    // FIXME: e2node_instance should be registered per thread (next line should be called within each spawned thread)
+    // for now we call it here due e2sim only runs a single e2node instance
+    metrics.histogram = &metrics.family->Add({{"e2node_instance", "e2node1_env_name"}}, *metrics.buckets);
 }
 
 void get_cell_id(uint8_t *nrcellid_buf, char *cid_return_buf)
@@ -155,7 +244,7 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
     logger_trace("in %s function", __func__);
 
-    while (cpid < num2send) {
+    while (cpid < cmd_args.num2send) {
 
         E2SM_RC_IndicationHeader_t *ind_header =
                 (E2SM_RC_IndicationHeader_t *) calloc(1, sizeof(E2SM_RC_IndicationHeader_t));
@@ -196,7 +285,7 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
         // ASN_STRUCT_FREE(asn_DEF_E2SM_RC_IndicationHeader, ind_header);
 
-        // FIXME TODO Huff: implement decoding function to see if all get decoded correctly <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        // FIXME TODO Huff: implement decoding function to see if all get decoded correctly
         // fprintf(stderr, "\nDEBUG - about to decode E2SM message\n\n");
         // asn_transfer_syntax syntax = ATS_ALIGNED_BASIC_PER;
         // E2SM_RC_IndicationMessage_t *msg;
@@ -230,13 +319,28 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
         // FIXME Huff: Release E2AP_PDU_t *pdu
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        if(cmd_args.loop_interval > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(cmd_args.loop_interval));
+        }
     }
 
     logger_debug("%s has finished", __func__);
 
-    std::this_thread::sleep_for(std::chrono::seconds(2));   // wait for all messages coming back
+    std::this_thread::sleep_for(std::chrono::seconds(cmd_args.report_wait));   // wait for all messages coming back
     save_timestamp_report();
+}
+
+static inline double elapsed_seconds(timestamp_t t) {
+    unsigned long sent;
+    unsigned long recv;
+    double latency;
+
+    sent = t.sent.tv_sec * 1000000000 + t.sent.tv_nsec;
+    recv = t.recv.tv_sec * 1000000000 + t.recv.tv_nsec;
+
+    latency = (recv - sent) / 1000000000.0;     // converting to seconds
+
+    return latency;
 }
 
 void save_timestamp_report() {
@@ -246,13 +350,13 @@ void save_timestamp_report() {
     unsigned long recv;
     timestamp_t *ts;
 
-    io_file.open("/tmp/timestamp_report.log", std::ios::in|std::ios::out|std::ios::trunc);
+    io_file.open("/tmp/e2sim_report.log", std::ios::in|std::ios::out|std::ios::trunc);
     if (!io_file) {
         logger_error("unable to open file to store the latency report: %s", strerror(errno));
         return;
     }
 
-    for (unsigned int i = 0; i < num2send; i++) {
+    for (unsigned int i = 0; i < cmd_args.num2send; i++) {
         ts = &ts_list[i];
         sent = ts->sent.tv_sec * 1000000000 + ts->sent.tv_nsec;
         recv = ts->recv.tv_sec * 1000000000 + ts->recv.tv_nsec;
@@ -532,6 +636,10 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
                     overwrittes the timespec values for each new received message
                 */
                 ts_list[cpid].recv = *recv_ts;
+
+                // prometheus metrics
+                double seconds = elapsed_seconds(ts_list[cpid]);
+                metrics.histogram->Observe(seconds);
 
                 break;
             }

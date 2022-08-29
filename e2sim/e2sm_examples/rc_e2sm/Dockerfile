@@ -89,9 +89,15 @@ RUN apt-get update \
 # RUN git clone https://github.com/azadkuh/nlohmann_json_release.git
 # RUN cp nlohmann_json_release/json.hpp /usr/local/include/nlohmann
 
+RUN apt-get install -y libcurl4-openssl-dev
+
 COPY . /playpen/
 
 RUN dpkg -i e2sim_1.0.0_amd64.deb e2sim-dev_1.0.0_amd64.deb
+
+RUN cd 3rdparty && git clone -v https://github.com/jupp0r/prometheus-cpp.git \
+    && cd prometheus-cpp && git submodule init && git submodule update && mkdir build && cd build \
+    && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig
 
 RUN rm -fr .build &&\
 	mkdir  .build && \

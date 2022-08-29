@@ -122,9 +122,18 @@ void E2Sim::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu,
 
 }
 
-int E2Sim::run_loop(int argc, char* argv[]){
-
+int E2Sim::run_loop(const char *server_ip, int server_port){
   logger_force(LOGGER_INFO, "Start E2 Agent (E2 Simulator)");
+
+  char *server_addr = (char *)server_ip;
+  if(server_addr == NULL) {
+    server_addr = (char *)DEFAULT_SCTP_IP;
+  }
+  if(server_port < 1 || server_port > 65535) {
+    logger_warn("Invalid port number (%d). Valid values are between 1 and 65535. Using default port (%d)",
+                                                                              server_port, E2AP_SCTP_PORT);
+    server_port = E2AP_SCTP_PORT;
+  }
 
   // ifstream simfile;
   // string line;
@@ -143,14 +152,14 @@ int E2Sim::run_loop(int argc, char* argv[]){
 
   bool xmlenc = false;
 
-  options_t ops = read_input_options(argc, argv);
+  // options_t ops = read_input_options(argc, argv);
 
   logger_trace("After reading input options");
 
   //E2 Agent will automatically restart upon sctp disconnection
   //  int server_fd = sctp_start_server(ops.server_ip, ops.server_port);
 
-  client_fd = sctp_start_client(ops.server_ip, ops.server_port);
+  client_fd = sctp_start_client(server_addr, server_port);
 
   logger_trace("After starting SCTP client");
 
