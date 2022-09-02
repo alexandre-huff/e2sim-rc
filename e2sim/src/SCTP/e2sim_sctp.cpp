@@ -30,15 +30,9 @@
 // #include "e2sim_defs.h"
 #include "logger.h"
 
-
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/sctp.h>
+#include <netdb.h>
 #include <signal.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <time.h>
 
 int sctp_start_server(const char *server_ip_str, const int server_port)
@@ -114,84 +108,54 @@ int sctp_start_server(const char *server_ip_str, const int server_port)
   return server_fd;
 }
 
-int sctp_start_client(const char *server_ip_str, const int server_port)
-{
-  int client_fd, af;
+/*
+  Starts a client SCTP connection to a given server and port
+  Accepts IPv4, IPv6, and hostname as input values
+*/
+int sctp_start_client(const char *server_addr_str, const int server_port) {
+  int client_fd;
+  struct addrinfo hints;
+  struct addrinfo *result, *rp;
+  int ret;
 
-  struct sockaddr* server_addr;
-  size_t addr_len;
+  /* Obtain address(es) matching host/port */
+  memset(&hints, 0, sizeof(struct addrinfo));
+  hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = 0;
+  hints.ai_protocol = IPPROTO_SCTP;
 
-  struct sockaddr_in  server4_addr;
-  memset(&server4_addr, 0, sizeof(struct sockaddr_in));
+  char port_buf[6];
+  snprintf(port_buf, 6, "%d", server_port);
 
-  struct sockaddr_in6 server6_addr;
-  memset(&server6_addr, 0, sizeof(struct sockaddr_in6));
-
-  if(inet_pton(AF_INET, server_ip_str, &server4_addr.sin_addr) == 1)
-  {
-    server4_addr.sin_family = AF_INET;
-    server4_addr.sin_port   = htons(server_port);
-    server_addr = (struct sockaddr*)&server4_addr;
-    addr_len    = sizeof(server4_addr);
-  }
-  else if(inet_pton(AF_INET6, server_ip_str, &server6_addr.sin6_addr) == 1)
-  {
-    server6_addr.sin6_family = AF_INET6;
-    server6_addr.sin6_port   = htons(server_port);
-    server_addr = (struct sockaddr*)&server6_addr;
-    addr_len    = sizeof(server6_addr);
-  }
-  else {
-    perror("inet_pton()");
-    exit(1);
+  ret = getaddrinfo(server_addr_str, port_buf, &hints, &result);
+  if (ret != 0) {
+      fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
+      exit(EXIT_FAILURE);
   }
 
-  if((client_fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_SCTP)) == -1)
-  {
-     perror("socket");
-     exit(1);
+  logger_info("[SCTP] Connecting to server at %s:%d ...", server_addr_str, server_port);
+
+  /* getaddrinfo() returns a list of address structures (IPv4 and IPv6).
+    We have to try each address until we successfully connect. */
+  for (rp = result; rp != NULL; rp = rp->ai_next) {
+      client_fd = socket(rp->ai_family, rp->ai_socktype,
+                      rp->ai_protocol);
+      if (client_fd == -1)
+          continue;
+
+      if (connect(client_fd, rp->ai_addr, rp->ai_addrlen) != -1)
+          break;                  /* Success */
+
+      close(client_fd);
   }
 
-  // int sendbuff = 10000;
-  // socklen_t optlen = sizeof(sendbuff);
-  // if(getsockopt(client_fd, SOL_SOCKET, SO_SNDBUF, &sendbuff, &optlen) == -1) {
-  //   perror("getsockopt send");
-  //   exit(1);
-  // }
-  // else
-  //   LOG_D("[SCTP] send buffer size = %d\n", sendbuff);
-
-  //--------------------------------
-  //Bind before connect
-  auto optval = 1;
-  if( setsockopt(client_fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof optval) != 0 ){
-    perror("setsockopt port");
-    exit(1);
+  if (rp == NULL) {               /* No address succeeded */
+      logger_fatal("Unable to connect to %s", server_addr_str);
+      exit(EXIT_FAILURE);
   }
 
-  if( setsockopt(client_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval) != 0 ){
-    perror("setsockopt addr");
-    exit(1);
-  }
-
-  struct sockaddr_in6  client6_addr {};
-  client6_addr.sin6_family = AF_INET6;
-  client6_addr.sin6_port   = htons(RIC_SCTP_SRC_PORT);
-  client6_addr.sin6_addr   = in6addr_any;
-
-  logger_info("[SCTP] Binding client socket to source port %d", RIC_SCTP_SRC_PORT);
-  if(bind(client_fd, (struct sockaddr*)&client6_addr, sizeof(client6_addr)) == -1) {
-    perror("bind");
-    exit(1);
-  }
-  // end binding ---------------------
-
-  logger_info("[SCTP] Connecting to server at %s:%d ...", server_ip_str, server_port);
-  if(connect(client_fd, server_addr, addr_len) == -1) {
-    perror("connect");
-    exit(1);
-  }
-  assert(client_fd != 0);
+  freeaddrinfo(result);           /* No longer needed */
 
   logger_info("[SCTP] Connection established");
   logger_debug("[SCTP] client_fd value is %d", client_fd);

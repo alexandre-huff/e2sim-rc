@@ -24,7 +24,7 @@
 #include "e2sim.hpp"
 #include "logger.h"
 
-#define DEFAULT_REPORT_WAIT 2       // time (seconds) to wait for generate file reports
+#define DEFAULT_REPORT_WAIT 5       // time (seconds) to wait for generate file reports
 #define DEFAULT_LOOP_INTERVAL 1000  // time (milliseconds) between each insert message that is sent to the RIC
 
 

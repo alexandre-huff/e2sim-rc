@@ -150,38 +150,47 @@ args_t parse_input_options(int argc, char *argv[]) {
         {"loop_interval", required_argument, 0, 'l'},
         {"wait_report", required_argument, 0, 'w'},
         {"num2send", required_argument, 0, 'n'},
+        {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
     };
 
     int c;
     while(1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "i:p:l:w:n:", long_options, &option_index);
+        c = getopt_long(argc, argv, "p:n:i:w:h", long_options, &option_index);
         if (c == -1)
             break;
 
         switch(c) {
-            case 'i':
-                args.server_ip = optarg;
-                break;
             case 'p':
                 args.server_port = atoi(optarg);
                 break;
-            case 'l':
+            case 'n':
+                args.num2send = atoi(optarg);
+                break;
+            case 'i':
                 args.loop_interval = strtoul(optarg, NULL, 10);
                 break;
             case 'w':
                 args.report_wait = atoi(optarg);
                 break;
-            case 'n':
-                args.num2send = atoi(optarg);
-                break;
+            case 'h':
             case '?':
             default:
                 fprintf(stderr,
-                    "\nUsage: %s [-i|--ip server_ip] [-p|--port server_port] [-l|--loop_interval milliseconds] [-w|--wait_report seconds] [-n|--num2send messages]\n\n", argv[0]);
+                    "\nUsage: %s [options] server-address\n\n"
+                    "Options:\n"
+                    "  -p  --port         E2Term SCTP port number\n"
+                    "  -n  --num2send     Number of messages to send\n"
+                    "  -i  --interval     Interval in milliseconds between sending each message to the RIC\n"
+                    "  -w  --wait4report  Wait seconds for draining replies and generate the final report\n"
+                    "  -h  --help         Display this information and quit\n\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
+    }
+
+    if (optind < argc) {    // we only expect one non-option argument (i.e. the server address)
+        args.server_ip = argv[optind];
     }
 
     return args;
@@ -369,6 +378,8 @@ void save_timestamp_report() {
     }
 
     io_file.close();
+
+    logger_force(LOGGER_INFO, "Simulation done!");
 }
 
 void test_decoding(E2AP_PDU_t *pdu) {
