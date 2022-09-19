@@ -20,6 +20,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <unordered_map>
 
 extern "C"
 {
@@ -71,8 +72,10 @@ class E2Sim;
 E2Sim e2sim;
 
 args_t cmd_args;        // command line arguments
-timestamp_t *ts_list;   // array containing the send and received timestamps of the corresponding INSERT and CONTROL messages
 metrics_t metrics;
+
+unordered_map<unsigned int, unsigned long> sent_ts_map; // timestamp of sent messages (INSERT) in nanoseconds
+unordered_map<unsigned int, unsigned long> recv_ts_map; // timestamp of received messages (CONTROL) in nanoseconds
 
 int main(int argc, char *argv[])
 {
@@ -82,12 +85,6 @@ int main(int argc, char *argv[])
 
     // run_insert_loop(123, 1, 1, 1);   // FIXME Huff: only for debugging purposes
     // exit(1);
-
-    ts_list = (timestamp_t *) calloc(cmd_args.num2send, sizeof(timestamp_t));
-    if(ts_list == NULL) {
-        logger_fatal("unable to allocate memory for the timestamp list");
-        exit(1);
-    }
 
     uint8_t *nrcellid_buf = (uint8_t *)calloc(1, 5);
     nrcellid_buf[0] = 0x22;
@@ -131,8 +128,6 @@ int main(int argc, char *argv[])
     init_prometheus(metrics);
 
     e2sim.run_loop(cmd_args.server_ip.c_str(), cmd_args.server_port);
-
-    free(ts_list);
 }
 
 args_t parse_input_options(int argc, char *argv[]) {
@@ -141,7 +136,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     args.server_port = E2AP_SCTP_PORT;
     args.loop_interval = DEFAULT_LOOP_INTERVAL;
     args.report_wait = DEFAULT_REPORT_WAIT;
-    args.num2send = 5;
+    args.num2send = UNLIMITED_MESSAGES;
 
     static struct option long_options[] =
     {
@@ -173,6 +168,9 @@ args_t parse_input_options(int argc, char *argv[]) {
                 break;
             case 'w':
                 args.report_wait = atoi(optarg);
+                if (args.num2send == UNLIMITED_MESSAGES) {
+                    args.num2send = 5; // num2send is required for report (default 5)
+                }
                 break;
             case 'h':
             case '?':
@@ -184,6 +182,7 @@ args_t parse_input_options(int argc, char *argv[]) {
                     "  -n  --num2send     Number of messages to send\n"
                     "  -i  --interval     Interval in milliseconds between sending each message to the RIC\n"
                     "  -w  --wait4report  Wait seconds for draining replies and generate the final report\n"
+                    "                     Requires --num2send argument\n"
                     "  -h  --help         Display this information and quit\n\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
@@ -247,13 +246,23 @@ void get_cell_id(uint8_t *nrcellid_buf, char *cid_return_buf)
     sprintf(cid_return_buf, "373437%d%d%d%d%d%d%d%d%d", nr0, nr1, nr2, nr3, nr4, nr5, nr6, nr7, nr8);
 }
 
+static inline unsigned long elapsed_nanoseconds(struct timespec ts) {
+    return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
+static inline double elapsed_seconds(unsigned long sent_ns, unsigned long recv_ns) {
+    return (recv_ns - sent_ns) / 1000000000.0;     // converting to seconds
+}
+
 void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId, long reqActionId) {
     uint16_t seqNum = 0;
     unsigned int cpid = 0;
+    struct timespec sent_time;
+    unsigned long sent_ns;  // sent_time in nanoseconds
 
     logger_trace("in %s function", __func__);
 
-    while (cpid < cmd_args.num2send) {
+    while (cmd_args.num2send == UNLIMITED_MESSAGES || cpid < cmd_args.num2send) {
 
         E2SM_RC_IndicationHeader_t *ind_header =
                 (E2SM_RC_IndicationHeader_t *) calloc(1, sizeof(E2SM_RC_IndicationHeader_t));
@@ -306,14 +315,13 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
         // xer_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, msg);
 
         // call process id
-        OCTET_STRING_t ostr_cpid;
-        OCTET_STRING_fromBuf(&ostr_cpid, (char *)&cpid, sizeof(unsigned int));
+        OCTET_STRING_t *ostr_cpid = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, (const char *)&cpid, sizeof(cpid));
 
         E2AP_PDU_t *pdu = (E2AP_PDU_t *) calloc(1, sizeof(E2AP_PDU_t));
         encoding::generate_e2ap_indication_request_parameterized(pdu, RICindicationType_insert, reqRequestorId,
                 reqInstanceId, ranFunctionId, reqActionId, seqNum,
                 e2sm_header_buffer, er_header.encoded,
-                e2sm_msg_buffer, er_msg.encoded, &ostr_cpid);
+                e2sm_msg_buffer, er_msg.encoded, ostr_cpid);
 
         // asn_fprint(stderr, &asn_DEF_E2AP_PDU, pdu);
 
@@ -321,7 +329,9 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
         // test_decoding(pdu);  // FIXME Huff: only for debugging
 
-        e2sim.encode_and_send_sctp_data(pdu, &ts_list[cpid].sent);  // timespec to store the timestamp of this message
+        e2sim.encode_and_send_sctp_data(pdu, &sent_time);   // timespec to store the timestamp of this message
+        sent_ns = elapsed_nanoseconds(sent_time);           // store the sent timespec in the map (in nanoseconds)
+        sent_ts_map[cpid] = sent_ns;
 
         seqNum++;
         cpid++;
@@ -335,21 +345,10 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
     logger_debug("%s has finished", __func__);
 
-    std::this_thread::sleep_for(std::chrono::seconds(cmd_args.report_wait));   // wait for all messages coming back
-    save_timestamp_report();
-}
-
-static inline double elapsed_seconds(timestamp_t t) {
-    unsigned long sent;
-    unsigned long recv;
-    double latency;
-
-    sent = t.sent.tv_sec * 1000000000 + t.sent.tv_nsec;
-    recv = t.recv.tv_sec * 1000000000 + t.recv.tv_nsec;
-
-    latency = (recv - sent) / 1000000000.0;     // converting to seconds
-
-    return latency;
+    if (cmd_args.num2send != UNLIMITED_MESSAGES) { // we do not generate the timestamp report file when running on infinite loop
+        std::this_thread::sleep_for(std::chrono::seconds(cmd_args.report_wait));   // wait for all messages coming back
+        save_timestamp_report();
+    }
 }
 
 void save_timestamp_report() {
@@ -357,7 +356,6 @@ void save_timestamp_report() {
     unsigned long latency;
     unsigned long sent;
     unsigned long recv;
-    timestamp_t *ts;
 
     io_file.open("/tmp/e2sim_report.log", std::ios::in|std::ios::out|std::ios::trunc);
     if (!io_file) {
@@ -365,16 +363,21 @@ void save_timestamp_report() {
         return;
     }
 
-    for (unsigned int i = 0; i < cmd_args.num2send; i++) {
-        ts = &ts_list[i];
-        sent = ts->sent.tv_sec * 1000000000 + ts->sent.tv_nsec;
-        recv = ts->recv.tv_sec * 1000000000 + ts->recv.tv_nsec;
+    io_file << "cpid\tlatency(mu-sec)\n";
+
+    for (size_t i = 0; i < recv_ts_map.size(); i++) {
+        try {
+            sent = sent_ts_map.at(i);
+            recv = recv_ts_map.at(i);
+        } catch (std::runtime_error) {
+            logger_error("unable to fetch timestamp for cpid=%z from timpestamp maps", i);
+            continue;
+        }
 
         latency = (recv - sent) / 1000;     // converting to mu-sec
+        io_file << i << "\t" << latency << endl;
 
         logger_debug("sent: %lu, recv: %lu, latency: %lu", sent, recv, latency);
-
-        io_file << i << "\t" << latency << endl;
     }
 
     io_file.close();
@@ -577,15 +580,9 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
 
     e2sim.encode_and_send_sctp_data(e2ap_pdu, NULL);    // timestamp for subscription request is not relevant for now
 
-    // Start thread for sending REPORT messages
-
-    //  std::thread loop_thread;
-
-    // long funcId = 0;
-    //   run_report_loop(reqRequestorId, reqInstanceId, funcId, reqActionId);
     logger_trace("callback_rc_subscription_request has finished");
 
-
+    // Start thread for sending REPORT messages
     if (accept_size > 0) {  // we only call the simulation if the RIC subscription has succeeded
         logger_trace("about to call run_insert_loop thread");
         std::thread th(run_insert_loop, reqRequestorId, reqInstanceId, reqFunctionId, reqActionId);
@@ -593,8 +590,6 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
         logger_trace("run_insert_loop thread has spawned");
         // run_insert_loop(reqRequestorId, reqInstanceId, reqFunctionId, reqActionId);
     }
-
-    //  loop_thread = std::thread(&run_report_loop);
 }
 
 void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv_ts) {
@@ -646,10 +641,23 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
                     we copy all the timespec content since it comes from the base e2sim, which
                     overwrittes the timespec values for each new received message
                 */
-                ts_list[cpid].recv = *recv_ts;
+                unsigned long recv_ns = elapsed_nanoseconds(*recv_ts);
+                unsigned long sent_ns;
+                try {
+                    sent_ns = sent_ts_map.at(cpid);
+
+                } catch (std::out_of_range) {
+                    logger_error("sent timestamp for message cpid=%u not found", cpid);
+                    break;
+                }
+                logger_debug("latency of message cpid=%u is %.3fms", cpid, (recv_ns - sent_ns)/1000000.0);
+
+                if (cmd_args.num2send != UNLIMITED_MESSAGES) {
+                    recv_ts_map[cpid] = recv_ns;
+                }
 
                 // prometheus metrics
-                double seconds = elapsed_seconds(ts_list[cpid]);
+                double seconds = elapsed_seconds(sent_ns, recv_ns);
                 metrics.histogram->Observe(seconds);
 
                 break;

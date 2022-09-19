@@ -13,7 +13,7 @@ cd sim-e2-interface.git
 git push --mirror <url-of-this-repo>/e2sim.git
 ```
 
-2. Clone our repository e make changes as follows:
+2. Clone this repository and make changes as follows:
 ```
 git clone git@github.com:LABORA-INF-UFG/e2sim.git my-e2sim
 cd my-e2sim

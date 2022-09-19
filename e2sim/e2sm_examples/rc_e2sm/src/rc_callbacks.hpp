@@ -26,15 +26,10 @@
 
 #define DEFAULT_REPORT_WAIT 5       // time (seconds) to wait for generate file reports
 #define DEFAULT_LOOP_INTERVAL 1000  // time (milliseconds) between each insert message that is sent to the RIC
+#define UNLIMITED_MESSAGES 0        // simulation sends unlimited messages (infinite loop)
 
 
 using namespace prometheus;
-
-// helper for RTT latency measurements
-typedef struct {
-    struct timespec sent;
-    struct timespec recv;
-} timestamp_t;
 
 // helper for prometheus metrics
 typedef struct {
