@@ -200,17 +200,27 @@ args_t parse_input_options(int argc, char *argv[]) {
     Builds the prometheus configuration and exposes its metrics on port 8080
 */
 void init_prometheus(metrics_t &metrics) {
-    std::string podName = "unknown-e2sim";
-    char *pod_env = std::getenv("POD_NAME");
+    std::string hostname = "unknown-e2sim-hostname";
+    char *pod_env = std::getenv("HOSTNAME");
     if(pod_env != NULL) {
-        podName = pod_env;
+        hostname = pod_env;
     }
 
     metrics.registry = std::make_shared<Registry>();
-    metrics.family = &BuildHistogram()
+    metrics.hist_family = &BuildHistogram()
                             .Name("rc_control_loop_seconds")
                             .Help("E2SM-RC Insert-Control Loop metrics")
-                            .Labels({{"POD_NAME", podName}})
+                            .Labels({{"HOSTNAME", hostname},
+                                     {"E2TERM", cmd_args.server_ip + ":" + std::to_string(cmd_args.server_port)}
+                                    })
+                            .Register(*metrics.registry);
+
+    metrics.gauge_family = &BuildGauge()
+                            .Name("rc_control_loop_latency_seconds")
+                            .Help("Current E2SM-RC Insert-Control Loop latency")
+                            .Labels({{"HOSTNAME", hostname},
+                                     {"E2TERM", cmd_args.server_ip + ":" + std::to_string(cmd_args.server_port)}
+                                    })
                             .Register(*metrics.registry);
 
     metrics.exposer = new Exposer("0.0.0.0:8080", 1);
@@ -220,7 +230,9 @@ void init_prometheus(metrics_t &metrics) {
         {0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01, 0.02, 0.05, 0.1});
     // FIXME: e2node_instance should be registered per thread (next line should be called within each spawned thread)
     // for now we call it here due e2sim only runs a single e2node instance
-    metrics.histogram = &metrics.family->Add({{"e2node_instance", "e2node1_env_name"}}, *metrics.buckets);
+    metrics.histogram = &metrics.hist_family->Add({{"GNODEB_ID", std::to_string(cmd_args.gnb_id)}}, *metrics.buckets);
+
+    metrics.gauge = &metrics.gauge_family->Add({{"GNODEB_ID", std::to_string(cmd_args.gnb_id)}}, 0.0);
 }
 
 void get_cell_id(uint8_t *nrcellid_buf, char *cid_return_buf)
@@ -664,6 +676,7 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
                 // prometheus metrics
                 double seconds = elapsed_seconds(sent_ns, recv_ns);
                 metrics.histogram->Observe(seconds);
+                metrics.gauge->Set(seconds);
 
                 break;
             }

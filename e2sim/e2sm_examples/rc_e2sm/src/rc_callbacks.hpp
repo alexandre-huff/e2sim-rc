@@ -34,10 +34,12 @@ using namespace prometheus;
 // helper for prometheus metrics
 typedef struct {
     std::shared_ptr<Registry> registry;
-    Family<Histogram> *family;
+    Family<Histogram> *hist_family;
     Exposer *exposer = nullptr;
     Histogram *histogram = nullptr;
     Histogram::BucketBoundaries *buckets = nullptr;
+    Family<Gauge> *gauge_family;
+    Gauge *gauge = nullptr;
 } metrics_t;
 
 // helper for command line input arguments
