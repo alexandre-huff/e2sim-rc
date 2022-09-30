@@ -28,6 +28,8 @@ extern "C" {
   #include "OCTET_STRING.h"
   #include "PrintableString.h"
   #include "RICindicationType.h"
+  #include "BIT_STRING.h"
+  #include "PLMN-Identity.h"
 }
 
 typedef struct {
@@ -47,10 +49,16 @@ private:
   std::unordered_map<long, encoded_ran_function_t *> ran_functions_registered;
   std::unordered_map<long, SubscriptionCallback> subscription_callbacks;
   std::unordered_map<long, ControlCallback> control_callbacks;
+  PLMN_Identity_t plmn_id;
+  BIT_STRING_t gnb_id;
 
   void wait_for_sctp_data();
 
 public:
+
+  E2Sim(uint8_t *plmn_id, uint32_t gnb_id);
+
+  ~E2Sim();
 
   std::unordered_map<long, encoded_ran_function_t *> getRegistered_ran_functions();
 
@@ -61,6 +69,10 @@ public:
   SubscriptionCallback get_subscription_callback(long func_id);
 
   ControlCallback get_control_callback(long func_id);
+
+  PLMN_Identity_t *get_plmn_id_cpy();
+
+  BIT_STRING_t *get_gnb_id_cpy();
 
   void register_e2sm(long func_id, encoded_ran_function_t* ran_func);
 

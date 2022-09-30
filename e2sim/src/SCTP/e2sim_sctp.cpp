@@ -109,8 +109,8 @@ int sctp_start_server(const char *server_ip_str, const int server_port)
 }
 
 /*
-  Starts a client SCTP connection to a given server and port
-  Accepts IPv4, IPv6, and hostname as input values
+  Starts a client SCTP connection to a given server and port.
+  Accepts IPv4, IPv6, or hostname as input values.
 */
 int sctp_start_client(const char *server_addr_str, const int server_port) {
   int client_fd;

@@ -47,6 +47,7 @@ typedef struct {
     int report_wait;                // time (seconds) to wait before store latencies report into file
     unsigned long loop_interval;    // time (milliseconds) between each insert message that is sent to the RIC
     unsigned long num2send;         // number of messages to send in the simulation
+    uint32_t gnb_id;                // gNodeB Identity
 } args_t;
 
 

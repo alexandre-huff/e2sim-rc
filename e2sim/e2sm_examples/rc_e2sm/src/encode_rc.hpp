@@ -53,9 +53,9 @@ extern "C" {
 
 void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def);
 
-void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg);
+void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIdentity_t *plmn_id, BIT_STRING_t *gnb_id);
 
-void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header);
+void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header, PLMNIdentity_t *plmn_id);
 
 // void encode_kpm_report_style5(E2SM_KPM_IndicationMessage_t* indicationmessage);
 

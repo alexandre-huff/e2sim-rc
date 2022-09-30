@@ -197,36 +197,21 @@ void encoding::generate_e2apv1_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<
   e2ap_pdu->choice.initiatingMessage = initiatingMessage;
 }
 
-void encoding::generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs) {
+void encoding::generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs,
+                                                          PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id) {
 
   logger_trace("in function %s", __func__);
-
-  BIT_STRING_t *gnb_bstring = (BIT_STRING_t*)calloc(1, sizeof(BIT_STRING_t));;
-  gnb_bstring->buf = (uint8_t*)calloc(1,4);
-  gnb_bstring->size = 4;
-  gnb_bstring->buf[0] = 0xB5;
-  gnb_bstring->buf[1] = 0xC6;
-  gnb_bstring->buf[2] = 0x77;
-  gnb_bstring->buf[3] = 0x88;
-
-  gnb_bstring->bits_unused = 3;
-
-  uint8_t *buf2 = (uint8_t *)"747";
-  OCTET_STRING_t *plmn = (OCTET_STRING_t*)calloc(1, sizeof(OCTET_STRING_t));
-  plmn->buf = (uint8_t*)calloc(1,3);
-  memcpy(plmn->buf, buf2, 3);
-  plmn->size = 3;
 
   GNB_ID_Choice_t *gnbchoice = (GNB_ID_Choice_t*)calloc(1,sizeof(GNB_ID_Choice_t));
   GNB_ID_Choice_PR pres2 = GNB_ID_Choice_PR_gnb_ID;
   gnbchoice->present = pres2;
-  gnbchoice->choice.gnb_ID = *gnb_bstring;
-  if (gnb_bstring) free(gnb_bstring);
+  gnbchoice->choice.gnb_ID = *gnb_id;
+  if (gnb_id) free(gnb_id);
 
   GlobalgNB_ID_t *gnb = (GlobalgNB_ID_t*)calloc(1, sizeof(GlobalgNB_ID_t));
-  gnb->plmn_id = *plmn;
+  gnb->plmn_id = *plmn_id;
   gnb->gnb_id = *gnbchoice;
-  if (plmn) free(plmn);
+  if (plmn_id) free(plmn_id);
   if (gnbchoice) free(gnbchoice);
 
   GlobalE2node_gNB_ID_t *e2gnb = (GlobalE2node_gNB_ID_t*)calloc(1, sizeof(GlobalE2node_gNB_ID_t));

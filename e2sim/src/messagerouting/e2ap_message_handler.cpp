@@ -28,7 +28,7 @@
 
 #include <unistd.h>
 
-void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, bool xmlenc, E2Sim *e2sim, struct timespec *ts)
+void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, struct timespec *ts)
 {
   logger_trace("in func %s", __func__);
   //decode the data into E2AP-PDU

@@ -69,7 +69,7 @@ using namespace prometheus;
 
 class E2Sim;
 
-E2Sim e2sim;
+E2Sim *e2sim;
 
 args_t cmd_args;        // command line arguments
 metrics_t metrics;
@@ -81,17 +81,12 @@ int main(int argc, char *argv[])
 {
     cmd_args = parse_input_options(argc, argv);
 
+    e2sim = new E2Sim((uint8_t *)"747", cmd_args.gnb_id);
+
     logger_force(LOGGER_INFO, "Starting E2 Simulator for RC service model");
 
     // run_insert_loop(123, 1, 1, 1);   // FIXME Huff: only for debugging purposes
     // exit(1);
-
-    uint8_t *nrcellid_buf = (uint8_t *)calloc(1, 5);
-    nrcellid_buf[0] = 0x22;
-    nrcellid_buf[1] = 0x5B;
-    nrcellid_buf[2] = 0xD6;
-    nrcellid_buf[3] = 0x00;
-    nrcellid_buf[4] = 0x70;
 
     asn_codec_ctx_t *opt_cod;
 
@@ -121,13 +116,13 @@ int main(int argc, char *argv[])
     reg_func->ran_function_ostr.buf = (uint8_t *) calloc(1, er.encoded);
     memcpy(reg_func->ran_function_ostr.buf, e2smbuffer, er.encoded);
 
-    e2sim.register_e2sm(1, reg_func);
-    e2sim.register_subscription_callback(1, &callback_rc_subscription_request);
-    e2sim.register_control_callback(1, &callback_rc_control_request);
+    e2sim->register_e2sm(1, reg_func);
+    e2sim->register_subscription_callback(1, &callback_rc_subscription_request);
+    e2sim->register_control_callback(1, &callback_rc_control_request);
 
     init_prometheus(metrics);
 
-    e2sim.run_loop(cmd_args.server_ip.c_str(), cmd_args.server_port);
+    e2sim->run_loop(cmd_args.server_ip.c_str(), cmd_args.server_port);
 }
 
 args_t parse_input_options(int argc, char *argv[]) {
@@ -137,6 +132,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     args.loop_interval = DEFAULT_LOOP_INTERVAL;
     args.report_wait = DEFAULT_REPORT_WAIT;
     args.num2send = UNLIMITED_MESSAGES;
+    args.gnb_id = 1;
 
     static struct option long_options[] =
     {
@@ -145,6 +141,7 @@ args_t parse_input_options(int argc, char *argv[]) {
         {"loop_interval", required_argument, 0, 'l'},
         {"wait_report", required_argument, 0, 'w'},
         {"num2send", required_argument, 0, 'n'},
+        {"gnodeb", required_argument, 0, 'g'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
     };
@@ -152,7 +149,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     int c;
     while(1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "p:n:i:w:h", long_options, &option_index);
+        c = getopt_long(argc, argv, "p:n:g:i:w:h", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -165,6 +162,9 @@ args_t parse_input_options(int argc, char *argv[]) {
                 break;
             case 'i':
                 args.loop_interval = strtoul(optarg, NULL, 10);
+                break;
+            case 'g':
+                args.gnb_id = strtoumax(optarg, NULL, 10);
                 break;
             case 'w':
                 args.report_wait = atoi(optarg);
@@ -181,6 +181,7 @@ args_t parse_input_options(int argc, char *argv[]) {
                     "  -p  --port         E2Term SCTP port number\n"
                     "  -n  --num2send     Number of messages to send\n"
                     "  -i  --interval     Interval in milliseconds between sending each message to the RIC\n"
+                    "  -g  --gnodeb       gNodeB Identity of the simulation (0...2^29-1)\n"
                     "  -w  --wait4report  Wait seconds for draining replies and generate the final report\n"
                     "                     Requires --num2send argument\n"
                     "  -h  --help         Display this information and quit\n\n", argv[0]);
@@ -257,7 +258,7 @@ static inline double elapsed_seconds(unsigned long sent_ns, unsigned long recv_n
 void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId, long reqActionId) {
     uint16_t seqNum = 0;
     unsigned int cpid = 0;
-    struct timespec sent_time;
+    struct timespec sent_time;  // timestamp of the sent message
     unsigned long sent_ns;  // sent_time in nanoseconds
 
     logger_trace("in %s function", __func__);
@@ -269,9 +270,13 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
         E2SM_RC_IndicationMessage_t *ind_msg =
                 (E2SM_RC_IndicationMessage_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_t));
 
-        // TODO Huff: these functions should return a boolean value
-        encode_rc_indication_header(ind_header);
-        encode_rc_indication_message(ind_msg);
+        // TODO Huff: these encode_rc_indication_* functions should return a boolean value
+        PLMNIdentity_t *plmn_cpy = e2sim->get_plmn_id_cpy();
+        encode_rc_indication_header(ind_header, plmn_cpy);    // invalidates plmn_cpy variable
+
+        plmn_cpy = e2sim->get_plmn_id_cpy();
+        BIT_STRING_t *gnb_cpy = e2sim->get_gnb_id_cpy();
+        encode_rc_indication_message(ind_msg, plmn_cpy, gnb_cpy); // invalidates plmn_cpy and gnb_cpy variables
 
         asn_codec_ctx_t *opt_cod;
 
@@ -329,7 +334,7 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
         // test_decoding(pdu);  // FIXME Huff: only for debugging
 
-        e2sim.encode_and_send_sctp_data(pdu, &sent_time);   // timespec to store the timestamp of this message
+        e2sim->encode_and_send_sctp_data(pdu, &sent_time);   // timespec to store the timestamp of this message
         sent_ns = elapsed_nanoseconds(sent_time);           // store the sent timespec in the map (in nanoseconds)
         sent_ts_map[cpid] = sent_ns;
 
@@ -578,7 +583,7 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
         encoding::generate_e2ap_subscription_response_failure(e2ap_pdu, reqRequestorId, reqInstanceId, reqFunctionId, &cause, nullptr);
     }
 
-    e2sim.encode_and_send_sctp_data(e2ap_pdu, NULL);    // timestamp for subscription request is not relevant for now
+    e2sim->encode_and_send_sctp_data(e2ap_pdu, NULL);    // timestamp for subscription request is not relevant for now
 
     logger_trace("callback_rc_subscription_request has finished");
 

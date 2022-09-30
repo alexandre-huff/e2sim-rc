@@ -131,7 +131,7 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     logger_trace("end of %s", __func__);
 }
 
-void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg) {
+void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIdentity_t *plmn_id, BIT_STRING_t *gnb_id) {
     logger_trace("in %s function", __func__);
 
     char error_buf[300] = {0, };
@@ -208,24 +208,30 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg) {
 
     NR_CGI_t *nr_cgi = (NR_CGI_t *) calloc(1, sizeof(NR_CGI_t));
 
-    uint8_t *plmnid = (uint8_t *) "747";   // TODO it seems that we should get this from e2sim base class
-    OCTET_STRING_fromBuf(&nr_cgi->pLMNIdentity, (char *) plmnid, strlen((char *) plmnid));
+    nr_cgi->pLMNIdentity = *plmn_id;    // Is this as same as the plmn id from Global gNodeB IE? or from a given UE?
+    if(plmn_id) free(plmn_id);
 
-    unsigned long lNRCellId = 89; // TODO Huff: dummy Cell ID - it seems that we should get this from e2sim base class
-    BIT_STRING_t *nr_cell_id = (BIT_STRING_t*) calloc(1, sizeof(BIT_STRING_t));
-    if(nr_cell_id) {
-        nr_cell_id->buf = (uint8_t*)calloc(1,5); // required to have room for 36 bits
-        if(nr_cell_id->buf) {
-            nr_cell_id->size = 5;
-            nr_cell_id->buf[0] = ((lNRCellId & 0X0FF0000000) >> 28);
-            nr_cell_id->buf[1] = ((lNRCellId & 0X000FF00000) >> 20);
-            nr_cell_id->buf[2] = ((lNRCellId & 0X00000FF000) >> 12);
-            nr_cell_id->buf[3] = ((lNRCellId & 0X0000000FF0) >> 4);
-            nr_cell_id->buf[4] = (lNRCellId & 0X000000000F) << 4;
-            nr_cell_id->bits_unused = 4;  // 40-36
+    if(gnb_id == NULL) {
+        logger_fatal("gnb_id must have a value. nil?");
+        exit(1);
+    }
 
-            nr_cgi->nRCellIdentity = *nr_cell_id;
-        }
+    nr_cgi->nRCellIdentity.buf = (uint8_t*)calloc(1,5); // required to have room for 36 bits
+    if(nr_cgi->nRCellIdentity.buf) {
+        // currently we use a dummy value for cell id, should we get this from e2sim base class?
+        uint8_t cellid = 127; // for now we leave 7 bits to identity cells on each gNodeB, so uint8_t is enough
+
+        nr_cgi->nRCellIdentity.size = 5;
+        nr_cgi->nRCellIdentity.bits_unused = 4;   // 40-36
+        assert(nr_cgi->nRCellIdentity.size >= gnb_id->size);
+        memcpy(nr_cgi->nRCellIdentity.buf, gnb_id->buf, gnb_id->size); // copied 32 bytes into a 40 bytes variable (we need only 29)
+        nr_cgi->nRCellIdentity.buf[3] |= ((cellid & 0X0070) >> 4);       // we get only the 3 most significant of 7 bits
+        nr_cgi->nRCellIdentity.buf[4] = ((cellid & 0X000F) << 4) ;       // we get only the 4 least significant bits of 7 bits
+    }
+    free(gnb_id);
+
+    if(LOGGER_LEVEL >= LOGGER_DEBUG) {
+        xer_fprint(stdout, &asn_DEF_NR_CGI, nr_cgi);
     }
 
     memset(error_buf, 0, sizeof(error_buf));    // ensuring it is clean
@@ -288,7 +294,7 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg) {
     logger_trace("end of %s", __func__);
 }
 
-void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header) {
+void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header, PLMNIdentity_t *plmn_id) {
     logger_trace("in %s function", __func__);
 
     ind_header->ric_indicationHeader_formats.choice.indicationHeader_Format2 =
@@ -307,8 +313,8 @@ void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header) {
     ueid_gnb->amf_UE_NGAP_ID.buf[0] = (uint8_t) 1;
     ueid_gnb->amf_UE_NGAP_ID.size = sizeof(uint8_t);
 
-    uint8_t *plmnid = (uint8_t *) "747";   // TODO it seems that we should get this from e2sim base class
-    OCTET_STRING_fromBuf(&ueid_gnb->guami.pLMNIdentity, (char *) plmnid, strlen((char *) plmnid));
+    ueid_gnb->guami.pLMNIdentity = *plmn_id;    // Is this as same as the plmn id from Global gNodeB IE? or from a given UE?
+    if (plmn_id) free(plmn_id);
 
     ueid_gnb->guami.aMFRegionID.buf = (uint8_t *) calloc(1, sizeof(uint8_t)); // (8 bits)
     ueid_gnb->guami.aMFRegionID.buf[0] = (uint8_t) 128; // this is a dummy value

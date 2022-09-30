@@ -29,11 +29,53 @@
 #include "e2sim_sctp.hpp"
 #include "e2ap_message_handler.hpp"
 #include "encode_e2apv1.hpp"
-#include "RANfunctionOID.h"
 
 using namespace std;
 
 int client_fd = 0;
+
+/*
+  E2Sim constructor
+
+  throws std::invalid_argument
+*/
+E2Sim::E2Sim(uint8_t *plmn_id, uint32_t gnb_id) {
+  logger_trace("in %s constructor", __func__);
+
+  size_t len = strlen((char *)plmn_id); // FIXME maximum plmn_id size must be 3 octet string bytes
+  if (len > 3) {
+    throw invalid_argument("maximum plmn_id size is 3");
+  }
+
+  if (gnb_id >= 1<<29) {
+    throw invalid_argument("maximum gnb_id value is 2^29-1");
+  }
+
+  ASN_STRUCT_RESET(asn_DEF_PLMN_Identity, &this->plmn_id);
+  ASN_STRUCT_RESET(asn_DEF_BIT_STRING, &this->gnb_id);
+
+  // encoding PLMN identity
+  this->plmn_id.size = len;
+  this->plmn_id.buf = (uint8_t *) calloc(this->plmn_id.size, sizeof(uint8_t));
+  memcpy(this->plmn_id.buf, plmn_id, this->plmn_id.size);
+
+  // encoding gNodeB identity
+  this->gnb_id.buf = (uint8_t *) calloc(1, 4); // maximum size is 32 bits
+  this->gnb_id.size = 4;
+  this->gnb_id.bits_unused = 3; // we are using 29 bits for gnb_id so that 7 bits (3+4) is left for the NR Cell Identity
+  gnb_id = ((gnb_id & 0X1FFFFFFF) << 3);
+  this->gnb_id.buf[0] = ((gnb_id & 0XFF000000) >> 24);
+  this->gnb_id.buf[1] = ((gnb_id & 0X00FF0000) >> 16);
+  this->gnb_id.buf[2] = ((gnb_id & 0X0000FF00) >> 8);
+  this->gnb_id.buf[3] = (gnb_id & 0X000000FF);
+
+  logger_trace("end of %s constructor", __func__);
+}
+
+E2Sim::~E2Sim() {
+  ASN_STRUCT_RESET(asn_DEF_PLMN_Identity, &this->plmn_id);
+  ASN_STRUCT_RESET(asn_DEF_BIT_STRING, &this->gnb_id);
+}
 
 std::unordered_map<long, encoded_ran_function_t *> E2Sim::getRegistered_ran_functions() {
   return ran_functions_registered;
@@ -75,6 +117,33 @@ ControlCallback E2Sim::get_control_callback(long func_id) {
 
 }
 
+/*
+  Return a copy of the PLMN Indentity.
+  It is the caller responsibility to free the returned pointer.
+*/
+PLMN_Identity_t *E2Sim::get_plmn_id_cpy() {
+  // we return a copy since ASN structs are freed after encoding and we don't want to loose this value
+  auto *plmn = (PLMN_Identity_t *) calloc(1, sizeof(PLMN_Identity_t));
+  plmn->buf = (uint8_t *) calloc(plmn_id.size, sizeof(uint8_t));
+  plmn->size = plmn_id.size;
+  memcpy(plmn->buf, plmn_id.buf, plmn->size);
+  return plmn;
+}
+
+/*
+  Return a copy of the Global gNodeb ID.
+  It is the caller responsibility to free the returned pointer.
+*/
+BIT_STRING_t *E2Sim::get_gnb_id_cpy() {
+  // we return a copy since ASN structs are freed after encoding and we don't want to loose this value
+  auto *gnb = (BIT_STRING_t *) calloc(1, sizeof(BIT_STRING_t));
+  gnb->buf = (uint8_t *) calloc(gnb_id.size, sizeof(uint8_t));
+  gnb->size = gnb_id.size;
+  gnb->bits_unused = gnb_id.bits_unused;
+  memcpy(gnb->buf, gnb_id.buf, gnb->size);
+  return gnb;
+}
+
 void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func) {
 
   //Error conditions:
@@ -82,7 +151,12 @@ void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func) {
 
   logger_debug("about to register e2sm func id %ld", func_id);
 
-  ran_functions_registered[func_id] = ran_func;
+  auto res = ran_functions_registered.find(func_id);
+  if (res == ran_functions_registered.end()) {
+    ran_functions_registered[func_id] = ran_func;
+  } else {
+    logger_error("function with id %ld is already registered");
+  }
 
 }
 
@@ -107,7 +181,7 @@ void E2Sim::wait_for_sctp_data()
   if(sctp_receive_data(client_fd, recv_buf, &ts) > 0)
   {
     logger_info("[SCTP] Received new data of size %d", recv_buf.len);
-    e2ap_handle_sctp_data(client_fd, recv_buf, false, this, &ts);
+    e2ap_handle_sctp_data(client_fd, recv_buf, this, &ts);
   }
 }
 
@@ -135,26 +209,7 @@ int E2Sim::run_loop(const char *server_addr, int server_port){
     server_port = E2AP_SCTP_PORT;
   }
 
-  // ifstream simfile;
-  // string line;
-
-  // simfile.open("simulation.txt", ios::in);
-
-  // if (simfile.is_open()) {
-
-  //   while (getline(simfile, line)) {
-  //     cout << line << "\n";
-  //   }
-
-  //   simfile.close();
-
-  // }
-
-  bool xmlenc = false;
-
   // options_t ops = read_input_options(argc, argv);
-
-  logger_trace("After reading input options");
 
   //E2 Agent will automatically restart upon sctp disconnection
   //  int server_fd = sctp_start_server(ops.server_ip, ops.server_port);
@@ -186,8 +241,11 @@ int E2Sim::run_loop(const char *server_addr, int server_port){
     all_funcs.push_back(next_func);
   }
 
+  PLMN_Identity_t *plmn_id_cpy = get_plmn_id_cpy(); // ptr no longer available after calling setup_request_parameterized function
+  BIT_STRING_t *gnb_id_cpy = get_gnb_id_cpy();  // ptr no longer available after calling setup_request_parameterized function
+
   logger_trace("about to call setup request encode");
-  generate_e2apv1_setup_request_parameterized(pdu_setup, all_funcs);
+  generate_e2apv1_setup_request_parameterized(pdu_setup, all_funcs, plmn_id_cpy, gnb_id_cpy);
 
   logger_trace("After generating e2setup req");
 
@@ -237,8 +295,7 @@ int E2Sim::run_loop(const char *server_addr, int server_port){
 
     logger_debug("[SCTP] Received new data of size %d", recv_buf.len);
 
-    e2ap_handle_sctp_data(client_fd, recv_buf, xmlenc, this, &ts);
-    if (xmlenc) xmlenc = false;
+    e2ap_handle_sctp_data(client_fd, recv_buf, this, &ts);
   }
 
   return 0;

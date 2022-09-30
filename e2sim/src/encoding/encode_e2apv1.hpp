@@ -31,6 +31,8 @@ extern "C" {
   #include "RICindicationType.h"
   #include "Cause.h"
   #include "CriticalityDiagnostics.h"
+  #include "BIT_STRING.h"
+  #include "PLMN-Identity.h"
 }
 
 namespace encoding {
@@ -48,7 +50,7 @@ namespace encoding {
 
   void buildSubsReq(E2AP_PDU_t *pdu);
 
-  void generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs);
+  void generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs, PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id);
 
   void generate_e2apv1_setup_response(E2AP_PDU_t *setup_resp_pdu);
 
