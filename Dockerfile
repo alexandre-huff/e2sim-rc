@@ -64,14 +64,16 @@ RUN apt-get update \
 # Stage to build E2SM-RC
 FROM e2sim-base AS e2sim-rc
 
-RUN mkdir -p 3rdparty && cd 3rdparty && git clone -v https://github.com/jupp0r/prometheus-cpp.git \
-    && cd prometheus-cpp && git submodule init && git submodule update && mkdir build && cd build \
-    && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig
-
 COPY . /playpen/
 
 WORKDIR /playpen/e2sim
 
+# build and install submodule dependencies
+RUN git submodule update --init --recursive e2sm/rc/3rdparty/prometheus-cpp \
+    && cd e2sm/rc/3rdparty/prometheus-cpp/ && mkdir build && cd build \
+    && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig
+
+# build and install the e2sim-rc application
 RUN mkdir build && \
 	cd build && \
 	cmake .. && \

@@ -91,7 +91,19 @@ E2SM Callback Functions:
         libboost-all-dev
 ```
 
-2. Build and run the official e2sim
+2. Build and install dependencies
+
+E2SM-RC simulation depends on Prometheus, so fetch all submodule dependencies:
+
+```
+git submodule update --init --recursive
+cd e2sm/rc/3rdparty/prometheus-cpp/
+mkdir build && cd build && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig
+```
+
+3. Build and run the official e2sim
+
+Run the following commands in the root folder of the repository:
 
 ```
 mkdir build && cd build
