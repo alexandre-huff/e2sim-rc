@@ -46,6 +46,8 @@ namespace encoding {
 
   long get_function_id_from_subscription(E2AP_PDU_t *e2ap_pdu);
 
+  long get_function_id_from_subscription_delete(E2AP_PDU_t *e2ap_pdu);
+
   long get_function_id_from_control(E2AP_PDU_t *e2ap_pdu);
 
   void buildSubsReq(E2AP_PDU_t *pdu);
@@ -61,6 +63,8 @@ namespace encoding {
   void generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[], long reqActionIdsRejected[], int accept_size, int reject_size, long reqRequestorId, long reqInstanceId);
 
   void generate_e2ap_subscription_response_failure(E2AP_PDU *e2ap_pdu, long reqRequestorId, long reqInstanceId, long func_id, Cause_t *cause, CriticalityDiagnostics_t *crit_diagnostics);
+
+  void generate_e2ap_subscription_delete_response_success(E2AP_PDU *e2ap_pdu, long ranFunctionId, long reqRequestorId, long reqInstanceId);
 
   void generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu, e_RICindicationType indicationType, long requestorId, long instanceId, long ranFunctionId, long actionId, long seqNum, uint8_t *ind_header_buf, int header_length, uint8_t *ind_message_buf, int message_length);
 

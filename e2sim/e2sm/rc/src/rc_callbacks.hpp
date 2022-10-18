@@ -55,6 +55,8 @@ typedef struct {
 
 void callback_rc_subscription_request(E2AP_PDU_t *pdu);
 
+void callback_rc_subscription_delete_request(E2AP_PDU_t *pdu);
+
 void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts);
 
 void run_insert_loop(long requestorId, long instanceId, long ranFunctionId, long actionId);

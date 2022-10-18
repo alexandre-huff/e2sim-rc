@@ -128,7 +128,6 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
       {
         logger_error("Error: No RAN Function with ID %ld exists", func_id);
       }
-      //	  callback_kpm_subscription_request(pdu, socket_fd);
     }
     break;
 
@@ -141,8 +140,56 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
       break;
 
     default:
-      logger_error("[E2AP] Invalid message index=%d in E2AP-PDU", index);
+      logger_error("[E2AP] Invalid message index=%d in E2AP-PDU %ld", index, ProcedureCode_id_RICsubscription);
       break;
+    }
+    break;
+
+  case ProcedureCode_id_RICsubscriptionDelete:
+    switch (index)
+    {
+      case E2AP_PDU_PR_initiatingMessage:
+      {
+        logger_info("[E2AP] Received RIC-SUBSCRIPTION-DELETE-REQUEST");
+
+        long func_id = encoding::get_function_id_from_subscription_delete(pdu);
+        logger_debug("Function Id of message is %ld", func_id);
+        SubscriptionDeleteCallback cb;
+
+        bool func_exists = true;
+
+        try
+        {
+          cb = e2sim->get_subscription_delete_callback(func_id);
+        }
+        catch (const std::out_of_range &e)
+        {
+          func_exists = false;
+        }
+
+        if (func_exists)
+        {
+          logger_trace("Calling callback function");
+          cb(pdu);
+        }
+        else
+        {
+          logger_error("Error: No RAN Function with ID %ld exists", func_id);
+        }
+      }
+      break;
+
+      case E2AP_PDU_PR_successfulOutcome:
+        logger_info("[E2AP] Received RIC-SUBSCRIPTION-DELETE-RESPONSE");
+        break;
+
+      case E2AP_PDU_PR_unsuccessfulOutcome:
+        logger_warn("[E2AP] Received RIC-SUBSCRIPTION-DELETE-FAILURE");
+        break;
+
+      default:
+        logger_error("[E2AP] Invalid message index=%d in E2AP-PDU %ld", index, ProcedureCode_id_RICsubscriptionDelete);
+        break;
     }
     break;
 

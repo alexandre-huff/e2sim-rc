@@ -74,6 +74,8 @@ E2Sim *e2sim;
 args_t cmd_args;        // command line arguments
 metrics_t metrics;
 
+volatile bool ok2run;   // controls if the experiment should keep running
+
 unordered_map<unsigned int, unsigned long> sent_ts_map; // timestamp of sent messages (INSERT) in nanoseconds
 unordered_map<unsigned int, unsigned long> recv_ts_map; // timestamp of received messages (CONTROL) in nanoseconds
 
@@ -118,6 +120,7 @@ int main(int argc, char *argv[])
 
     e2sim->register_e2sm(1, reg_func);
     e2sim->register_subscription_callback(1, &callback_rc_subscription_request);
+    e2sim->register_subscription_delete_callback(1, &callback_rc_subscription_delete_request);
     e2sim->register_control_callback(1, &callback_rc_control_request);
 
     init_prometheus(metrics);
@@ -275,7 +278,9 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
     logger_trace("in %s function", __func__);
 
-    while (cmd_args.num2send == UNLIMITED_MESSAGES || cpid < cmd_args.num2send) {
+    ok2run = true;
+
+    while (ok2run && (cmd_args.num2send == UNLIMITED_MESSAGES || cpid < cmd_args.num2send)) {
 
         E2SM_RC_IndicationHeader_t *ind_header =
                 (E2SM_RC_IndicationHeader_t *) calloc(1, sizeof(E2SM_RC_IndicationHeader_t));
@@ -342,7 +347,7 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
         // asn_fprint(stderr, &asn_DEF_E2AP_PDU, pdu);
 
-        logger_info("E2AP indication request PDU encoded");
+        logger_info("Sending RIC-INDICATION type INSERT");
 
         // test_decoding(pdu);  // FIXME Huff: only for debugging
 
@@ -495,10 +500,8 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
             {
                logger_trace("in case request id");
                 RICrequestID_t reqId = next_ie->value.choice.RICrequestID;
-                long requestorId = reqId.ricRequestorID;
-                long instanceId = reqId.ricInstanceID;
-                reqRequestorId = requestorId;
-                reqInstanceId = instanceId;
+                reqRequestorId = reqId.ricRequestorID;
+                reqInstanceId = reqId.ricInstanceID;
 
                 break;
             }
@@ -535,16 +538,16 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
                     RICactionID_t actionId = ((RICaction_ToBeSetup_ItemIEs *)next_item)->value.choice.RICaction_ToBeSetup_Item.ricActionID;
                     RICactionType_t actionType = ((RICaction_ToBeSetup_ItemIEs *)next_item)->value.choice.RICaction_ToBeSetup_Item.ricActionType;
 
+                    reqActionId = actionId;
+
                     if (!foundAction && actionType == RICactionType_insert)
                     {
-                        reqActionId = actionId;
-                        actionIdsAccept.push_back(reqActionId);
                         logger_trace("adding accept");
+                        actionIdsAccept.push_back(reqActionId);
                         foundAction = true;
                     }
                     else
                     {
-                        reqActionId = actionId;
                         logger_trace("adding reject");
                         actionIdsReject.push_back(reqActionId);
                     }
@@ -609,6 +612,81 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
     }
 }
 
+void callback_rc_subscription_delete_request(E2AP_PDU_t *sub_req_pdu) {
+    long reqRequestorId;
+    long reqInstanceId;
+    long reqFunctionId;
+
+    logger_trace("Calling callback_rc_subscription_delete_request");
+
+    // Record RIC Request ID
+    // Record RAN Function ID
+    // Encode subscription response
+
+    RICsubscriptionDeleteRequest_t orig_req =
+        sub_req_pdu->choice.initiatingMessage->value.choice.RICsubscriptionDeleteRequest;
+
+    int count = orig_req.protocolIEs.list.count;
+    int size = orig_req.protocolIEs.list.size;
+
+    RICsubscriptionDeleteRequest_IEs_t **ies = (RICsubscriptionDeleteRequest_IEs_t **)orig_req.protocolIEs.list.array;
+
+    logger_debug("count %d", count);
+    logger_debug("size %d", size);
+
+    RICsubscriptionDeleteRequest_IEs__value_PR pres;
+
+    for (int i = 0; i < count; i++)
+    {
+        RICsubscriptionDeleteRequest_IEs_t *next_ie = ies[i];
+        pres = next_ie->value.present;
+
+        logger_debug("The next present value %d", pres);
+
+        switch (pres)
+        {
+            case RICsubscriptionDeleteRequest_IEs__value_PR_RICrequestID:
+            {
+               logger_trace("in case request id");
+                RICrequestID_t reqId = next_ie->value.choice.RICrequestID;
+                reqRequestorId = reqId.ricRequestorID;
+                reqInstanceId = reqId.ricInstanceID;
+
+                break;
+            }
+            case RICsubscriptionRequest_IEs__value_PR_RANfunctionID:
+            {
+                logger_trace("in case ran func id");
+                RANfunctionID_t funcId = next_ie->value.choice.RANfunctionID;
+                reqFunctionId = funcId;
+
+                break;
+            }
+            default:
+            {
+                logger_trace("in case default");
+                break;
+            }
+        }
+    }
+
+    logger_trace("After Processing Subscription Request");
+
+    logger_debug("requestorId %ld\tinstanceId %ld\tfunctionId %ld", reqRequestorId, reqInstanceId, reqFunctionId);
+
+    E2AP_PDU *e2ap_pdu = (E2AP_PDU *)calloc(1, sizeof(E2AP_PDU));
+
+    encoding::generate_e2ap_subscription_delete_response_success(e2ap_pdu, reqFunctionId, reqRequestorId, reqInstanceId);
+
+    ok2run = false;
+
+    logger_info("Sending RIC-SUBSCRIPTION-DELETE-RESPONSE");
+
+    e2sim->encode_and_send_sctp_data(e2ap_pdu, NULL);    // timestamp for subscription delete request is not relevant for now
+
+    logger_trace("callback_rc_subscription_delete_request has finished");
+}
+
 void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv_ts) {
     logger_trace("Calling callback_rc_control_request");
 
@@ -623,14 +701,6 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
     logger_debug("count %d\tsize %d", count, size);
 
     RICcontrolRequest_IEs__value_PR pres;
-
-    long reqRequestorId;
-    long reqInstanceId;
-    long reqActionId;
-    long reqFunctionId;
-
-    std::vector<long> actionIdsAccept;
-    std::vector<long> actionIdsReject;
 
     for (int i = 0; i < count; i++)
     {

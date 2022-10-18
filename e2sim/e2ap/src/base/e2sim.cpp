@@ -86,6 +86,11 @@ void E2Sim::register_subscription_callback(long func_id, SubscriptionCallback cb
   subscription_callbacks[func_id] = cb;
 }
 
+void E2Sim::register_subscription_delete_callback(long func_id, SubscriptionDeleteCallback cb) {
+  logger_debug("about to register callback for subscription delete for func id %ld", func_id);
+  subscription_delete_callbacks[func_id] = cb;
+}
+
 void E2Sim::register_control_callback(long func_id, ControlCallback cb) {
   logger_debug("about to register callback for control for func id %ld", func_id);
   control_callbacks[func_id] = cb;
@@ -97,6 +102,19 @@ SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
 
   try {
     cb = subscription_callbacks.at(func_id);
+  } catch(const std::out_of_range& e) {
+    throw std::out_of_range("Function ID is not registered");
+  }
+  return cb;
+
+}
+
+SubscriptionDeleteCallback E2Sim::get_subscription_delete_callback(long func_id) {
+  logger_debug("we are getting the subscription delete callback for func id %ld", func_id);
+  SubscriptionDeleteCallback cb;
+
+  try {
+    cb = subscription_delete_callbacks.at(func_id);
   } catch(const std::out_of_range& e) {
     throw std::out_of_range("Function ID is not registered");
   }
@@ -189,6 +207,10 @@ void E2Sim::wait_for_sctp_data()
 
 void E2Sim::generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[], long reqActionIdsRejected[], int accept_size, int reject_size, long reqRequestorId, long reqInstanceId) {
   encoding::generate_e2apv1_subscription_response_success(e2ap_pdu, reqActionIdsAccepted, reqActionIdsRejected, accept_size, reject_size, reqRequestorId, reqInstanceId);
+}
+
+void E2Sim::generate_e2ap_subscription_delete_response_success(E2AP_PDU *e2ap_pdu, long reqFunctionId, long reqRequestorId, long reqInstanceId) {
+  encoding::generate_e2ap_subscription_delete_response_success(e2ap_pdu, reqFunctionId, reqRequestorId, reqInstanceId);
 }
 
 void E2Sim::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu, e_RICindicationType indicationType, long requestorId, long instanceId, long ranFunctionId, long actionId, long seqNum, uint8_t *ind_header_buf, int header_length, uint8_t *ind_message_buf, int message_length) {

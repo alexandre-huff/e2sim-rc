@@ -39,6 +39,8 @@ typedef struct {
 
 typedef void (*SubscriptionCallback)(E2AP_PDU_t*);
 
+typedef void (*SubscriptionDeleteCallback)(E2AP_PDU_t*);
+
 typedef void (*ControlCallback)(E2AP_PDU_t*, struct timespec *ts);
 
 class E2Sim;
@@ -48,6 +50,7 @@ private:
 
   std::unordered_map<long, encoded_ran_function_t *> ran_functions_registered;
   std::unordered_map<long, SubscriptionCallback> subscription_callbacks;
+  std::unordered_map<long, SubscriptionDeleteCallback> subscription_delete_callbacks;
   std::unordered_map<long, ControlCallback> control_callbacks;
   PLMN_Identity_t plmn_id;
   BIT_STRING_t gnb_id;
@@ -64,9 +67,13 @@ public:
 
   void generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[], long reqActionIdsRejected[], int accept_size, int reject_size, long reqRequestorId, long reqInstanceId);
 
+  void generate_e2ap_subscription_delete_response_success(E2AP_PDU *e2ap_pdu, long reqFunctionId, long reqRequestorId, long reqInstanceId);
+
   void generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu, e_RICindicationType indicationType, long requestorId, long instanceId, long ranFunctionId, long actionId, long seqNum, uint8_t *ind_header_buf, int header_length, uint8_t *ind_message_buf, int message_length);
 
   SubscriptionCallback get_subscription_callback(long func_id);
+
+  SubscriptionDeleteCallback get_subscription_delete_callback(long func_id);
 
   ControlCallback get_control_callback(long func_id);
 
@@ -77,6 +84,8 @@ public:
   void register_e2sm(long func_id, encoded_ran_function_t* ran_func);
 
   void register_subscription_callback(long func_id, SubscriptionCallback cb);
+
+  void register_subscription_delete_callback(long func_id, SubscriptionDeleteCallback cb);
 
   void register_control_callback(long func_id, ControlCallback cb);
 

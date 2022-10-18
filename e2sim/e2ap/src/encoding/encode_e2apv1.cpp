@@ -80,7 +80,7 @@ long encoding::get_function_id_from_subscription(E2AP_PDU_t *e2ap_pdu) {
 
   RICsubscriptionRequest_IEs__value_PR pres;
 
-  long func_id;
+  long func_id = 0;
 
   for (int i=0; i < count; i++) {
     RICsubscriptionRequest_IEs_t *next_ie = ies[i];
@@ -90,6 +90,43 @@ long encoding::get_function_id_from_subscription(E2AP_PDU_t *e2ap_pdu) {
     logger_debug("value of pres ranfuncid is %d", RICsubscriptionRequest_IEs__value_PR_RANfunctionID);
 
     if (pres == RICsubscriptionRequest_IEs__value_PR_RANfunctionID) {
+      func_id = next_ie->value.choice.RANfunctionID;
+    }
+
+  }
+
+  logger_debug("After loop, func_id is %ld", func_id);
+
+  return func_id;
+
+}
+
+long encoding::get_function_id_from_subscription_delete(E2AP_PDU_t *e2ap_pdu) {
+
+  logger_trace("in function %s", __func__);
+
+  RICsubscriptionDeleteRequest_t orig_req =
+    e2ap_pdu->choice.initiatingMessage->value.choice.RICsubscriptionDeleteRequest;
+
+  int count = orig_req.protocolIEs.list.count;
+  int size = orig_req.protocolIEs.list.size;
+
+  RICsubscriptionDeleteRequest_IEs_t **ies = (RICsubscriptionDeleteRequest_IEs_t**)orig_req.protocolIEs.list.array;
+
+  logger_debug("RICsubscriptionDeleteRequest_IEs count = %d, size = %d", count, size);
+
+  RICsubscriptionDeleteRequest_IEs__value_PR pres;
+
+  long func_id = 0;
+
+  for (int i = 0; i < count; i++) {
+    RICsubscriptionDeleteRequest_IEs_t *next_ie = ies[i];
+    pres = next_ie->value.present;
+
+    logger_debug("next present value %d", pres);
+    logger_debug("value of pres ranfuncid is %d", RICsubscriptionDeleteRequest_IEs__value_PR_RANfunctionID);
+
+    if (pres == RICsubscriptionDeleteRequest_IEs__value_PR_RANfunctionID) {
       func_id = next_ie->value.choice.RANfunctionID;
     }
 
@@ -117,7 +154,7 @@ long encoding::get_function_id_from_control(E2AP_PDU_t *e2ap_pdu) {
 
   RICcontrolRequest_IEs__value_PR pres;
 
-  long func_id;
+  long func_id = 0;
 
   for (int i=0; i < count; i++) {
     RICcontrolRequest_IEs_t *next_ie = ies[i];
@@ -931,6 +968,54 @@ void encoding::generate_e2apv1_subscription_response(E2AP_PDU *e2ap_pdu, E2AP_PD
   }
 }
 
+void encoding::generate_e2ap_subscription_delete_response_success(E2AP_PDU *e2ap_pdu, long reqFunctionId,
+						   long reqRequestorId, long reqInstanceId) {
+
+  logger_trace("in function %s", __func__);
+
+  RICsubscriptionDeleteResponse_IEs_t *respricreqid =
+    (RICsubscriptionDeleteResponse_IEs_t*)calloc(1, sizeof(RICsubscriptionDeleteResponse_IEs_t));
+
+  respricreqid->id = ProtocolIE_ID_id_RICrequestID;
+  respricreqid->criticality = Criticality_reject;
+  respricreqid->value.present = RICsubscriptionDeleteResponse_IEs__value_PR_RICrequestID;
+  respricreqid->value.choice.RICrequestID.ricRequestorID = reqRequestorId;
+  respricreqid->value.choice.RICrequestID.ricInstanceID = reqInstanceId;
+
+  RICsubscriptionDeleteResponse_IEs_t *respfuncid =
+    (RICsubscriptionDeleteResponse_IEs_t*)calloc(1, sizeof(RICsubscriptionDeleteResponse_IEs_t));
+  respfuncid->id = ProtocolIE_ID_id_RANfunctionID;
+  respfuncid->criticality = Criticality_reject;
+  respfuncid->value.present = RICsubscriptionDeleteResponse_IEs__value_PR_RANfunctionID;
+  respfuncid->value.choice.RANfunctionID = reqFunctionId;
+
+  RICsubscriptionDeleteResponse_t *ricsubresp = (RICsubscriptionDeleteResponse_t*)calloc(1,sizeof(RICsubscriptionDeleteResponse_t));
+  ASN_SEQUENCE_ADD(&ricsubresp->protocolIEs.list, respricreqid);
+  ASN_SEQUENCE_ADD(&ricsubresp->protocolIEs.list, respfuncid);
+
+  SuccessfulOutcome_t *successoutcome = (SuccessfulOutcome_t*)calloc(1, sizeof(SuccessfulOutcome_t));
+  successoutcome->procedureCode = ProcedureCode_id_RICsubscriptionDelete;
+  successoutcome->criticality = Criticality_reject;
+  successoutcome->value.present = SuccessfulOutcome__value_PR_RICsubscriptionDeleteResponse;
+  successoutcome->value.choice.RICsubscriptionDeleteResponse = *ricsubresp;
+  if (ricsubresp) free(ricsubresp);
+
+  e2ap_pdu->present = E2AP_PDU_PR_successfulOutcome;
+  e2ap_pdu->choice.successfulOutcome = successoutcome;
+
+  char error_buf[300] = {0, };
+  size_t errlen = 0;
+
+  int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf, &errlen);
+  if (ret != 0) {
+    logger_error("E2AP_PDU check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+  }
+
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
+  }
+}
+
 void encoding::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu,
                 e_RICindicationType indicationType,
 								long requestorId,
@@ -1160,6 +1245,8 @@ void encoding::generate_e2ap_indication_request_parameterized(E2AP_PDU_t *e2ap_p
   if (ret != 0) {
     logger_error("E2AP_PDU check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
   }
+
+  logger_debug("E2AP indication request PDU encoded");
 
   if (LOGGER_LEVEL >= LOGGER_DEBUG) {
     xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
