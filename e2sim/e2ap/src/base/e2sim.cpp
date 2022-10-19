@@ -203,21 +203,6 @@ void E2Sim::wait_for_sctp_data()
   }
 }
 
-
-
-void E2Sim::generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[], long reqActionIdsRejected[], int accept_size, int reject_size, long reqRequestorId, long reqInstanceId) {
-  encoding::generate_e2apv1_subscription_response_success(e2ap_pdu, reqActionIdsAccepted, reqActionIdsRejected, accept_size, reject_size, reqRequestorId, reqInstanceId);
-}
-
-void E2Sim::generate_e2ap_subscription_delete_response_success(E2AP_PDU *e2ap_pdu, long reqFunctionId, long reqRequestorId, long reqInstanceId) {
-  encoding::generate_e2ap_subscription_delete_response_success(e2ap_pdu, reqFunctionId, reqRequestorId, reqInstanceId);
-}
-
-void E2Sim::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu, e_RICindicationType indicationType, long requestorId, long instanceId, long ranFunctionId, long actionId, long seqNum, uint8_t *ind_header_buf, int header_length, uint8_t *ind_message_buf, int message_length) {
-  encoding::generate_e2apv1_indication_request_parameterized(e2ap_pdu, indicationType, requestorId, instanceId, ranFunctionId, actionId, seqNum, ind_header_buf, header_length, ind_message_buf, message_length);
-
-}
-
 int E2Sim::run_loop(const char *server_addr, int server_port){
   logger_force(LOGGER_INFO, "Start E2 Agent (E2 Simulator)");
 
