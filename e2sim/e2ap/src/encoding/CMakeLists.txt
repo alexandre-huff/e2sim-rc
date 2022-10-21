@@ -19,7 +19,7 @@
 
 # For clarity: this generates object, not a lib as the CM command implies.
 #
-add_library( encoding_objects OBJECT encode_e2apv1.cpp)
+add_library( encoding_objects OBJECT encode_e2ap.cpp)
 
 target_link_libraries(encoding_objects PRIVATE e2ap_asn1_objects logger_objects)
 
@@ -31,7 +31,7 @@ target_include_directories (encoding_objects PUBLIC
 
 if( DEV_PKG )
   install( FILES
-    encode_e2apv1.hpp
+    encode_e2ap.hpp
     DESTINATION ${install_inc}
     )
 endif()

@@ -27,7 +27,7 @@
 #include <iterator>
 #include <vector>
 
-#include "encode_e2apv1.hpp"
+#include "encode_e2ap.hpp"
 
 extern "C" {
 
@@ -176,7 +176,7 @@ long encoding::get_function_id_from_control(E2AP_PDU_t *e2ap_pdu) {
 
 }
 
-void encoding::generate_e2apv1_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<encoding::ran_func_info> all_funcs) {
+void encoding::generate_e2ap_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<encoding::ran_func_info> all_funcs) {
   logger_trace("in function %s", __func__);
 
   char* ran_function_op_type = getenv("RAN_FUNCTION_OP_TYPE");
@@ -238,7 +238,7 @@ void encoding::generate_e2apv1_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<
   e2ap_pdu->choice.initiatingMessage = initiatingMessage;
 }
 
-void encoding::generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs,
+void encoding::generate_e2ap_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs,
                                                           PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id) {
 
   logger_trace("in function %s", __func__);
@@ -438,7 +438,7 @@ void encoding::generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu,
 
 }
 
-void encoding::generate_e2apv2_config_update(E2AP_PDU_t *e2ap_pdu){
+void encoding::generate_e2ap_config_update(E2AP_PDU_t *e2ap_pdu){
   logger_trace("in function %s", __func__);
 
   // txid
@@ -499,7 +499,7 @@ void encoding::generate_e2apv2_config_update(E2AP_PDU_t *e2ap_pdu){
   e2ap_pdu->choice.initiatingMessage = inititingMsg;
 }
 
-void encoding::generate_e2apv1_setup_response(E2AP_PDU_t *e2ap_pdu) {
+void encoding::generate_e2ap_setup_response(E2AP_PDU_t *e2ap_pdu) {
   logger_trace("in function %s", __func__);
 
   E2setupResponseIEs *resp_ies1 = (E2setupResponseIEs_t*)calloc(1, sizeof(E2setupResponseIEs_t));
@@ -550,7 +550,7 @@ void encoding::generate_e2apv1_setup_response(E2AP_PDU_t *e2ap_pdu) {
 }
 
 
-void encoding::generate_e2apv1_subscription_request(E2AP_PDU *e2ap_pdu) {
+void encoding::generate_e2ap_subscription_request(E2AP_PDU *e2ap_pdu) {
   logger_trace("in function %s", __func__);
 
   RICsubscriptionRequest_IEs_t *ricreqid = (RICsubscriptionRequest_IEs_t*)calloc(1, sizeof(RICsubscriptionRequest_IEs_t));
@@ -637,7 +637,7 @@ void encoding::generate_e2apv1_subscription_request(E2AP_PDU *e2ap_pdu) {
   }
 }
 
-void encoding::generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[],
+void encoding::generate_e2ap_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[],
 						   long reqActionIdsRejected[], int accept_size, int reject_size,
 						   long reqRequestorId, long reqInstanceId) {
 
@@ -821,7 +821,7 @@ void encoding::generate_e2ap_subscription_response_failure(E2AP_PDU *e2ap_pdu, l
   }
 }
 
-void encoding::generate_e2apv1_subscription_response(E2AP_PDU *e2ap_pdu, E2AP_PDU *sub_req_pdu) {
+void encoding::generate_e2ap_subscription_response(E2AP_PDU *e2ap_pdu, E2AP_PDU *sub_req_pdu) {
   logger_trace("in function %s", __func__);
 
   //Gather details of the request
@@ -1016,7 +1016,7 @@ void encoding::generate_e2ap_subscription_delete_response_success(E2AP_PDU *e2ap
   }
 }
 
-void encoding::generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu,
+void encoding::generate_e2ap_indication_request_parameterized(E2AP_PDU *e2ap_pdu,
                 e_RICindicationType indicationType,
 								long requestorId,
 								long instanceId,

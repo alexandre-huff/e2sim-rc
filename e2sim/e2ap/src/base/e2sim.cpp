@@ -29,7 +29,7 @@
 #include "e2sim_defs.h"
 #include "e2sim_sctp.hpp"
 #include "e2ap_message_handler.hpp"
-#include "encode_e2apv1.hpp"
+#include "encode_e2ap.hpp"
 
 using namespace std;
 
@@ -274,7 +274,7 @@ int E2Sim::run_loop(const char *server_addr, int server_port){
   BIT_STRING_t *gnb_id_cpy = get_gnb_id_cpy();  // ptr no longer available after calling setup_request_parameterized function
 
   logger_trace("about to call setup request encode");
-  generate_e2apv1_setup_request_parameterized(pdu_setup, all_funcs, plmn_id_cpy, gnb_id_cpy);
+  generate_e2ap_setup_request_parameterized(pdu_setup, all_funcs, plmn_id_cpy, gnb_id_cpy);
 
   logger_trace("After generating e2setup req");
 

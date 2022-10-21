@@ -18,8 +18,8 @@
 #                                                                            *
 ******************************************************************************/
 
-#ifndef ENCODE_E2APV1_HPP
-#define ENCODE_E2APV1_HPP
+#ifndef ENCODE_E2AP_HPP
+#define ENCODE_E2AP_HPP
 
 #include <vector>
 #include "logger.h"
@@ -52,27 +52,27 @@ namespace encoding {
 
   void buildSubsReq(E2AP_PDU_t *pdu);
 
-  void generate_e2apv1_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs, PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id);
+  void generate_e2ap_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs, PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id);
 
-  void generate_e2apv1_setup_response(E2AP_PDU_t *setup_resp_pdu);
+  void generate_e2ap_setup_response(E2AP_PDU_t *setup_resp_pdu);
 
-  void generate_e2apv1_subscription_request(E2AP_PDU_t *sub_req_pdu);
+  void generate_e2ap_subscription_request(E2AP_PDU_t *sub_req_pdu);
 
-  void generate_e2apv1_subscription_response(E2AP_PDU_t *sub_resp_pdu, E2AP_PDU_t *sub_req_pdu);
+  void generate_e2ap_subscription_response(E2AP_PDU_t *sub_resp_pdu, E2AP_PDU_t *sub_req_pdu);
 
-  void generate_e2apv1_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[], long reqActionIdsRejected[], int accept_size, int reject_size, long reqRequestorId, long reqInstanceId);
+  void generate_e2ap_subscription_response_success(E2AP_PDU *e2ap_pdu, long reqActionIdsAccepted[], long reqActionIdsRejected[], int accept_size, int reject_size, long reqRequestorId, long reqInstanceId);
 
   void generate_e2ap_subscription_response_failure(E2AP_PDU *e2ap_pdu, long reqRequestorId, long reqInstanceId, long func_id, Cause_t *cause, CriticalityDiagnostics_t *crit_diagnostics);
 
   void generate_e2ap_subscription_delete_response_success(E2AP_PDU *e2ap_pdu, long ranFunctionId, long reqRequestorId, long reqInstanceId);
 
-  void generate_e2apv1_indication_request_parameterized(E2AP_PDU *e2ap_pdu, e_RICindicationType indicationType, long requestorId, long instanceId, long ranFunctionId, long actionId, long seqNum, uint8_t *ind_header_buf, int header_length, uint8_t *ind_message_buf, int message_length);
+  void generate_e2ap_indication_request_parameterized(E2AP_PDU *e2ap_pdu, e_RICindicationType indicationType, long requestorId, long instanceId, long ranFunctionId, long actionId, long seqNum, uint8_t *ind_header_buf, int header_length, uint8_t *ind_message_buf, int message_length);
 
   void generate_e2ap_indication_request_parameterized(E2AP_PDU *e2ap_pdu, e_RICindicationType indicationType, long requestorId, long instanceId, long ranFunctionId, long actionId, uint16_t seqNum, uint8_t *ind_header_buf, int header_length, uint8_t *ind_message_buf, int message_length, OCTET_STRING_t *call_proc_id);
 
-  void generate_e2apv1_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs);
+  void generate_e2ap_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs);
 
-  void generate_e2apv2_config_update(E2AP_PDU_t *e2ap_edu);
+  void generate_e2ap_config_update(E2AP_PDU_t *e2ap_edu);
 
   void generate_e2ap_removal_request(E2AP_PDU_t *e2ap_pdu);
 }

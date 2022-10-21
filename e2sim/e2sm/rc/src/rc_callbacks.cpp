@@ -48,7 +48,7 @@ extern "C"
 #include "e2sim.hpp"
 #include "e2sim_defs.h"
 
-#include "encode_e2apv1.hpp"
+#include "encode_e2ap.hpp"
 
 // #include <nlohmann/json.hpp>
 #include <thread>
@@ -593,7 +593,7 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
 
     if (accept_size > 0)
     {
-        encoding::generate_e2apv1_subscription_response_success(e2ap_pdu, accept_array, reject_array, accept_size, reject_size, reqRequestorId, reqInstanceId);
+        encoding::generate_e2ap_subscription_response_success(e2ap_pdu, accept_array, reject_array, accept_size, reject_size, reqRequestorId, reqInstanceId);
     }
     else
     {

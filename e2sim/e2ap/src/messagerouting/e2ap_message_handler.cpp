@@ -23,7 +23,7 @@
 //#include <iostream>
 //#include <vector>
 
-#include "encode_e2apv1.hpp"
+#include "encode_e2ap.hpp"
 #include "logger.h"
 
 #include <unistd.h>
@@ -352,7 +352,7 @@ void e2ap_handle_E2SeviceRequest(E2AP_PDU_t* pdu, int &socket_fd, E2Sim *e2sim) 
 
   logger_trace("about to call service update encode");
 
-  encoding::generate_e2apv1_service_update(res_pdu, all_funcs);
+  encoding::generate_e2ap_service_update(res_pdu, all_funcs);
 
   logger_debug("[E2AP] Created E2-SERVICE-UPDATE");
 
@@ -394,7 +394,7 @@ void e2ap_send_e2nodeConfigUpdate(int &socket_fd) {
 
   logger_trace("about to call e2nodeconfigUpdate encode");
 
-  encoding::generate_e2apv2_config_update(pdu);
+  encoding::generate_e2ap_config_update(pdu);
 
   logger_debug("[E2AP] Created E2nodeConfigUpdate");
 
@@ -431,7 +431,7 @@ void e2ap_handle_E2SetupRequest(E2AP_PDU_t* pdu, int &socket_fd) {
   logger_trace("in func %s", __func__);
 
   E2AP_PDU_t* res_pdu = (E2AP_PDU_t*)calloc(1, sizeof(E2AP_PDU));
-  encoding::generate_e2apv1_setup_response(res_pdu);
+  encoding::generate_e2ap_setup_response(res_pdu);
 
   logger_debug("[E2AP] Created E2-SETUP-RESPONSE");
 
@@ -463,7 +463,7 @@ void e2ap_handle_E2SetupRequest(E2AP_PDU_t* pdu, int &socket_fd) {
 
   E2AP_PDU_t* pdu_sub = (E2AP_PDU_t*)calloc(1,sizeof(E2AP_PDU));
 
-  encoding::generate_e2apv1_subscription_request(pdu_sub);
+  encoding::generate_e2ap_subscription_request(pdu_sub);
 
   if (LOGGER_LEVEL >= LOGGER_DEBUG) {
     xer_fprint(stderr, &asn_DEF_E2AP_PDU, pdu_sub);
@@ -497,7 +497,7 @@ void e2ap_handle_RICSubscriptionRequest(E2AP_PDU_t* pdu, int &socket_fd)
 
   E2AP_PDU_t* pdu_resp = (E2AP_PDU_t*)calloc(1,sizeof(E2AP_PDU));
 
-  generate_e2apv1_subscription_response(pdu_resp, pdu);
+  generate_e2ap_subscription_response(pdu_resp, pdu);
 
   fprintf(stderr, "Subscription Response\n");
 

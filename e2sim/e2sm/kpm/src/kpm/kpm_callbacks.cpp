@@ -73,32 +73,32 @@ int main(int argc, char* argv[]) {
   nrcellid_buf[3] = 0x00;
   nrcellid_buf[4] = 0x70;
 
-  
+
 
   asn_codec_ctx_t *opt_cod;
-  
+
   E2SM_KPM_RANfunction_Description_t *ranfunc_desc =
     (E2SM_KPM_RANfunction_Description_t*)calloc(1,sizeof(E2SM_KPM_RANfunction_Description_t));
   encode_kpm_function_description(ranfunc_desc);
-  
+
   uint8_t e2smbuffer[8192] = {0, };
   size_t e2smbuffer_size = 8192;
-  
+
   asn_enc_rval_t er =
     asn_encode_to_buffer(opt_cod,
 			 ATS_ALIGNED_BASIC_PER,
 			 &asn_DEF_E2SM_KPM_RANfunction_Description,
 			 ranfunc_desc, e2smbuffer, e2smbuffer_size);
-  
+
   fprintf(stderr, "er encded is %d\n", er.encoded);
   fprintf(stderr, "after encoding message\n");
   fprintf(stderr, "here is encoded message %s\n", e2smbuffer);
-  
+
   uint8_t *ranfuncdesc = (uint8_t*)calloc(1,er.encoded);
   memcpy(ranfuncdesc, e2smbuffer, er.encoded);
-  
+
   printf("this is the char array %s\n", (char*)ranfuncdesc);
-  
+
   OCTET_STRING_t *ranfunc_ostr = (OCTET_STRING_t*)calloc(1,sizeof(OCTET_STRING_t));
   ranfunc_ostr->buf = (uint8_t*)calloc(1,er.encoded);
   ranfunc_ostr->size = er.encoded;
@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
   printf("value of this index is %d\n", ranfuncdesc[15]);
   printf("value of this index is %d\n", ranfuncdesc[100]);
   printf("value of this index is %d\n", ranfuncdesc[101]);
-  
+
   e2sim.register_e2sm(0,ranfunc_ostr);
   e2sim.register_subscription_callback(0,&callback_kpm_subscription_request);
 
@@ -143,8 +143,8 @@ void get_cell_id(uint8_t *nrcellid_buf, char *cid_return_buf) {
   nr7 = nr7 >> 4;
 
   uint8_t nr8 = nrcellid_buf[4] >> 4;
-  
-  sprintf(cid_return_buf, "373437%d%d%d%d%d%d%d%d%d", nr0,nr1,nr2,nr3,nr4,nr5,nr6,nr7,nr8);  
+
+  sprintf(cid_return_buf, "373437%d%d%d%d%d%d%d%d%d", nr0,nr1,nr2,nr3,nr4,nr5,nr6,nr7,nr8);
 
 }
 
@@ -165,7 +165,7 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
   long seqNum = 1;
 
   std::string str;
-  
+
   while ( getline(input, str) ) {
 
     json all_ues_json;
@@ -176,7 +176,7 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
     uint8_t *plmnid_buf = (uint8_t*)"747";
     uint8_t *sst_buf = (uint8_t*)"1";
     uint8_t *sd_buf = (uint8_t*)"100";
-    
+
 
     fprintf(stderr,"De line is %s\n", str.c_str());
 
@@ -196,14 +196,14 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 
       std::string first_key = all_ues_json.begin().key();
       fprintf(stderr, "first key is %s\n", first_key.c_str());
-      
+
       if (first_key.compare("ueMeasReport") == 0) {
-	
+
 	fprintf(stderr, "it is equal to ue meas report\n");
 
 	int numMeasReports = (all_ues_json["/ueMeasReport/ueMeasReportList"_json_pointer]).size();
-	
-      
+
+
 	for (int i = 0; i < numMeasReports; i++) {
 	  int nextCellId;
 	  int nextRsrp;
@@ -212,39 +212,39 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	  float tput;
 	  int prb_usage;
 	  std::string ueId;
-	  
+
 	  fprintf(stderr,"UE number %d\n", i);
 
 	  json::json_pointer p001(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i) +"/ue-id");
 	  ueId = all_ues_json[p001].get<std::string>();
-	  fprintf(stderr, "UEID %s\n", ueId.c_str());	  
-	  
+	  fprintf(stderr, "UEID %s\n", ueId.c_str());
+
 	  json::json_pointer p0(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i) +"/throughput");
 	  tput = all_ues_json[p0].get<float>();
 	  fprintf(stderr, "Throughput %f\n", tput);
-	  
+
 	  json::json_pointer p00(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i) +"/prb_usage");
 	  prb_usage = all_ues_json[p00].get<int>();
 	  fprintf(stderr, "Throughput %d\n", prb_usage);
-	  
+
 	  json::json_pointer p1(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i) +"/nrCellIdentity");
 	  nextCellId = all_ues_json[p1].get<int>();
 	  fprintf(stderr, "Serving Cell %d\n",nextCellId);
-	  
+
 	  json::json_pointer p2(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i) +"/servingCellRfReport/rsrp");
 	  nextRsrp = all_ues_json[p2].get<int>();
 	  fprintf(stderr,"  RSRP %d\n", nextRsrp);
-	  
+
 	  json::json_pointer p3(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i) +"/servingCellRfReport/rsrq");
 	  nextRsrq = all_ues_json[p3].get<int>();
 	  fprintf(stderr,"  RSRQ %d\n",nextRsrq);
-	  
+
 	  json::json_pointer p4(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i) +"/servingCellRfReport/rssinr");
 	  nextRssinr = all_ues_json[p4].get<int>();
 	  fprintf(stderr,"  RSSINR %d\n", nextRssinr);
-	  
+
 	  json::json_pointer p5(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i) +"/neighbourCellList");
-	  
+
 	  uint8_t crnti_buf[3] = {0, };
 
 	  if (ueId.find("Pedestrian") != string::npos) {
@@ -260,27 +260,27 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	      crnti_buf[0] = indval/10;
 	      crnti_buf[1] = indval % 10;
 	    }
-	    
+
 	  } else if (ueId.find("Car") != string::npos) {
 	    crnti_buf[0] = 4;
 	    crnti_buf[1] = 1;
 	  }
-	  
+
 	  //	  uint8_t *buf2 = (uint8_t*)"12";
-	  
+
 	  std::string serving_str = "{\"rsrp\": " + std::to_string(nextRsrp) + ", \"rsrq\": " +
 	    std::to_string(nextRsrq) + ", \"rssinr\": " + std::to_string(nextRssinr) + "}";
-	  const uint8_t *serving_buf = reinterpret_cast<const uint8_t*>(serving_str.c_str());	
-	  
+	  const uint8_t *serving_buf = reinterpret_cast<const uint8_t*>(serving_str.c_str());
+
 	  int numNeighborCells = (all_ues_json[p5]).size();
-	  
+
 	  std::string neighbor_str = "[";
-	  
+
 	  int nextNbCell;
 	  int nextNbRsrp;
 	  int nextNbRsrq;
 	  int nextNbRssinr;
-	  
+
 	  for (int j = 0; j < numNeighborCells; j++) {
 	    json::json_pointer p8(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i) +"/neighbourCellList/" + std::to_string(j) + "/nbCellIdentity");
 	    nextNbCell = all_ues_json[p8].get<int>();
@@ -289,20 +289,20 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 				  +"/neighbourCellList/" + std::to_string(j) + "/nbCellRfReport/rsrp");
 	    nextNbRsrp = all_ues_json[p9].get<int>();
 	    //cout << "  RSRP " << nextNbRsrp << endl;
-	    
+
 	    json::json_pointer p10(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i)
 				   +"/neighbourCellList/" + std::to_string(j) + "/nbCellRfReport/rsrq");
 	    nextNbRsrq = all_ues_json[p10].get<int>();
 	    //cout << "  RSRQ " << nextNbRsrq << endl;
-	    
+
 	    json::json_pointer p11(std::string("/ueMeasReport/ueMeasReportList/") + std::to_string(i)
 				   +"/neighbourCellList/" + std::to_string(j) + "/nbCellRfReport/rssinr");
 	    nextNbRssinr = all_ues_json[p11].get<int>();
 	    //cout << "  RSSINR " << nextNbRssinr << endl;
-	    
+
 	    if (j != 0) {
 	      neighbor_str += ",";
-	      
+
 	    }
 
 
@@ -312,24 +312,24 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	    neighbor_cellid_buf[2] = 0xD6;
 	    neighbor_cellid_buf[3] = nextNbCell;
 	    neighbor_cellid_buf[4] = 0x70;
-	    
+
 	    char cid_buf[25] = {0, };
 	    get_cell_id(neighbor_cellid_buf,cid_buf);
-	    
-	    
+
+
 	    neighbor_str += "{\"CID\" : \"" + std::string(cid_buf) + "\", \"Cell-RF\" : {\"rsrp\": " + std::to_string(nextNbRsrp) +
 	      ", \"rsrq\": " + std::to_string(nextNbRsrq) + ", \"rssinr\": " + std::to_string(nextNbRssinr) + "}}";
-	    
+
 	  }
-	  
+
 	  neighbor_str += "]";
-	  
+
 	  fprintf(stderr,"This is neighbor str %s\n", neighbor_str.c_str());
-	  
+
 	  //Creating UE-level RAN-Container CUCP message
-	  
+
 	  fprintf(stderr,"Creating UE-level RAN-Container CUCP message\n");
-	  
+
 	  const uint8_t *neighbor_buf = reinterpret_cast<const uint8_t*>(neighbor_str.c_str());
 
 
@@ -351,26 +351,26 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	  uint8_t duid_buf[2] = {0, };
 	  duid_buf[0] = 20000;
 
-	  uint8_t *cuupname_buf = (uint8_t*)"GNBCUUP5";	  
-	  
-	  
+	  uint8_t *cuupname_buf = (uint8_t*)"GNBCUUP5";
+
+
 	  E2SM_KPM_IndicationMessage_t *ind_msg_cucp_ue =
 	    (E2SM_KPM_IndicationMessage_t*)calloc(1,sizeof(E2SM_KPM_IndicationMessage_t));
-	  
+
 	  encode_kpm_report_rancontainer_cucp_parameterized(ind_msg_cucp_ue, plmnid_buf, nrcellid_buf, crnti_buf, serving_buf, neighbor_buf);
-	  
+
 	  uint8_t e2sm_message_buf_cucp_ue[8192] = {0, };
 	  size_t e2sm_message_buf_size_cucp_ue = 8192;
-	  
+
 	  asn_codec_ctx_t *opt_cod;
 
-	  
+
 	  asn_enc_rval_t er_message_cucp_ue = asn_encode_to_buffer(opt_cod,
 								   ATS_ALIGNED_BASIC_PER,
 								   &asn_DEF_E2SM_KPM_IndicationMessage,
 								   ind_msg_cucp_ue, e2sm_message_buf_cucp_ue, e2sm_message_buf_size_cucp_ue);
 	  ASN_STRUCT_FREE(asn_DEF_E2SM_KPM_IndicationMessage, ind_msg_cucp_ue);
-	  
+
 	  fprintf(stderr, "er encded is %d\n", er_message_cucp_ue.encoded);
 	  fprintf(stderr, "after encoding message\n");
 
@@ -378,11 +378,11 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	    (E2SM_KPM_IndicationHeader_t*)calloc(1,sizeof(E2SM_KPM_IndicationHeader_t));
 	  encode_e2sm_kpm_indication_header(ind_header_cucp_ue, plmnid_buf, sst_buf, sd_buf, fqival, qcival, nrcellid_buf, gnbid_buf, 0, cuupid_buf, duid_buf, cuupname_buf);
 	  fprintf(stderr, "Now printing xer outside of function call\n");
-	  xer_fprint(stderr, &asn_DEF_E2SM_KPM_IndicationHeader, ind_header_cucp_ue);	  
+	  xer_fprint(stderr, &asn_DEF_E2SM_KPM_IndicationHeader, ind_header_cucp_ue);
 
 	  uint8_t e2sm_header_buf_cucp_ue[8192] = {0, };
 	  size_t e2sm_header_buf_size_cucp_ue = 8192;
-	  
+
 	  asn_enc_rval_t er_header_cucp_ue = asn_encode_to_buffer(opt_cod,
 								  ATS_ALIGNED_BASIC_PER,
 								  &asn_DEF_E2SM_KPM_IndicationHeader,
@@ -391,46 +391,46 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 
 	  fprintf(stderr, "er encded is %d\n", er_header_cucp_ue.encoded);
 	  fprintf(stderr, "error buf is %s\n", (char*)e2sm_header_buf_cucp_ue);
-	  fprintf(stderr, "after encoding header\n");	  
-	  
+	  fprintf(stderr, "after encoding header\n");
+
 	  E2AP_PDU *pdu_cucp_ue = (E2AP_PDU*)calloc(1,sizeof(E2AP_PDU));
-	  
-	  encoding::generate_e2apv1_indication_request_parameterized(pdu_cucp_ue, requestorId,
+
+	  encoding::generate_e2ap_indication_request_parameterized(pdu_cucp_ue, requestorId,
 								     instanceId, ranFunctionId,
 								     actionId, seqNum, e2sm_header_buf_cucp_ue,
 								     er_header_cucp_ue.encoded, e2sm_message_buf_cucp_ue,
 								     er_message_cucp_ue.encoded);
-	  
-	  
+
+
 	  e2sim.encode_and_send_sctp_data(pdu_cucp_ue);
 
 	  seqNum++;
 
 	  std::this_thread::sleep_for (std::chrono::milliseconds(50));
-	  
+
 	  //Creating UE-level RAN-Container CUUP message
-	  
-	  fprintf(stderr,"Creating UE-level RAN-Container CUUP message\n");	
-	  
+
+	  fprintf(stderr,"Creating UE-level RAN-Container CUUP message\n");
+
 	  E2SM_KPM_IndicationMessage_t *ind_msg_cuup_ue =
 	    (E2SM_KPM_IndicationMessage_t*)calloc(1,sizeof(E2SM_KPM_IndicationMessage_t));
-	  
+
 	  long bytes = (long)(tput * 100);
-	  
+
 	  encode_kpm_report_rancontainer_cuup_parameterized(ind_msg_cuup_ue, plmnid_buf, nrcellid_buf, crnti_buf, bytes, 0);
-	  
+
 	  uint8_t e2sm_message_buf_cuup_ue[8192] = {0, };
 	  size_t e2sm_message_buf_size_cuup_ue = 8192;
-	  
+
 	  asn_codec_ctx_t *opt_cod2;
-	  
-	  
+
+
 	  asn_enc_rval_t er_message_cuup_ue = asn_encode_to_buffer(opt_cod2,
 							       ATS_ALIGNED_BASIC_PER,
 							       &asn_DEF_E2SM_KPM_IndicationMessage,
 							       ind_msg_cuup_ue, e2sm_message_buf_cuup_ue, e2sm_message_buf_size_cuup_ue);
 	  ASN_STRUCT_FREE(asn_DEF_E2SM_KPM_IndicationMessage, ind_msg_cuup_ue);
-	  
+
 	  fprintf(stderr, "er encded is %d\n", er_message_cuup_ue.encoded);
 	  fprintf(stderr, "after encoding message\n");
 
@@ -440,17 +440,17 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 
 	  uint8_t e2sm_header_buf_cuup_ue[8192] = {0, };
 	  size_t e2sm_header_buf_size_cuup_ue = 8192;
-	  
+
 	  asn_enc_rval_t er_header_cuup_ue = asn_encode_to_buffer(opt_cod,
 								  ATS_ALIGNED_BASIC_PER,
 								  &asn_DEF_E2SM_KPM_IndicationHeader,
 								  ind_header_cuup_ue, e2sm_header_buf_cuup_ue, e2sm_header_buf_size_cuup_ue);
 	  ASN_STRUCT_FREE(asn_DEF_E2SM_KPM_IndicationHeader, ind_header_cuup_ue);
-	  
-	  
-	  E2AP_PDU *pdu_cuup_ue = (E2AP_PDU*)calloc(1,sizeof(E2AP_PDU));	
-	  
-	  encoding::generate_e2apv1_indication_request_parameterized(pdu_cuup_ue, requestorId,
+
+
+	  E2AP_PDU *pdu_cuup_ue = (E2AP_PDU*)calloc(1,sizeof(E2AP_PDU));
+
+	  encoding::generate_e2ap_indication_request_parameterized(pdu_cuup_ue, requestorId,
 								     instanceId, ranFunctionId,
 								     actionId, seqNum, e2sm_header_buf_cuup_ue,
 								     er_header_cuup_ue.encoded,
@@ -461,23 +461,23 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	  seqNum++;
 
 	  std::this_thread::sleep_for (std::chrono::milliseconds(50));
-	  
+
 	  //Creating UE-level RAN-Container DU message
-	  
+
 	  fprintf(stderr,"Creating UE-level RAN-Container DU message\n");
-	  
+
 	  E2SM_KPM_IndicationMessage_t *ind_message_du_ue =
 	    (E2SM_KPM_IndicationMessage_t*)calloc(1,sizeof(E2SM_KPM_IndicationMessage_t));
-	  
+
 	  encode_kpm_report_rancontainer_du_parameterized(ind_message_du_ue,
 							  plmnid_buf, nrcellid_buf, crnti_buf, prb_usage, 0);
-	  
+
 	  uint8_t e2sm_message_buf_du_ue[8192] = {0, };
 	  size_t e2sm_message_buf_size_du_ue = 8192;
-	  
+
 	  asn_codec_ctx_t *opt_cod3;
-	  
-	  
+
+
 	  asn_enc_rval_t er_message_du_ue = asn_encode_to_buffer(opt_cod3,
 								 ATS_ALIGNED_BASIC_PER,
 								 &asn_DEF_E2SM_KPM_IndicationMessage,
@@ -485,7 +485,7 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 								 e2sm_message_buf_du_ue,
 								 e2sm_message_buf_size_du_ue);
 	  ASN_STRUCT_FREE(asn_DEF_E2SM_KPM_IndicationMessage, ind_message_du_ue);
-	  
+
 	  fprintf(stderr, "er encded is %d\n", er_message_du_ue.encoded);
 	  fprintf(stderr, "after encoding message\n");
 
@@ -495,18 +495,18 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 
 	  uint8_t e2sm_header_buf_du_ue[8192] = {0, };
 	  size_t e2sm_header_buf_size_du_ue = 8192;
-	  
+
 	  asn_enc_rval_t er_header_du_ue = asn_encode_to_buffer(opt_cod,
 								ATS_ALIGNED_BASIC_PER,
 								&asn_DEF_E2SM_KPM_IndicationHeader,
 								ind_header_du_ue, e2sm_header_buf_du_ue,
 								e2sm_header_buf_size_du_ue);
 	  ASN_STRUCT_FREE(asn_DEF_E2SM_KPM_IndicationHeader, ind_header_du_ue);
-	  
-	  
+
+
 	  E2AP_PDU *pdu_du_ue = (E2AP_PDU*)calloc(1,sizeof(E2AP_PDU));
-	  
-	  encoding::generate_e2apv1_indication_request_parameterized(pdu_du_ue, requestorId,
+
+	  encoding::generate_e2ap_indication_request_parameterized(pdu_du_ue, requestorId,
 								     instanceId, ranFunctionId,
 								     actionId, seqNum,
 								     e2sm_header_buf_du_ue, er_header_du_ue.encoded,
@@ -517,16 +517,16 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	  seqNum++;
 
 	  std::this_thread::sleep_for (std::chrono::milliseconds(50));
-	  
+
 	  fprintf(stderr, "done with ue meas report\n");
 	}
-	
+
       } else if (first_key.compare("cellMeasReport") == 0) {
 
 	fprintf(stderr, "it is equal to cell meas report\n");
-	
+
 	int numMeasReports = (all_ues_json["/cellMeasReport/cellMeasReportList"_json_pointer]).size();
-	
+
 	for (int i = 0; i < numMeasReports; i++) {
 	  int nextCellId;
 
@@ -535,30 +535,30 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	  int prb_dl;
 	  int prb_ul;
 	  int cellid;
-	  
+
 	  fprintf(stderr,"UE number %d\n", i);
 
 	  json::json_pointer p00(std::string("/cellMeasReport/cellMeasReportList/") + std::to_string(i) +"/nrCellIdentity");
 	  cellid = all_ues_json[p00].get<int>();
 	  fprintf(stderr, "Cell ID %d\n", cellid);
-	  
+
 	  json::json_pointer p0(std::string("/cellMeasReport/cellMeasReportList/") + std::to_string(i) +"/pdcpByteMeasReport/pdcpBytesDl");
 	  bytes_dl = all_ues_json[p0].get<float>();
 	  fprintf(stderr, "Bytes DL %f\n", bytes_dl);
 
 	  json::json_pointer p1(std::string("/cellMeasReport/cellMeasReportList/") + std::to_string(i) +"/pdcpByteMeasReport/pdcpBytesUl");
 	  bytes_ul = all_ues_json[p1].get<float>();
-	  fprintf(stderr, "Bytes UL %f\n", bytes_ul);	  
-	  
+	  fprintf(stderr, "Bytes UL %f\n", bytes_ul);
+
 	  json::json_pointer p2(std::string("/cellMeasReport/cellMeasReportList/") + std::to_string(i) +"/prbMeasReport/availPrbDl");
 	  prb_dl = all_ues_json[p2].get<int>();
-	  fprintf(stderr, "Avail PRB DL %d\n", prb_dl);	
+	  fprintf(stderr, "Avail PRB DL %d\n", prb_dl);
 
 	  json::json_pointer p3(std::string("/cellMeasReport/cellMeasReportList/") + std::to_string(i) +"/prbMeasReport/availPrbUl");
 	  prb_ul = all_ues_json[p3].get<int>();
 	  fprintf(stderr, "Avail PRB UL %d\n", prb_ul);
 
-	  
+
 	  uint8_t *sst_buf = (uint8_t*)"1";
 	  uint8_t *sd_buf = (uint8_t*)"100";
 	  uint8_t *plmnid_buf = (uint8_t*)"747";
@@ -581,11 +581,11 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	  uint8_t duid_buf[2] = {0, };
 	  duid_buf[0] = 20000;
 
-	  uint8_t *cuupname_buf = (uint8_t*)"GNBCUUP5";	  	  
-	  
+	  uint8_t *cuupname_buf = (uint8_t*)"GNBCUUP5";
+
 
 	  //Encoding Style 5 Message Body
-	  
+
 	  fprintf(stderr, "Encoding Style 5 Message body\n");
 
 	  asn_codec_ctx_t *opt_cod;
@@ -593,21 +593,21 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 	  E2SM_KPM_IndicationMessage_t *ind_msg_style5 =
 	    (E2SM_KPM_IndicationMessage_t*)calloc(1,sizeof(E2SM_KPM_IndicationMessage_t));
 	  E2AP_PDU *pdu_style5 = (E2AP_PDU*)calloc(1,sizeof(E2AP_PDU));
-	  
+
 	  encode_kpm_report_style5_parameterized(ind_msg_style5 , cuupname_buf, bytes_dl, bytes_ul, sst_buf, sd_buf, plmnid_buf);
-	  
+
 	  uint8_t e2sm_message_buf_style5[8192] = {0, };
 	  size_t e2sm_message_buf_size_style5 = 8192;
-	  
+
 	  asn_enc_rval_t er_message_style5 = asn_encode_to_buffer(opt_cod,
 								  ATS_ALIGNED_BASIC_PER,
 								  &asn_DEF_E2SM_KPM_IndicationMessage,
 								  ind_msg_style5, e2sm_message_buf_style5, e2sm_message_buf_size_style5);
 	  ASN_STRUCT_FREE(asn_DEF_E2SM_KPM_IndicationMessage, ind_msg_style5);
-	  
+
 	  fprintf(stderr, "er encded is %d\n", er_message_style5.encoded);
 	  fprintf(stderr, "after encoding message\n");
-	  
+
 	  int seqNum0 = 1;
 
 
@@ -617,16 +617,16 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 
 	  uint8_t e2sm_header_buf_style5[8192] = {0, };
 	  size_t e2sm_header_buf_size_style5 = 8192;
-	  
+
 	  asn_enc_rval_t er_header_style5 = asn_encode_to_buffer(opt_cod,
 								 ATS_ALIGNED_BASIC_PER,
 								 &asn_DEF_E2SM_KPM_IndicationHeader,
 								 ind_header_style5,
-								 e2sm_header_buf_style5, e2sm_header_buf_size_style5);	  
+								 e2sm_header_buf_style5, e2sm_header_buf_size_style5);
 	  ASN_STRUCT_FREE(asn_DEF_E2SM_KPM_IndicationHeader, ind_header_style5);
-	  
-	  
-	  encoding::generate_e2apv1_indication_request_parameterized(pdu_style5, requestorId,
+
+
+	  encoding::generate_e2ap_indication_request_parameterized(pdu_style5, requestorId,
 								     instanceId, ranFunctionId,
 								     actionId, seqNum0, e2sm_header_buf_style5,
 								     er_header_style5.encoded, e2sm_message_buf_style5,
@@ -636,48 +636,48 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 
 	  seqNum++;
 
-	  std::this_thread::sleep_for (std::chrono::milliseconds(50));	  
-	  
+	  std::this_thread::sleep_for (std::chrono::milliseconds(50));
+
 
 	  //Encoding Style 1 Message Body
-	  
-	  fprintf(stderr, "Encoding Style 1 Message body\n");	  
+
+	  fprintf(stderr, "Encoding Style 1 Message body\n");
 	  asn_codec_ctx_t *opt_cod2;
-	  
-	  
+
+
 	  E2SM_KPM_IndicationMessage_t *ind_message_style1 =
 	    (E2SM_KPM_IndicationMessage_t*)calloc(1,sizeof(E2SM_KPM_IndicationMessage_t));
 	  E2AP_PDU *pdu_style1 = (E2AP_PDU*)calloc(1,sizeof(E2AP_PDU));
-	  
-	  long fiveqi = 7;
-	  
 
-	  
+	  long fiveqi = 7;
+
+
+
 	  long *l_dl_prbs = (long*)calloc(1, sizeof(long));
 	  long *l_ul_prbs = (long*)calloc(1, sizeof(long));
 	  *l_dl_prbs = (long)prb_dl;
 	  *l_ul_prbs = (long)prb_ul;
-	  
+
 	  encode_kpm_report_style1_parameterized(ind_message_style1, fiveqi,
 						 prb_dl, prb_ul, sst_buf, sd_buf,
 						 plmnid_buf, nrcellid_buf, l_dl_prbs, l_ul_prbs);
-	  
+
 	  uint8_t e2sm_message_buf_style1[8192] = {0, };
 	  size_t e2sm_message_buf_size_style1 = 8192;
-	  
+
 	  asn_enc_rval_t er_message_style1 = asn_encode_to_buffer(opt_cod2,
 								  ATS_ALIGNED_BASIC_PER,
 								  &asn_DEF_E2SM_KPM_IndicationMessage,
 								  ind_message_style1,
 								  e2sm_message_buf_style1, e2sm_message_buf_size_style1);
 	  ASN_STRUCT_FREE(asn_DEF_E2SM_KPM_IndicationMessage, ind_message_style1);
-	  
+
 	  fprintf(stderr, "er encded is %d\n", er_message_style1.encoded);
 	  fprintf(stderr, "after encoding message\n");
 
-	  
+
 	  uint8_t *cpid_buf2 = (uint8_t*)"CPID";
-	  
+
 	  fprintf(stderr, "About to encode Indication\n");
 
 	  E2SM_KPM_IndicationHeader_t* ind_header_style1 =
@@ -686,15 +686,15 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 
 	  uint8_t e2sm_header_buf_style1[8192] = {0, };
 	  size_t e2sm_header_buf_size_style1 = 8192;
-	  
+
 	  asn_enc_rval_t er_header_style1 = asn_encode_to_buffer(opt_cod,
 								 ATS_ALIGNED_BASIC_PER,
 								 &asn_DEF_E2SM_KPM_IndicationHeader,
 								 ind_header_style1,
 								 e2sm_header_buf_style1, e2sm_header_buf_size_style1);
 	  ASN_STRUCT_FREE(asn_DEF_E2SM_KPM_IndicationHeader, ind_header_style1);
-	  
-	  encoding::generate_e2apv1_indication_request_parameterized(pdu_style1, requestorId,
+
+	  encoding::generate_e2ap_indication_request_parameterized(pdu_style1, requestorId,
 								     instanceId, ranFunctionId,
 								     actionId, seqNum, e2sm_header_buf_style1,
 								     er_header_style1.encoded,
@@ -702,10 +702,10 @@ void run_report_loop(long requestorId, long instanceId, long ranFunctionId, long
 
 	  e2sim.encode_and_send_sctp_data(pdu_style1);
 	  seqNum++;
-	  std::this_thread::sleep_for (std::chrono::milliseconds(50));	  
-	  
+	  std::this_thread::sleep_for (std::chrono::milliseconds(50));
+
 	}
-      }					           
+      }
     }
   }
 }
@@ -723,13 +723,13 @@ void callback_kpm_subscription_request(E2AP_PDU_t *sub_req_pdu) {
 
   RICsubscriptionRequest_t orig_req =
     sub_req_pdu->choice.initiatingMessage->value.choice.RICsubscriptionRequest;
-  
+
   RICsubscriptionResponse_IEs_t *ricreqid =
     (RICsubscriptionResponse_IEs_t*)calloc(1, sizeof(RICsubscriptionResponse_IEs_t));
-					   
+
   int count = orig_req.protocolIEs.list.count;
   int size = orig_req.protocolIEs.list.size;
-  
+
   RICsubscriptionRequest_IEs_t **ies = (RICsubscriptionRequest_IEs_t**)orig_req.protocolIEs.list.array;
 
   fprintf(stderr, "count%d\n", count);
@@ -747,13 +747,13 @@ void callback_kpm_subscription_request(E2AP_PDU_t *sub_req_pdu) {
   for (int i=0; i < count; i++) {
     RICsubscriptionRequest_IEs_t *next_ie = ies[i];
     pres = next_ie->value.present;
-    
+
     fprintf(stderr, "The next present value %d\n", pres);
 
     switch(pres) {
     case RICsubscriptionRequest_IEs__value_PR_RICrequestID:
       {
-	fprintf(stderr,"in case request id\n");	
+	fprintf(stderr,"in case request id\n");
 	RICrequestID_t reqId = next_ie->value.choice.RICrequestID;
 	long requestorId = reqId.ricRequestorID;
 	long instanceId = reqId.ricInstanceID;
@@ -766,23 +766,23 @@ void callback_kpm_subscription_request(E2AP_PDU_t *sub_req_pdu) {
       }
     case RICsubscriptionRequest_IEs__value_PR_RANfunctionID:
       {
-	fprintf(stderr,"in case ran func id\n");	
+	fprintf(stderr,"in case ran func id\n");
 	break;
       }
     case RICsubscriptionRequest_IEs__value_PR_RICsubscriptionDetails:
       {
 	fprintf(stderr,"in case subscription details\n");
 	RICsubscriptionDetails_t subDetails = next_ie->value.choice.RICsubscriptionDetails;
-	fprintf(stderr,"in case subscription details 1\n");	
+	fprintf(stderr,"in case subscription details 1\n");
 	RICeventTriggerDefinition_t triggerDef = subDetails.ricEventTriggerDefinition;
-	fprintf(stderr,"in case subscription details 2\n");	
+	fprintf(stderr,"in case subscription details 2\n");
 	RICactions_ToBeSetup_List_t actionList = subDetails.ricAction_ToBeSetup_List;
 	fprintf(stderr,"in case subscription details 3\n");
 	//We are ignoring the trigger definition
 
 	//We identify the first action whose type is REPORT
 	//That is the only one accepted; all others are rejected
-	
+
 	int actionCount = actionList.list.count;
 	fprintf(stderr, "action count%d\n", actionCount);
 
@@ -807,16 +807,16 @@ void callback_kpm_subscription_request(E2AP_PDU_t *sub_req_pdu) {
 	    actionIdsReject.push_back(reqActionId);
 	  }
 	}
-	
+
 	break;
       }
     default:
       {
-	fprintf(stderr,"in case default\n");	
+	fprintf(stderr,"in case default\n");
 	break;
-      }      
+      }
     }
-    
+
   }
 
   fprintf(stderr, "After Processing Subscription Request\n");
@@ -827,7 +827,7 @@ void callback_kpm_subscription_request(E2AP_PDU_t *sub_req_pdu) {
 
   for (int i=0; i < actionIdsAccept.size(); i++) {
     fprintf(stderr, "Action ID %d %ld\n", i, actionIdsAccept.at(i));
-    
+
   }
 
   E2AP_PDU *e2ap_pdu = (E2AP_PDU*)calloc(1,sizeof(E2AP_PDU));
@@ -837,7 +837,7 @@ void callback_kpm_subscription_request(E2AP_PDU_t *sub_req_pdu) {
   int accept_size = actionIdsAccept.size();
   int reject_size = actionIdsReject.size();
 
-  encoding::generate_e2apv1_subscription_response_success(e2ap_pdu, accept_array, reject_array, accept_size, reject_size, reqRequestorId, reqInstanceId);
+  encoding::generate_e2ap_subscription_response_success(e2ap_pdu, accept_array, reject_array, accept_size, reject_size, reqRequestorId, reqInstanceId);
 
   e2sim.encode_and_send_sctp_data(e2ap_pdu);
 
