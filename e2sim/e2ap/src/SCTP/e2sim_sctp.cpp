@@ -25,6 +25,7 @@
 #include <netinet/sctp.h>
 #include <arpa/inet.h>	//for inet_ntop()
 #include <assert.h>
+#include <errno.h>
 
 #include "e2sim_sctp.hpp"
 // #include "e2sim_defs.h"
@@ -232,13 +233,15 @@ int sctp_send_data_X2AP(int &socket_fd, sctp_buffer_t &data)
 
 /*
 Receive data from SCTP socket
-Outcome of recv()
--1: exit the program
-0: close the connection
-+: new data
+
+Returns
+  -1 if an error occurred, errno is set to indicate the error.
+  0 on socket timeout, the application should retry again.
+  > 0 on new data.
 */
 int sctp_receive_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts)
 {
+  int error;
   //clear out the data before receiving
   logger_trace("in func %s", __func__);
   memset(data.buffer, 0, sizeof(data.buffer));
@@ -246,29 +249,41 @@ int sctp_receive_data(int &socket_fd, sctp_buffer_t &data, struct timespec *ts)
 
   //receive data from the socket
   int recv_len = recv(socket_fd, &(data.buffer), sizeof(data.buffer), 0);
-  if(ts != NULL) {
-    if(recv_len > 0) {
+  if (ts != NULL) {
+    if (recv_len > 0) {
       clock_gettime(CLOCK_REALTIME, ts);
     } else {
       memset(ts, 0, sizeof(struct timespec));
     }
   }
-  logger_debug("[SCTP] received %d bytes", recv_len);
 
-  if(recv_len == -1)
-  {
-    perror("[SCTP] recv");
-    exit(1);
-  }
-  else if (recv_len == 0)
-  {
-    logger_info("[SCTP] Connection closed by remote peer");
-    if(close(socket_fd) == -1)
-    {
-      perror("[SCTP] close");
+  if (recv_len == -1) {
+    if (errno == EAGAIN) {        // timeout
+      return 0;
+
+    } else if (errno == EINTR) {  // do not log expected interrupts, SIGINT or SIGTERM will shutdown the receiver
+      return -1;
+
+    } else {                      // all other errors are logged out
+      error = errno;
+      logger_error("[SCTP] recv error: %s", strerror(errno)); // can change errno
+      errno = error;
+      return -1;
     }
-    return -1;
   }
+
+  if (recv_len == 0) {
+    logger_info("[SCTP] Connection closed by remote peer");
+
+    if (close(socket_fd) == -1) {
+      error = errno;
+      logger_error("[SCTP] close: %s", strerror(errno));  // can change errno
+      errno = error;
+      return -1;
+    }
+  }
+
+  logger_debug("[SCTP] received %d bytes", recv_len);
 
   data.len = recv_len;
 

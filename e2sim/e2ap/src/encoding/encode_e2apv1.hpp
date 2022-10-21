@@ -73,6 +73,8 @@ namespace encoding {
   void generate_e2apv1_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs);
 
   void generate_e2apv2_config_update(E2AP_PDU_t *e2ap_edu);
+
+  void generate_e2ap_removal_request(E2AP_PDU_t *e2ap_pdu);
 }
 
 #endif

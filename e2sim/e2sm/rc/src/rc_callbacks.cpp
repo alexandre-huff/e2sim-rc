@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 
     e2sim = new E2Sim((uint8_t *)"747", cmd_args.gnb_id);
 
-    logger_force(LOGGER_INFO, "Starting E2 Simulator for RC service model");
+    logger_force(LOGGER_INFO, "Starting E2 Simulator for E2SM-RC");
 
     // run_insert_loop(123, 1, 1, 1);   // FIXME Huff: only for debugging purposes
     // exit(1);
@@ -122,10 +122,17 @@ int main(int argc, char *argv[])
     e2sim->register_subscription_callback(1, &callback_rc_subscription_request);
     e2sim->register_subscription_delete_callback(1, &callback_rc_subscription_delete_request);
     e2sim->register_control_callback(1, &callback_rc_control_request);
+    // TODO e2sim->register_e2ap_removal_callback...
 
     init_prometheus(metrics);
 
     e2sim->run_loop(cmd_args.server_ip.c_str(), cmd_args.server_port);
+
+    delete e2sim;
+
+    logger_force(LOGGER_INFO, "E2 Simulator finished gracefully");
+
+    return 0;
 }
 
 args_t parse_input_options(int argc, char *argv[]) {
@@ -670,7 +677,7 @@ void callback_rc_subscription_delete_request(E2AP_PDU_t *sub_req_pdu) {
         }
     }
 
-    logger_trace("After Processing Subscription Request");
+    logger_trace("After Processing Subscription Delete Request");
 
     logger_debug("requestorId %ld\tinstanceId %ld\tfunctionId %ld", reqRequestorId, reqInstanceId, reqFunctionId);
 

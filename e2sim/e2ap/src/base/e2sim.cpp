@@ -23,6 +23,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <signal.h>
 
 #include "e2sim.hpp"
 #include "e2sim_defs.h"
@@ -33,6 +34,25 @@
 using namespace std;
 
 int client_fd = 0;
+
+volatile sig_atomic_t sig_raised = 0;
+
+void signal_handler(int signal) {
+  switch (signal) {
+    case SIGINT:
+      logger_info("SIGINT was received");
+      break;
+
+    case SIGTERM:
+      logger_info("SIGTERM was received");
+      break;
+
+    default:
+      logger_warn("signal handler received signal %s", strsignal(signal));
+      break;
+  }
+  sig_raised = 1;
+}
 
 /*
   E2Sim constructor
@@ -68,6 +88,8 @@ E2Sim::E2Sim(uint8_t *plmn_id, uint32_t gnb_id) {
   this->gnb_id.buf[1] = ((gnb_id & 0X00FF0000) >> 16);
   this->gnb_id.buf[2] = ((gnb_id & 0X0000FF00) >> 8);
   this->gnb_id.buf[3] = (gnb_id & 0X000000FF);
+
+  ok2run = true;
 
   logger_trace("end of %s constructor", __func__);
 }
@@ -204,7 +226,7 @@ void E2Sim::wait_for_sctp_data()
 }
 
 int E2Sim::run_loop(const char *server_addr, int server_port){
-  logger_force(LOGGER_INFO, "Start E2 Agent (E2 Simulator)");
+  logger_force(LOGGER_INFO, "Starting E2AP Agent (E2 Simulator)");
 
   char *addr = (char *)server_addr;
   if(addr == NULL) {
@@ -289,21 +311,77 @@ int E2Sim::run_loop(const char *server_addr, int server_port){
     logger_error("[SCTP] Unable to send E2-SETUP-REQUEST to peer");
   }
 
+  // set socket timeout to shutdown gracefully
+  struct timeval timeout;
+  timeout.tv_sec = 2;
+  timeout.tv_usec = 0;
+  if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+    perror("setsockopt failed");
+    exit(EXIT_FAILURE);
+  }
+
+  // installing signal handlers
+  struct sigaction sa;
+  sa.sa_handler = &signal_handler;
+  sigemptyset(&sa.sa_mask);
+  sigaction(SIGINT, &sa, NULL);
+  sigaction(SIGTERM, &sa, NULL);
+
   sctp_buffer_t recv_buf;
 
   logger_info("[SCTP] Waiting for SCTP data");
 
   struct timespec ts; // timestamp of the received message
 
-  while(1) //constantly looking for data on SCTP interface
+  while (ok2run) // looking for data on SCTP interface
   {
-    if(sctp_receive_data(client_fd, recv_buf, &ts) <= 0)
-      break;
+    ret = sctp_receive_data(client_fd, recv_buf, &ts);
+    switch (ret) {
+      case 0:
+        logger_trace("EAGAIN");
+        continue;
+        break;
 
-    logger_debug("[SCTP] Received new data of size %d", recv_buf.len);
+      case -1:
+        if (errno == EINTR) {
+          break;  // we expect E2AP-REMOVAL-RESPONSE, so do not stop yet
+        }
 
-    e2ap_handle_sctp_data(client_fd, recv_buf, this, &ts);
+        shutdown(); // we stop on any other error
+        break;
+
+      default:
+        e2ap_handle_sctp_data(client_fd, recv_buf, this, &ts);
+        break;
+    }
+
+    if (sig_raised) {
+      /**
+       * Currently, RIC does not implement E2-REMOVAL-REQUEST yet.
+       * E2 removal is already implemented in E2Sim. We only need to
+       * uncomment the following code to enable it.
+       * We expect E2AP-REMOVAL-RESPONSE, so do not shutdown yet
+       */
+      // E2AP_PDU_t *e2ap_pdu = (E2AP_PDU_t *) calloc(1, sizeof(E2AP_PDU_t));
+      // encoding::generate_e2ap_removal_request(e2ap_pdu);
+      // logger_info("Sending E2AP-REMOVAL-REQUEST");
+      // encode_and_send_sctp_data(e2ap_pdu, NULL);
+
+      /**
+       * Shutdown is expected to be called on processing either
+       * E2-REMOVAL-REQUEST or E2-REMOVAL-RESPONSE messages
+       */
+      shutdown(); // TODO remove this line when enabling E2 removal
+    }
+
   }
 
+  logger_force(LOGGER_INFO, "Shutting down E2AP Agent (E2 Simulator)");
+
   return 0;
+}
+
+void E2Sim::shutdown() {
+  logger_trace("in %s", __func__);
+  ok2run = false;
 }

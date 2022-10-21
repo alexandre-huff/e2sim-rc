@@ -61,8 +61,8 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
     switch (index)
     {
     case E2AP_PDU_PR_initiatingMessage:
-      e2ap_handle_E2SetupRequest(pdu, socket_fd);
       logger_info("[E2AP] Received SETUP-REQUEST");
+      e2ap_handle_E2SetupRequest(pdu, socket_fd);
       break;
 
     case E2AP_PDU_PR_successfulOutcome:
@@ -296,6 +296,27 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
       logger_error("[E2AP] Invalid message index=%d in E2AP-PDU %d", index,
             (int)ProcedureCode_id_RICserviceUpdate);
       break;
+    }
+    break;
+
+  case ProcedureCode_id_E2removal:
+    switch (index) {
+      case E2AP_PDU_PR_initiatingMessage:
+        logger_error("[E2AP] Receive E2-REMOVAL-REQUEST not yet implemented!");
+        break;
+
+      case E2AP_PDU_PR_successfulOutcome:
+        logger_info("[E2AP] Received E2-REMOVAL-RESPONSE");
+        e2sim->shutdown();
+        break;
+
+      case E2AP_PDU_PR_unsuccessfulOutcome:
+        logger_warn("[E2AP] Received E2-REMOVAL-FAILURE");
+        break;
+
+      default:
+        logger_error("[E2AP] Invalid message index=%d in E2AP-PDU", index);
+        break;
     }
     break;
 

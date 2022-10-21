@@ -55,6 +55,8 @@ private:
   PLMN_Identity_t plmn_id;
   BIT_STRING_t gnb_id;
 
+  bool ok2run;  // controls the sctp receiver run loop
+
   void wait_for_sctp_data();
 
 public:
@@ -86,6 +88,8 @@ public:
   void encode_and_send_sctp_data(E2AP_PDU_t* pdu, struct timespec *ts);
 
   int run_loop(const char *server_addr, int server_port);
+
+  void shutdown();
 
 };
 

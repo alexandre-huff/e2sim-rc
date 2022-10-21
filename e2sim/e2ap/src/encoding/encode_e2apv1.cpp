@@ -1252,3 +1252,36 @@ void encoding::generate_e2ap_indication_request_parameterized(E2AP_PDU_t *e2ap_p
     xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
   }
 }
+
+void encoding::generate_e2ap_removal_request(E2AP_PDU_t *e2ap_pdu) {
+  logger_trace("in function %s", __func__);
+
+  e2ap_pdu->choice.initiatingMessage = (InitiatingMessage_t *) calloc(1, sizeof(InitiatingMessage_t));
+  InitiatingMessage_t *init_msg = e2ap_pdu->choice.initiatingMessage;
+  init_msg->procedureCode = ProcedureCode_id_E2removal;
+  init_msg->criticality = Criticality_reject;
+  init_msg->value.present = InitiatingMessage__value_PR_E2RemovalRequest;
+  e2ap_pdu->present = E2AP_PDU_PR_initiatingMessage;
+
+  auto *e2txid = (E2RemovalRequestIEs_t *) calloc(1, sizeof(E2RemovalRequestIEs_t));
+  e2txid->id = ProtocolIE_ID_id_TransactionID;
+  e2txid-> criticality = Criticality_reject;
+  e2txid->value.present = E2RemovalRequestIEs__value_PR_TransactionID;
+  e2txid->value.choice.TransactionID = 1;
+
+  ASN_SEQUENCE_ADD(&init_msg->value.choice.E2RemovalRequest.protocolIEs.list, e2txid);
+
+  char error_buf[300] = {0, };
+  size_t errlen = 0;
+
+  int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf, &errlen);
+  if (ret != 0) {
+    logger_error("E2AP_PDU check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+  }
+
+  logger_debug("E2AP removal request PDU encoded");
+
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
+  }
+}
