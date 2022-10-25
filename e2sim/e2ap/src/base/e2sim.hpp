@@ -21,6 +21,7 @@
 #define E2SIM_HPP
 
 #include <unordered_map>
+#include <atomic>
 #include "logger.h"
 
 extern "C" {
@@ -56,6 +57,7 @@ private:
   BIT_STRING_t gnb_id;
 
   bool ok2run;  // controls the sctp receiver run loop
+  std::atomic<bool> retryConnection;  // controls if the E2Sim should reconnect to the E2Term
 
   void wait_for_sctp_data();
 
@@ -90,6 +92,10 @@ public:
   int run_loop(const char *server_addr, int server_port);
 
   void shutdown();
+
+  void setRetryConnection(bool retry);
+
+  void connection_helper();
 
 };
 

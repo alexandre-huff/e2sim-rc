@@ -67,6 +67,7 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
 
     case E2AP_PDU_PR_successfulOutcome:
       logger_info("[E2AP] Received SETUP-RESPONSE-SUCCESS");
+      e2sim->setRetryConnection(false);
       break;
 
     case E2AP_PDU_PR_unsuccessfulOutcome:
