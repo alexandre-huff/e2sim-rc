@@ -143,6 +143,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     args.report_wait = DEFAULT_REPORT_WAIT;
     args.num2send = UNLIMITED_MESSAGES;
     args.gnb_id = 1;
+    args.simulation_id = 0;
 
     static struct option long_options[] =
     {
@@ -152,6 +153,7 @@ args_t parse_input_options(int argc, char *argv[]) {
         {"wait_report", required_argument, 0, 'w'},
         {"num2send", required_argument, 0, 'n'},
         {"gnodeb", required_argument, 0, 'g'},
+        {"simulation", required_argument, 0, 's'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
     };
@@ -159,7 +161,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     int c;
     while(1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "p:n:g:i:w:h", long_options, &option_index);
+        c = getopt_long(argc, argv, "p:n:g:i:w:s:h", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -175,6 +177,9 @@ args_t parse_input_options(int argc, char *argv[]) {
                 break;
             case 'g':
                 args.gnb_id = strtoumax(optarg, NULL, 10);
+                break;
+            case 's':
+                args.simulation_id = strtoumax(optarg, NULL, 10);
                 break;
             case 'w':
                 args.report_wait = atoi(optarg);
@@ -194,6 +199,7 @@ args_t parse_input_options(int argc, char *argv[]) {
                     "  -g  --gnodeb       gNodeB Identity of the simulation (0...2^29-1)\n"
                     "  -w  --wait4report  Wait seconds for draining replies and generate the final report\n"
                     "                     Requires --num2send argument\n"
+                    "  -s  --simulation   Simulation ID for prometheus reports (0...2^32-1)\n"
                     "  -h  --help         Display this information and quit\n\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
@@ -240,9 +246,15 @@ void init_prometheus(metrics_t &metrics) {
         {0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01, 0.02, 0.05, 0.1});
     // FIXME: e2node_instance should be registered per thread (next line should be called within each spawned thread)
     // for now we call it here due e2sim only runs a single e2node instance
-    metrics.histogram = &metrics.hist_family->Add({{"GNODEB_ID", std::to_string(cmd_args.gnb_id)}}, *metrics.buckets);
+    metrics.histogram = &metrics.hist_family->Add({
+            {"GNODEB_ID", std::to_string(cmd_args.gnb_id)},
+            {"SIM_ID", std::to_string(cmd_args.simulation_id)}
+        }, *metrics.buckets);
 
-    metrics.gauge = &metrics.gauge_family->Add({{"GNODEB_ID", std::to_string(cmd_args.gnb_id)}}, 0.0);
+    metrics.gauge = &metrics.gauge_family->Add({
+            {"GNODEB_ID", std::to_string(cmd_args.gnb_id)},
+            {"SIM_ID", std::to_string(cmd_args.simulation_id)}
+        }, 0.0);
 }
 
 void get_cell_id(uint8_t *nrcellid_buf, char *cid_return_buf)
