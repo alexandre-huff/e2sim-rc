@@ -37,9 +37,9 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     uint8_t *buf = (uint8_t*)"ORAN-E2SM-RC";	// short name
     uint8_t *buf2 = (uint8_t*)"RAN Control";	// ran function description
     uint8_t *buf3 = (uint8_t*)"1.3.6.1.4.1.53148.1.1.2.3";	// OID
-    long inst = 1;								// ran function instance
 
-    ASN_STRUCT_RESET(asn_DEF_E2SM_RC_RANFunctionDefinition, ranfunc_def);
+    long *inst = (long *) malloc(sizeof(long));     // ran function instance (optional)
+    *inst = 1;
 
     len = strlen((char *) buf);
     ranfunc_def->ranFunction_Name.ranFunction_ShortName.size = len;
@@ -56,7 +56,7 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     memcpy(ranfunc_def->ranFunction_Name.ranFunction_E2SM_OID.buf, buf3, len);
     ranfunc_def->ranFunction_Name.ranFunction_E2SM_OID.size = len;
 
-    ranfunc_def->ranFunction_Name.ranFunction_Instance = &inst;
+    ranfunc_def->ranFunction_Name.ranFunction_Instance = inst;
 
     logger_trace("ranFunction_Name set up");
 
@@ -111,15 +111,15 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     ctrl_item->ric_CallProcessIDFormat_Type = (RIC_Format_Type_t *) calloc(1, sizeof(RIC_Format_Type_t));
     *ctrl_item->ric_CallProcessIDFormat_Type = 1;
 
-    RANFunctionDefinition_Control_Action_Item_t *ctrl_act_item =
-            (RANFunctionDefinition_Control_Action_Item_t *) calloc(1, sizeof(RANFunctionDefinition_Control_Action_Item_t));
-    ctrl_act_item->ric_ControlAction_ID = 1;
-    uint8_t *ctrl_act_name = (uint8_t *) "UE Admission Control";
-    len = strlen((char *) ctrl_act_name);
-    ctrl_act_item->ric_ControlAction_Name.buf = (uint8_t *) calloc(len, sizeof(uint8_t));
-    memcpy(ctrl_act_item->ric_ControlAction_Name.buf, ctrl_act_name, len);
-    ctrl_act_item->ric_ControlAction_Name.size = len;
-    ASN_SEQUENCE_ADD(&ctrl_item->ric_ControlAction_List->list, ctrl_act_item);
+    // RANFunctionDefinition_Control_Action_Item_t *ctrl_act_item =
+    //         (RANFunctionDefinition_Control_Action_Item_t *) calloc(1, sizeof(RANFunctionDefinition_Control_Action_Item_t));
+    // ctrl_act_item->ric_ControlAction_ID = 1;
+    // uint8_t *ctrl_act_name = (uint8_t *) "UE Admission Control";
+    // len = strlen((char *) ctrl_act_name);
+    // ctrl_act_item->ric_ControlAction_Name.buf = (uint8_t *) calloc(len, sizeof(uint8_t));
+    // memcpy(ctrl_act_item->ric_ControlAction_Name.buf, ctrl_act_name, len);
+    // ctrl_act_item->ric_ControlAction_Name.size = len;
+    // ASN_SEQUENCE_ADD(&ctrl_item->ric_ControlAction_List->list, ctrl_act_item);
 
     ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Control->ric_ControlStyle_List.list, ctrl_item);
     logger_trace("ranFunction_Definition_Control set up");
@@ -228,7 +228,7 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIden
         nr_cgi->nRCellIdentity.buf[3] |= ((cellid & 0X0070) >> 4);       // we get only the 3 most significant of 7 bits
         nr_cgi->nRCellIdentity.buf[4] = ((cellid & 0X000F) << 4) ;       // we get only the 4 least significant bits of 7 bits
     }
-    free(gnb_id);
+    ASN_STRUCT_FREE(asn_DEF_BIT_STRING, gnb_id);
 
     if(LOGGER_LEVEL >= LOGGER_DEBUG) {
         xer_fprint(stdout, &asn_DEF_NR_CGI, nr_cgi);
@@ -258,6 +258,8 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIden
 
     logger_debug("er encded is %ld", er.encoded);
     logger_trace("after encoding NR_CGI");
+
+    ASN_STRUCT_FREE(asn_DEF_NR_CGI, nr_cgi);
 
     OCTET_STRING_t *ostr = &ranp_struct_item4->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueOctS;
     OCTET_STRING_fromBuf(ostr, (char *) nr_cgi_buffer, er.encoded);

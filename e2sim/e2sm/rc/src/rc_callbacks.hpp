@@ -35,9 +35,9 @@ using namespace prometheus;
 typedef struct {
     std::shared_ptr<Registry> registry;
     Family<Histogram> *hist_family;
-    Exposer *exposer = nullptr;
+    std::shared_ptr<Exposer> exposer;
     Histogram *histogram = nullptr;
-    Histogram::BucketBoundaries *buckets = nullptr;
+    std::shared_ptr<Histogram::BucketBoundaries> buckets;
     Family<Gauge> *gauge_family;
     Gauge *gauge = nullptr;
 } metrics_t;
@@ -67,5 +67,3 @@ void save_timestamp_report();
 void init_prometheus(metrics_t &metrics);
 
 args_t parse_input_options(int argc, char *argv[]);
-
-void test_decoding(E2AP_PDU_t *pdu);    // FIXME Huff: for debugging

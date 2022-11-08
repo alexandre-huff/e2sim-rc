@@ -27,7 +27,7 @@
 extern "C" {
   #include "E2AP-PDU.h"
   #include "OCTET_STRING.h"
-  #include "PrintableString.h"
+  #include "RANfunctionOID.h"
   #include "RICindicationType.h"
   #include "Cause.h"
   #include "CriticalityDiagnostics.h"
@@ -41,7 +41,7 @@ namespace encoding {
     long ranFunctionId;
     OCTET_STRING_t *ranFunctionDesc;
     long ranFunctionRev;
-    PrintableString_t *ranFunctionOId;
+    RANfunctionOID_t *ranFunctionOId;
   };
 
   long get_function_id_from_subscription(E2AP_PDU_t *e2ap_pdu);
@@ -52,7 +52,7 @@ namespace encoding {
 
   void buildSubsReq(E2AP_PDU_t *pdu);
 
-  void generate_e2ap_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, std::vector<ran_func_info> all_funcs, PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id);
+  void generate_e2ap_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, const std::vector<ran_func_info>& all_funcs, PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id);
 
   void generate_e2ap_setup_response(E2AP_PDU_t *setup_resp_pdu);
 

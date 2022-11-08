@@ -69,7 +69,7 @@ void signal_handler(int signal) {
 E2Sim::E2Sim(uint8_t *plmn_id, uint32_t gnb_id) {
   logger_trace("in %s constructor", __func__);
 
-  size_t len = strlen((char *)plmn_id); // FIXME maximum plmn_id size must be 3 octet string bytes
+  size_t len = strlen((char *)plmn_id); // maximum plmn_id size must be 3 octet string bytes
   if (len > 3) {
     throw invalid_argument("maximum plmn_id size is 3");
   }
@@ -78,8 +78,8 @@ E2Sim::E2Sim(uint8_t *plmn_id, uint32_t gnb_id) {
     throw invalid_argument("maximum gnb_id value is 2^29-1");
   }
 
-  ASN_STRUCT_RESET(asn_DEF_PLMN_Identity, &this->plmn_id);
-  ASN_STRUCT_RESET(asn_DEF_BIT_STRING, &this->gnb_id);
+  memset(&this->plmn_id, 0, sizeof(PLMN_Identity_t));
+  memset(&this->gnb_id, 0, sizeof(BIT_STRING_t));
 
   // encoding PLMN identity
   this->plmn_id.size = len;
@@ -296,7 +296,7 @@ int E2Sim::run_loop(const char *server_addr, int server_port){
     //Loop through RAN function definitions that are registered
 
     for (std::pair<long, encoded_ran_function_t *> elem : ran_functions_registered) {
-    logger_trace("looping through ran func");
+      logger_trace("looping through ran func");
       encoding::ran_func_info next_func;
 
       next_func.ranFunctionId = elem.first;
@@ -348,6 +348,8 @@ int E2Sim::run_loop(const char *server_addr, int server_port){
       logger_error("[SCTP] Unable to send E2-SETUP-REQUEST to peer");
     }
 
+    ASN_STRUCT_FREE(asn_DEF_E2AP_PDU, pdu_setup);
+
     // set socket timeout to shutdown gracefully
     struct timeval timeout;
     timeout.tv_sec = 2;
@@ -360,6 +362,7 @@ int E2Sim::run_loop(const char *server_addr, int server_port){
     // installing signal handlers
     struct sigaction sa;
     sa.sa_handler = &signal_handler;
+    sa.sa_flags = 0;
     sigemptyset(&sa.sa_mask);
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);

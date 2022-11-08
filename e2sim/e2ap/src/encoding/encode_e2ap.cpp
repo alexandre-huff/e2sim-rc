@@ -238,7 +238,7 @@ void encoding::generate_e2ap_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<en
   e2ap_pdu->choice.initiatingMessage = initiatingMessage;
 }
 
-void encoding::generate_e2ap_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs,
+void encoding::generate_e2ap_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, const std::vector<ran_func_info>& all_funcs,
                                                           PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id) {
 
   logger_trace("in function %s", __func__);
@@ -283,7 +283,6 @@ void encoding::generate_e2ap_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, s
   e2txid->value.choice.TransactionID = 1;
 
   auto *ranFlistIEs = (E2setupRequestIEs_t *)calloc(1, sizeof(E2setupRequestIEs_t));
-  ASN_STRUCT_RESET(asn_DEF_E2setupRequestIEs, ranFlistIEs);
   ranFlistIEs->criticality = 0;
   ranFlistIEs->id = ProtocolIE_ID_id_RANfunctionsAdded;
   ranFlistIEs->value.present = E2setupRequestIEs__value_PR_RANfunctions_List;
@@ -292,20 +291,15 @@ void encoding::generate_e2ap_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, s
   for (int i = 0; i < all_funcs.size(); i++) {
 
     ran_func_info nextRanFunc = all_funcs.at(i);
-    long nextRanFuncId = nextRanFunc.ranFunctionId;
-    OCTET_STRING_t *nextRanFuncDesc = nextRanFunc.ranFunctionDesc;
-    long nextRanFuncRev = nextRanFunc.ranFunctionRev;
 
     auto *itemIes = (RANfunction_ItemIEs_t *)calloc(1, sizeof(RANfunction_ItemIEs_t));
     itemIes->id = ProtocolIE_ID_id_RANfunction_Item;
     itemIes->criticality = Criticality_reject;
     itemIes->value.present = RANfunction_ItemIEs__value_PR_RANfunction_Item;
-    itemIes->value.choice.RANfunction_Item.ranFunctionID = nextRanFuncId;
-    itemIes->value.choice.RANfunction_Item.ranFunctionOID = RANfunctionOID_t(*(nextRanFunc.ranFunctionOId));
-    int ranFuncLength = strlen((char*)nextRanFuncDesc);
-
-    itemIes->value.choice.RANfunction_Item.ranFunctionDefinition = *nextRanFuncDesc;
-    itemIes->value.choice.RANfunction_Item.ranFunctionRevision = nextRanFuncRev;
+    itemIes->value.choice.RANfunction_Item.ranFunctionID = nextRanFunc.ranFunctionId;
+    itemIes->value.choice.RANfunction_Item.ranFunctionRevision = nextRanFunc.ranFunctionRev;
+    OCTET_STRING_fromBuf(&itemIes->value.choice.RANfunction_Item.ranFunctionOID, (char *)nextRanFunc.ranFunctionOId->buf, nextRanFunc.ranFunctionOId->size);
+    OCTET_STRING_fromBuf(&itemIes->value.choice.RANfunction_Item.ranFunctionDefinition, (char *)nextRanFunc.ranFunctionDesc->buf, nextRanFunc.ranFunctionDesc->size);
 
     ASN_SEQUENCE_ADD(&ranFlistIEs->value.choice.RANfunctions_List.list, itemIes);
 
@@ -327,28 +321,14 @@ void encoding::generate_e2ap_setup_request_parameterized(E2AP_PDU_t *e2ap_pdu, s
 
   auto *intfNG = (E2nodeComponentInterfaceNG_t *) calloc(1, sizeof(E2nodeComponentInterfaceNG_t));
 
-  OCTET_STRING_t nginterf;
-  nginterf.buf = (uint8_t*)calloc(1,8);
-  memcpy(nginterf.buf, (uint8_t *)"nginterf", 8);
-
-  nginterf.size = 8;
-  intfNG->amf_name = (AMFName_t)(nginterf);
-
+  OCTET_STRING_fromString(&intfNG->amf_name, "nginterf");
   e2configAdditionItem->value.choice.E2nodeComponentConfigAddition_Item.e2nodeComponentID.choice.e2nodeComponentInterfaceTypeNG = intfNG;
 
-  OCTET_STRING_t reqPart;
-  reqPart.buf = (uint8_t*)calloc(1,7);
-  memcpy(reqPart.buf, (uint8_t *)"reqpart", 7);
-  reqPart.size = 7;
+  OCTET_STRING_t *reqpart = &e2configAdditionItem->value.choice.E2nodeComponentConfigAddition_Item.e2nodeComponentConfiguration.e2nodeComponentRequestPart;
+  OCTET_STRING_fromString(reqpart, "reqpart");
 
-  e2configAdditionItem->value.choice.E2nodeComponentConfigAddition_Item.e2nodeComponentConfiguration.e2nodeComponentRequestPart = reqPart;
-
-  OCTET_STRING_t resPart;
-  resPart.buf = (uint8_t*)calloc(1,7);
-  memcpy(resPart.buf, (uint8_t *)"respart", 7);
-  resPart.size = 7;
-  e2configAdditionItem->value.choice.E2nodeComponentConfigAddition_Item.e2nodeComponentConfiguration.e2nodeComponentResponsePart = resPart;
-
+  OCTET_STRING_t *respart = &e2configAdditionItem->value.choice.E2nodeComponentConfigAddition_Item.e2nodeComponentConfiguration.e2nodeComponentResponsePart;
+  OCTET_STRING_fromString(respart, "respart");
 
   ASN_SEQUENCE_ADD(&e2configIE->value.choice.RANfunctions_List.list, e2configAdditionItem);
 /*
@@ -1212,7 +1192,6 @@ void encoding::generate_e2ap_indication_request_parameterized(E2AP_PDU_t *e2ap_p
   header->criticality = Criticality_reject;
   header->value.choice.RICindicationHeader.buf = (uint8_t *) calloc(header_length, sizeof(uint8_t));
   header->value.choice.RICindicationHeader.size = header_length;
-  // TODO Huff: check if we can just set the uint_8 ptr received in function arg (caution: possible double free corrupt)
   memcpy(header->value.choice.RICindicationHeader.buf, ind_header_buf, header_length);
   header->value.present = RICindication_IEs__value_PR_RICindicationHeader;
   ASN_SEQUENCE_ADD(&ric_indication->protocolIEs.list, header);
@@ -1226,15 +1205,12 @@ void encoding::generate_e2ap_indication_request_parameterized(E2AP_PDU_t *e2ap_p
   message->value.present = RICindication_IEs__value_PR_RICindicationMessage;
   ASN_SEQUENCE_ADD(&ric_indication->protocolIEs.list, message);
 
-  // uint8_t *cpid_buf = (uint8_t *) "cpid"; // current implementation uses a constant
-  // size_t cpid_len = strlen((char *) cpid_buf);
   RICindication_IEs_t *cpid = (RICindication_IEs_t *) calloc(1, sizeof(RICindication_IEs_t));
   cpid->id = ProtocolIE_ID_id_RICcallProcessID;
   cpid->criticality = Criticality_reject;
-  cpid->value.choice.RICcallProcessID = *call_proc_id;
-  // cpid->value.choice.RICcallProcessID.buf = (uint8_t *) calloc(cpid_len, sizeof(uint8_t));
-  // cpid->value.choice.RICcallProcessID.size = cpid_len;
-  // memcpy(message->value.choice.RICcallProcessID.buf, cpid_buf, cpid_len);
+  cpid->value.choice.RICcallProcessID.buf = (uint8_t *) calloc(call_proc_id->size, sizeof(uint8_t));
+  cpid->value.choice.RICcallProcessID.size = call_proc_id->size;
+  memcpy(message->value.choice.RICcallProcessID.buf, call_proc_id->buf, call_proc_id->size);
   cpid->value.present = RICindication_IEs__value_PR_RICcallProcessID;
   ASN_SEQUENCE_ADD(&ric_indication->protocolIEs.list, cpid);
 

@@ -87,9 +87,6 @@ int main(int argc, char *argv[])
 
     logger_force(LOGGER_INFO, "Starting E2 Simulator for E2SM-RC");
 
-    // run_insert_loop(123, 1, 1, 1);   // FIXME Huff: only for debugging purposes
-    // exit(1);
-
     asn_codec_ctx_t *opt_cod;
 
     E2SM_RC_RANFunctionDefinition_t *ranfunc_def =
@@ -129,6 +126,11 @@ int main(int argc, char *argv[])
     e2sim->run_loop(cmd_args.server_ip.c_str(), cmd_args.server_port);
 
     delete e2sim;
+
+    ASN_STRUCT_FREE(asn_DEF_E2SM_RC_RANFunctionDefinition, ranfunc_def);
+    ASN_STRUCT_RESET(asn_DEF_PrintableString, &reg_func->oid);
+    ASN_STRUCT_RESET(asn_DEF_OCTET_STRING, &reg_func->ran_function_ostr);
+    free(reg_func);
 
     logger_force(LOGGER_INFO, "E2 Simulator finished gracefully");
 
@@ -239,12 +241,13 @@ void init_prometheus(metrics_t &metrics) {
                                     })
                             .Register(*metrics.registry);
 
-    metrics.exposer = new Exposer("0.0.0.0:8080", 1);
+    metrics.exposer = std::make_shared<Exposer>("0.0.0.0:8080", 1);
     metrics.exposer->RegisterCollectable(metrics.registry);
 
-    metrics.buckets = new Histogram::BucketBoundaries(
-        {0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01, 0.02, 0.05, 0.1});
-    // FIXME: e2node_instance should be registered per thread (next line should be called within each spawned thread)
+    metrics.buckets = std::make_shared<Histogram::BucketBoundaries>();
+    metrics.buckets->assign({0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01, 0.02, 0.05, 0.1});
+
+    // TODO: e2node_instance should be registered per thread (next line should be called within each spawned thread)
     // for now we call it here due e2sim only runs a single e2node instance
     metrics.histogram = &metrics.hist_family->Add({
             {"GNODEB_ID", std::to_string(cmd_args.gnb_id)},
@@ -297,6 +300,10 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
     logger_trace("in %s function", __func__);
 
+    OCTET_STRING_t *ostr_cpid = (OCTET_STRING_t *) calloc(1, sizeof(OCTET_STRING_t));
+    ostr_cpid->buf = (uint8_t *) calloc(1, sizeof(cpid));
+    ostr_cpid->size = sizeof(cpid);
+
     ok2run = true;
 
     while (ok2run && (cmd_args.num2send == UNLIMITED_MESSAGES || cpid < cmd_args.num2send)) {
@@ -328,7 +335,7 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
         logger_debug("er encded is %ld", er_header.encoded);
         logger_trace("after encoding header");
 
-        // ASN_STRUCT_FREE(asn_DEF_E2SM_RC_IndicationHeader, ind_header);
+        ASN_STRUCT_FREE(asn_DEF_E2SM_RC_IndicationHeader, ind_header);
 
         uint8_t e2sm_msg_buffer[8192] = {0, };
         size_t e2sm_msg_buffer_size = 8192;
@@ -342,21 +349,10 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
         logger_debug("er encded is %ld", er_msg.encoded);
         logger_trace("after encoding message");
 
-        // ASN_STRUCT_FREE(asn_DEF_E2SM_RC_IndicationHeader, ind_header);
-
-        // FIXME TODO Huff: implement decoding function to see if all get decoded correctly
-        // fprintf(stderr, "\nDEBUG - about to decode E2SM message\n\n");
-        // asn_transfer_syntax syntax = ATS_ALIGNED_BASIC_PER;
-        // E2SM_RC_IndicationMessage_t *msg;
-        // asn_dec_rval_t rval = asn_decode(nullptr, syntax, &asn_DEF_E2SM_RC_IndicationMessage, (void **)&msg, e2sm_msg_buffer, er_msg.encoded);
-        // // asn_dec_rval_t rval = aper_decode_complete(NULL, &asn_DEF_E2SM_RC_IndicationMessage, (void **)&msg, ostr->buf, ostr->size);
-        // if (rval.code != RC_OK) {
-        // fprintf(stderr, "\nERROR - unable to decode E2SM message\n\n");
-        // }
-        // xer_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, msg);
+        ASN_STRUCT_FREE(asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
 
         // call process id
-        OCTET_STRING_t *ostr_cpid = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, (const char *)&cpid, sizeof(cpid));
+        memcpy(ostr_cpid->buf, &cpid, sizeof(cpid));
 
         E2AP_PDU_t *pdu = (E2AP_PDU_t *) calloc(1, sizeof(E2AP_PDU_t));
         encoding::generate_e2ap_indication_request_parameterized(pdu, RICindicationType_insert, reqRequestorId,
@@ -364,11 +360,7 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
                 e2sm_header_buffer, er_header.encoded,
                 e2sm_msg_buffer, er_msg.encoded, ostr_cpid);
 
-        // asn_fprint(stderr, &asn_DEF_E2AP_PDU, pdu);
-
         logger_info("Sending RIC-INDICATION type INSERT");
-
-        // test_decoding(pdu);  // FIXME Huff: only for debugging
 
         e2sim->encode_and_send_sctp_data(pdu, &sent_time);   // timespec to store the timestamp of this message
         sent_ns = elapsed_nanoseconds(sent_time);           // store the sent timespec in the map (in nanoseconds)
@@ -377,12 +369,12 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
         seqNum++;
         cpid++;
 
-        // FIXME Huff: Release E2AP_PDU_t *pdu
-
         if(cmd_args.loop_interval > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(cmd_args.loop_interval));
         }
     }
+
+    ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, ostr_cpid);
 
     logger_debug("%s has finished", __func__);
 
@@ -424,51 +416,6 @@ void save_timestamp_report() {
     io_file.close();
 
     logger_force(LOGGER_INFO, "Simulation done!");
-}
-
-void test_decoding(E2AP_PDU_t *pdu) {
-    uint8_t *buf = NULL;
-    int len;
-    // first, we have to enconde those things
-    len = aper_encode_to_new_buffer(&asn_DEF_E2AP_PDU, 0, pdu, (void **)&buf);
-    if (len < 0) {
-        logger_fatal("[E2AP ASN] Unable to aper encode");
-        exit(1);
-    } else {
-        logger_debug("[E2AP ASN] Encoded succesfully, encoded size = %d", len);
-    }
-
-    E2AP_PDU_t *msg = NULL;
-    asn_transfer_syntax syntax = ATS_ALIGNED_BASIC_PER;
-    logger_trace("about to decode ASN.1 message");
-    asn_dec_rval_t rval = asn_decode(0, syntax, &asn_DEF_E2AP_PDU, (void **)&msg, buf, len);
-    logger_trace("after decoding ASN.1 message");
-    if (rval.code != RC_OK) {
-      logger_error("unable to decode ASN.1 message");
-    }
-    if (LOGGER_LEVEL > LOGGER_INFO) {
-        xer_fprint(stderr, &asn_DEF_E2AP_PDU, msg);
-    }
-
-    for (int i = 0; i < msg->choice.initiatingMessage->value.choice.RICindication.protocolIEs.list.count; i++) {
-        RICindication_IEs *ind_ie = msg->choice.initiatingMessage->value.choice.RICindication.protocolIEs.list.array[i];
-        if (ind_ie->value.present == RICindication_IEs__value_PR_RICindicationMessage) {
-            E2SM_RC_IndicationMessage_t *ind_msg = NULL;
-            logger_trace("about to decode E2SM_RC_IndicationMessage");
-            asn_dec_rval_t ret = asn_decode(NULL, syntax, &asn_DEF_E2SM_RC_IndicationMessage, (void **)&ind_msg,
-                                 ind_ie->value.choice.RICindicationMessage.buf, ind_ie->value.choice.RICindicationMessage.size);
-            logger_trace("after decoding E2SM_RC_IndicationMessage");
-            if (ret.code != RC_OK) {
-                logger_error("unable to decode E2SM_RC_IndicationMessage, ret.code=%d", ret.code);
-            }
-            if (LOGGER_LEVEL > LOGGER_INFO) {
-                asn_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
-                // xer_fprint(stderr, &asn_DEF_E2SM_RC_IndicationMessage, ind_msg);
-            }
-
-        }
-    }
-
 }
 
 void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu)
