@@ -300,6 +300,15 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
 
     logger_trace("in %s function", __func__);
 
+    /*
+        We have to wait for the subscription response to reach the xapp before sending messages.
+        The "E2Sim -> E2Term -> xApp" subscription response requires about 2 seconds to
+        setup the RIC and allow the xApp to process incoming messages.
+        Should we do not wait, then all messages sent within these 2 seconds will also include the
+        latency of the subscription setup (i.e. xApps don't receive any INSERT message prior the subscription has finished).
+    */
+    this_thread::sleep_for(std::chrono::seconds(2));
+
     OCTET_STRING_t *ostr_cpid = (OCTET_STRING_t *) calloc(1, sizeof(OCTET_STRING_t));
     ostr_cpid->buf = (uint8_t *) calloc(1, sizeof(cpid));
     ostr_cpid->size = sizeof(cpid);
