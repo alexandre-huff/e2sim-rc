@@ -1,6 +1,6 @@
-[submodule "e2sim/e2sm/rc/3rdparty/prometheus-cpp"]
-	path = e2sim/e2sm/rc/3rdparty/prometheus-cpp
+[submodule "e2sim/3rdparty/prometheus-cpp"]
+	path = e2sim/3rdparty/prometheus-cpp
 	url = https://github.com/jupp0r/prometheus-cpp.git
-[submodule "e2sim/e2sm/kpm/nlohmann_json_release"]
-	path = e2sim/e2sm/kpm/nlohmann_json_release
+[submodule "e2sim/3rdparty/nlohmann_json_release"]
+	path = e2sim/3rdparty/nlohmann_json_release
 	url = https://github.com/azadkuh/nlohmann_json_release.git
