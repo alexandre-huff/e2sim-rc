@@ -1210,7 +1210,7 @@ void encoding::generate_e2ap_indication_request_parameterized(E2AP_PDU_t *e2ap_p
   cpid->criticality = Criticality_reject;
   cpid->value.choice.RICcallProcessID.buf = (uint8_t *) calloc(call_proc_id->size, sizeof(uint8_t));
   cpid->value.choice.RICcallProcessID.size = call_proc_id->size;
-  memcpy(message->value.choice.RICcallProcessID.buf, call_proc_id->buf, call_proc_id->size);
+  memcpy(cpid->value.choice.RICcallProcessID.buf, call_proc_id->buf, call_proc_id->size);
   cpid->value.present = RICindication_IEs__value_PR_RICcallProcessID;
   ASN_SEQUENCE_ADD(&ric_indication->protocolIEs.list, cpid);
 
