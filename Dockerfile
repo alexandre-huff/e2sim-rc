@@ -89,5 +89,5 @@ FROM ubuntu:20.04
 
 COPY --from=e2sim-rc /usr/local/bin/e2sim-rc /usr/local/bin/e2sim-rc
 
-# CMD e2sim-rc 10.110.102.29 36422
+# CMD e2sim-rc 10.110.102.29 -p 36422
 CMD sleep 100000000
