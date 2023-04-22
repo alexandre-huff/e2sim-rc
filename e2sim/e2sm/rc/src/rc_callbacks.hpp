@@ -17,53 +17,36 @@
 #                                                                            *
 ******************************************************************************/
 
-#include <memory>
-#include <prometheus/family.h>
-#include <prometheus/exposer.h>
+#ifndef RC_CALLBACKS_HPP
+#define RC_CALLBACKS_HPP
+
+extern "C" {
+    #include <E2AP-PDU.h>
+}
+
 #include <prometheus/histogram.h>
+
 #include "e2sim.hpp"
-#include "logger.h"
+#include "e2sim_rc.hpp"
 
 #define DEFAULT_REPORT_WAIT 5       // time (seconds) to wait for generate file reports
 #define DEFAULT_LOOP_INTERVAL 1000  // time (milliseconds) between each insert message that is sent to the RIC
 #define UNLIMITED_MESSAGES 0        // simulation sends unlimited messages (infinite loop)
 
-
 using namespace prometheus;
 
-// helper for prometheus metrics
-typedef struct {
-    std::shared_ptr<Registry> registry;
-    Family<Histogram> *hist_family;
-    std::shared_ptr<Exposer> exposer;
-    Histogram *histogram = nullptr;
-    std::shared_ptr<Histogram::BucketBoundaries> buckets;
-    Family<Gauge> *gauge_family;
-    Gauge *gauge = nullptr;
-} metrics_t;
+void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2sim, InsertLoopCallback run_insert_loop);
 
-// helper for command line input arguments
-typedef struct {
-    std::string server_ip;          // E2Term IP
-    int server_port;                // E2Term port
-    int report_wait;                // time (seconds) to wait before store latencies report into file
-    unsigned long loop_interval;    // time (milliseconds) between each insert message that is sent to the RIC
-    unsigned long num2send;         // number of messages to send in the simulation
-    uint32_t gnb_id;                // gNodeB Identity
-    uint32_t simulation_id;         // Simulation ID for prometheus reports
-} args_t;
+void callback_rc_subscription_delete_request(E2AP_PDU_t *pdu, E2Sim *e2sim, volatile bool *ok2run);
 
+void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts, unsigned long num2send, Histogram *histogram, Gauge *gauge, std::unordered_map<unsigned int, unsigned long> *sent_ts_map, std::unordered_map<unsigned int, unsigned long> *recv_ts_map);
 
-void callback_rc_subscription_request(E2AP_PDU_t *pdu);
+static inline unsigned long elapsed_nanoseconds(struct timespec ts) {
+    return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
 
-void callback_rc_subscription_delete_request(E2AP_PDU_t *pdu);
+static inline double elapsed_seconds(unsigned long sent_ns, unsigned long recv_ns) {
+    return (recv_ns - sent_ns) / 1000000000.0;     // converting to seconds
+}
 
-void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts);
-
-void run_insert_loop(long requestorId, long instanceId, long ranFunctionId, long actionId);
-
-void save_timestamp_report();
-
-void init_prometheus(metrics_t &metrics);
-
-args_t parse_input_options(int argc, char *argv[]);
+#endif

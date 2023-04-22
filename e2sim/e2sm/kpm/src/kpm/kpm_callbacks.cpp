@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
   e2sim.register_e2sm(0,ranfunc_ostr);
   e2sim.register_subscription_callback(0,&callback_kpm_subscription_request);
 
-  e2sim.run_loop(argc, argv);
+  e2sim.listener(argc, argv);
 
 }
 

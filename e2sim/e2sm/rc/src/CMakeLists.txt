@@ -15,31 +15,25 @@
 #==================================================================================
 #
 
-find_package(prometheus-cpp CONFIG REQUIRED)
+add_library( rc_objects OBJECT encode_rc.cpp rc_callbacks.cpp )
 
-add_executable( e2sim-rc rc_callbacks.cpp encode_rc.cpp )
-
-target_link_libraries( e2sim-rc PRIVATE e2ap_asn1_objects
-                                        base_objects
+target_link_libraries( rc_objects PRIVATE e2ap_asn1_objects
+                                        e2sm_rc_asn1_objects
                                         logger_objects
-                                        encoding_objects
+                                        base_objects
                                         def_objects
-                                        sctp_objects
-                                        messagerouting_objects )
-target_link_libraries( e2sim-rc PRIVATE e2sm_rc_asn1_objects )
-target_link_libraries( e2sim-rc PRIVATE pthread )
+                                        encoding_objects )
 
-# Prometheus
-target_include_directories( e2sim-rc PRIVATE /usr/include/prometheus )
-if(PROMETHEUS_CPP_ENABLE_PUSH)
-    target_link_libraries(e2sim-rc PRIVATE prometheus-cpp::push)
+target_include_directories (rc_objects PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+    PRIVATE ../../../src/
+    )
+
+if( DEV_PKG )
+    install( FILES
+        encode_rc.hpp
+        rc_callbacks.hpp
+        DESTINATION ${install_inc}
+    )
 endif()
-if(PROMETHEUS_CPP_ENABLE_PULL)
-    target_link_libraries(e2sim-rc PRIVATE prometheus-cpp::pull)
-endif()
-
-install(
-    TARGETS e2sim-rc
-    DESTINATION ${install_bin}
-)
-

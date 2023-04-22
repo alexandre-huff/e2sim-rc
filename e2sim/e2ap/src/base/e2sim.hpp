@@ -22,7 +22,8 @@
 
 #include <unordered_map>
 #include <atomic>
-#include "logger.h"
+#include <functional>
+#include <thread>
 
 extern "C" {
   #include "E2AP-PDU.h"
@@ -38,13 +39,10 @@ typedef struct {
   OCTET_STRING_t ran_function_ostr;  // RAN function definition octet string
 } encoded_ran_function_t;
 
-typedef void (*SubscriptionCallback)(E2AP_PDU_t*);
+typedef std::function<void(E2AP_PDU_t*)> SubscriptionCallback;
+typedef std::function<void(E2AP_PDU_t*)> SubscriptionDeleteCallback;
+typedef std::function<void(E2AP_PDU_t*, struct timespec*)> ControlCallback;
 
-typedef void (*SubscriptionDeleteCallback)(E2AP_PDU_t*);
-
-typedef void (*ControlCallback)(E2AP_PDU_t*, struct timespec *ts);
-
-class E2Sim;
 class E2Sim {
 
 private:
@@ -56,9 +54,13 @@ private:
   PLMN_Identity_t plmn_id;
   BIT_STRING_t gnb_id;
 
+  int client_fd;
   bool ok2run;  // controls the sctp receiver run loop
   std::atomic<bool> retryConnection;  // controls if the E2Sim should reconnect to the E2Term
 
+  std::thread sctp_listener_th;
+
+  void listener();
   void wait_for_sctp_data();
 
 public:
@@ -89,7 +91,7 @@ public:
 
   void encode_and_send_sctp_data(E2AP_PDU_t* pdu, struct timespec *ts);
 
-  int run_loop(const char *server_addr, int server_port);
+  void run(const char *e2term_addr, int e2term_port);
 
   void shutdown();
 

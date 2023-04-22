@@ -24,7 +24,6 @@
 #include <fstream>
 #include <vector>
 #include <signal.h>
-#include <thread>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -37,29 +36,8 @@
 
 using namespace std;
 
-int client_fd = 0;
-
 std::mutex cond_mutex;
 std::condition_variable cond; // condition to wait/awake the connection helper thread
-
-volatile sig_atomic_t sig_raised = 0;
-
-void signal_handler(int signal) {
-  switch (signal) {
-    case SIGINT:
-      logger_info("SIGINT was received");
-      break;
-
-    case SIGTERM:
-      logger_info("SIGTERM was received");
-      break;
-
-    default:
-      logger_warn("signal handler received signal %s", strsignal(signal));
-      break;
-  }
-  sig_raised = 1;
-}
 
 /*
   E2Sim constructor
@@ -97,11 +75,15 @@ E2Sim::E2Sim(uint8_t *plmn_id, uint32_t gnb_id) {
   this->gnb_id.buf[3] = (gnb_id & 0X000000FF);
 
   retryConnection = true;
+  client_fd = -1;
 
   logger_trace("end of %s constructor", __func__);
 }
 
 E2Sim::~E2Sim() {
+  if(sctp_listener_th.joinable()) {
+    sctp_listener_th.join();
+  }
   ASN_STRUCT_RESET(asn_DEF_PLMN_Identity, &this->plmn_id);
   ASN_STRUCT_RESET(asn_DEF_BIT_STRING, &this->gnb_id);
 }
@@ -233,79 +215,32 @@ void E2Sim::wait_for_sctp_data()
 }
 
 /**
- * Runs a thread that keeps retrying the SCTP connection to E2Term in case
- * a SETUP-RESPONSE-SUCCESS is not received in a given interval of time (currently 10s).
- * This thread retries for 3 times and then give up closing the application.
+ * Runs a thread that sends E2-SETUP-REQUEST.
+ * In case a E2-SETUP-RESPONSE-SUCCESS is not received in a given interval
+ * of time (currently 10s), then this thread resends the E2-SETUP-REQUEST.
+ * This thread tries for 3 times and then give up closing the application.
  */
 void E2Sim::connection_helper() {
-  shutdown();
   int retries = 3;
 
+  std::vector<encoding::ran_func_info> all_funcs;
+  //Loop through RAN function definitions that are registered
+  for (std::pair<long, encoded_ran_function_t *> elem : ran_functions_registered) {
+    logger_trace("looping through ran func");
+    encoding::ran_func_info next_func;
+
+    next_func.ranFunctionId = elem.first;
+    next_func.ranFunctionDesc = &elem.second->ran_function_ostr;
+    next_func.ranFunctionRev = (long)2;
+    next_func.ranFunctionOId = &elem.second->oid;
+
+    all_funcs.push_back(next_func);
+  }
+
   while (retryConnection && retries) {
-    std::unique_lock<std::mutex> lk(cond_mutex);
-    cond.wait_for(lk, std::chrono::seconds(10));
-    lk.unlock();
-
-    if (retryConnection) {
-      shutdown(); // shutdown the current connection and start a new one
-      logger_warn("retrying sctp connection...");
-    }
-    retries--;
-  }
-
-  if (retries == 0 && retryConnection) {
-    retryConnection = false;
-    logger_fatal("giving up sctp connection");
-  }
-}
-
-int E2Sim::run_loop(const char *server_addr, int server_port){
-  logger_force(LOGGER_INFO, "Starting E2AP Agent (E2 Simulator)");
-
-  char *addr = (char *)server_addr;
-  if(addr == NULL) {
-    addr = (char *)DEFAULT_SCTP_IP;
-  }
-  if(server_port < 1 || server_port > 65535) {
-    logger_warn("Invalid port number (%d). Valid values are between 1 and 65535. Using default port (%d)",
-                                                                              server_port, E2AP_SCTP_PORT);
-    server_port = E2AP_SCTP_PORT;
-  }
-
-  // options_t ops = read_input_options(argc, argv);
-
-  // start this helper to reconnect in case of any success response isn't received
-  std::thread retry_th(&E2Sim::connection_helper, this);
-
-  while (retryConnection) {
-  //E2 Agent will automatically restart upon sctp disconnection
-  //  int server_fd = sctp_start_server(ops.server_ip, ops.server_port);
-    client_fd = sctp_start_client(addr, server_port);
-
-    logger_trace("After starting SCTP client");
 
     E2AP_PDU_t* pdu_setup = (E2AP_PDU_t*)calloc(1,sizeof(E2AP_PDU));
 
-    std::vector<encoding::ran_func_info> all_funcs;
-    // RANfunctionOID_t *ranFunctionOIDe = (RANfunctionOID_t*)calloc(1,sizeof(RANfunctionOID_t));
-    // uint8_t *buf = (uint8_t*)"OID123";
-    // ranFunctionOIDe->buf = (uint8_t*)calloc(1,strlen((char*)buf)+1);
-    // memcpy(ranFunctionOIDe->buf, buf, strlen((char*)buf)+1);
-    // ranFunctionOIDe->size = strlen((char*)buf);
-
-    //Loop through RAN function definitions that are registered
-
-    for (std::pair<long, encoded_ran_function_t *> elem : ran_functions_registered) {
-      logger_trace("looping through ran func");
-      encoding::ran_func_info next_func;
-
-      next_func.ranFunctionId = elem.first;
-      next_func.ranFunctionDesc = &elem.second->ran_function_ostr;
-      next_func.ranFunctionRev = (long)2;
-      next_func.ranFunctionOId = &elem.second->oid;
-
-      all_funcs.push_back(next_func);
-    }
 
     PLMN_Identity_t *plmn_id_cpy = get_plmn_id_cpy(); // ptr no longer available after calling setup_request_parameterized function
     BIT_STRING_t *gnb_id_cpy = get_gnb_id_cpy();  // ptr no longer available after calling setup_request_parameterized function
@@ -350,89 +285,121 @@ int E2Sim::run_loop(const char *server_addr, int server_port){
 
     ASN_STRUCT_FREE(asn_DEF_E2AP_PDU, pdu_setup);
 
-    // set socket timeout to shutdown gracefully
-    struct timeval timeout;
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
-    if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-      perror("setsockopt failed");
-      exit(EXIT_FAILURE);
+    std::unique_lock<std::mutex> lk(cond_mutex);
+    cond.wait_for(lk, std::chrono::seconds(10));
+    lk.unlock();
+
+    if (retryConnection) {
+      logger_warn("retrying E2-SETUP-REQUEST...");
     }
+    retries--;
+  }
 
-    // installing signal handlers
-    struct sigaction sa;
-    sa.sa_handler = &signal_handler;
-    sa.sa_flags = 0;
-    sigemptyset(&sa.sa_mask);
-    sigaction(SIGINT, &sa, NULL);
-    sigaction(SIGTERM, &sa, NULL);
+  if (retries == 0 && retryConnection) {
+    logger_fatal("giving up E2-SETUP-REQUEST. Closing the application...");
+    retryConnection = false;
+    ok2run = false;
+  }
+}
 
-    sctp_buffer_t recv_buf;
+void E2Sim::listener(){
+  // start this helper thread to resend E2-SETUP-REQUEST in case of any success response wasn't received
+  std::thread conn_helper_th(&E2Sim::connection_helper, this);
 
-    logger_info("[SCTP] Waiting for SCTP data");
+  sctp_buffer_t recv_buf;
+  struct timespec ts; // timestamp of the received message
 
-    struct timespec ts; // timestamp of the received message
+  logger_info("[SCTP] Waiting for SCTP data");
 
-    ok2run = true;
-    while (ok2run) // looking for data on SCTP interface
-    {
-      ret = sctp_receive_data(client_fd, recv_buf, &ts);
-      switch (ret) {
-        case 0:
-          logger_trace("EAGAIN");
-          continue;
-          break;
+  ok2run = true;
+  while (ok2run) { // looking for data on SCTP interface
+    logger_trace("about to call sctp_receive_data");
+    int ret = sctp_receive_data(client_fd, recv_buf, &ts);
+    switch (ret) {
+      case 0:
+        logger_trace("EAGAIN");
+        continue;
+        break;
 
-        case -1:
-          if (errno == EINTR) {
-            break;  // we expect E2AP-REMOVAL-RESPONSE, so do not stop yet
-          }
+      case -1:
+        if (errno == EINTR) {
+          break;  // we expect E2AP-REMOVAL-RESPONSE, so do not stop yet
+        }
 
-          shutdown(); // we stop on any other error
-          break;
+        shutdown(); // we stop on any other error
+        break;
 
-        default:
-          e2ap_handle_sctp_data(client_fd, recv_buf, this, &ts);
-          break;
-      }
-
-      if (sig_raised) {
-        /**
-         * Currently, RIC does not implement E2-REMOVAL-REQUEST yet.
-         * E2 removal is already implemented in E2Sim. We only need to
-         * uncomment the following code to enable it.
-         * We expect E2AP-REMOVAL-RESPONSE, so do not shutdown yet
-         */
-        // E2AP_PDU_t *e2ap_pdu = (E2AP_PDU_t *) calloc(1, sizeof(E2AP_PDU_t));
-        // encoding::generate_e2ap_removal_request(e2ap_pdu);
-        // logger_info("Sending E2AP-REMOVAL-REQUEST");
-        // encode_and_send_sctp_data(e2ap_pdu, NULL);
-
-        /**
-         * Shutdown is expected to be called on processing either
-         * E2-REMOVAL-REQUEST or E2-REMOVAL-RESPONSE messages
-         */
-        shutdown(); // TODO remove this line when enabling E2 removal
-        retryConnection = false;
-
-        std::unique_lock<std::mutex> lk(cond_mutex);
-        cond.notify_all();
-        lk.unlock();
-      }
-
+      default:
+        e2ap_handle_sctp_data(client_fd, recv_buf, this, &ts);
+        break;
     }
   }
 
-  retry_th.join();
+  std::unique_lock<std::mutex> lk(cond_mutex);
+  cond.notify_all();
+  lk.unlock();
 
-  logger_force(LOGGER_INFO, "Shutting down E2AP Agent (E2 Simulator)");
+  conn_helper_th.join();
 
-  return 0;
+  logger_force(LOGGER_INFO, "Shutting down E2AP Agent");
+}
+
+void E2Sim::run(const char *e2term_addr, int e2term_port) {
+  logger_force(LOGGER_INFO, "Starting E2AP Agent");
+
+  char *addr = (char *)e2term_addr;
+  if (addr == NULL) {
+    addr = (char *)DEFAULT_SCTP_IP;
+  }
+
+  if (e2term_port < 1 || e2term_port > 65535) {
+    logger_warn("Invalid port number (%d). Valid values are between 1 and 65535. Using default port (%d)",
+                                                                              e2term_port, E2AP_SCTP_PORT);
+    e2term_port = E2AP_SCTP_PORT;
+  }
+
+  client_fd = sctp_start_client(addr, e2term_port);
+  if (client_fd == -1) {
+    retryConnection = false;
+    kill(getpid(), SIGTERM);
+    return;
+  }
+
+  // set socket timeout to shutdown gracefully
+  struct timeval timeout;
+  timeout.tv_sec = 2;
+  timeout.tv_usec = 0;
+  if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+    perror("setsockopt failed");
+    kill(getpid(), SIGTERM);
+    return;
+  }
+
+  logger_trace("After starting SCTP client");
+
+  std::thread client_th(&E2Sim::listener, this);
+  sctp_listener_th = std::move(client_th);
 }
 
 void E2Sim::shutdown() {
   logger_trace("in %s", __func__);
+  retryConnection = false;
   ok2run = false;
+  // TODO Check how to implement E2AP-REMOVAL-RESPONSE and graceful shutdown
+  /**
+   * Currently, RIC does not implement E2-REMOVAL-REQUEST yet.
+   * E2 removal is already implemented in E2Sim. We only need to
+   * uncomment the following code to enable it.
+   * We expect E2AP-REMOVAL-RESPONSE, so do not shutdown yet
+   */
+  // E2AP_PDU_t *e2ap_pdu = (E2AP_PDU_t *) calloc(1, sizeof(E2AP_PDU_t));
+  // encoding::generate_e2ap_removal_request(e2ap_pdu);
+  // logger_info("Sending E2AP-REMOVAL-REQUEST");
+  // encode_and_send_sctp_data(e2ap_pdu, NULL);
+  /**
+  * Shutdown is expected to be called on processing either
+  * E2-REMOVAL-REQUEST or E2-REMOVAL-RESPONSE messages
+  */
 }
 
 void E2Sim::setRetryConnection(bool retry) {

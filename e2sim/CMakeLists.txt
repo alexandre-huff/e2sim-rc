@@ -86,3 +86,4 @@ unset( GPROF CACHE )					# ensure this does not persist
 # each binary is built from a subset
 add_subdirectory( e2ap/src )
 add_subdirectory( e2sm/rc )
+add_subdirectory( src )
