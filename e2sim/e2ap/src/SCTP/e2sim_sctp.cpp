@@ -28,7 +28,6 @@
 #include <errno.h>
 
 #include "e2sim_sctp.hpp"
-// #include "e2sim_defs.h"
 #include "logger.h"
 
 #include <sys/types.h>
@@ -110,8 +109,17 @@ int sctp_start_server(const char *server_ip_str, const int server_port)
 }
 
 /*
+  This is only used as a placeholder to handle alarms for SCTP connection timeout
+*/
+void alarm_handler(int signal) {
+  logger_warn("[SCTP] The SCTP connection is taking too long... Received signal %d (%s)", signal, strsignal(signal));
+}
+
+/*
   Starts a client SCTP connection to a given server and port.
   Accepts IPv4, IPv6, or hostname as input values.
+
+  Returns the socket fd on success, -1 on error
 */
 int sctp_start_client(const char *server_addr_str, const int server_port) {
   int client_fd;
@@ -131,8 +139,8 @@ int sctp_start_client(const char *server_addr_str, const int server_port) {
 
   ret = getaddrinfo(server_addr_str, port_buf, &hints, &result);
   if (ret != 0) {
-      fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
-      exit(EXIT_FAILURE);
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
+    return -1;
   }
 
   logger_info("[SCTP] Connecting to server at %s:%d ...", server_addr_str, server_port);
@@ -140,25 +148,49 @@ int sctp_start_client(const char *server_addr_str, const int server_port) {
   /* getaddrinfo() returns a list of address structures (IPv4 and IPv6).
     We have to try each address until we successfully connect. */
   for (rp = result; rp != NULL; rp = rp->ai_next) {
-      client_fd = socket(rp->ai_family, rp->ai_socktype,
-                      rp->ai_protocol);
-      if (client_fd == -1)
-          continue;
+    client_fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+    if (client_fd == -1)
+      continue;
 
-      if (connect(client_fd, rp->ai_addr, rp->ai_addrlen) != -1)
-          break;                  /* Success */
+    // unmasking SIGALARM
+    sigset_t old_signals;
+    sigset_t monitored_signals;
+    int deliveredSignal;
+    sigemptyset(&old_signals);
+    sigemptyset(&monitored_signals);
+    sigaddset(&monitored_signals, SIGALRM);
+    sigprocmask(SIG_UNBLOCK, &monitored_signals, &old_signals);
 
-      close(client_fd);
+    // installing signal handlers for SCTP connection timeout
+    struct sigaction sa;
+    sa.sa_handler = &alarm_handler;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGALRM, &sa, NULL);
+
+    alarm(10);  // we wait for 10s to timeout
+    if (connect(client_fd, rp->ai_addr, rp->ai_addrlen) != -1) {
+      alarm(0); // disarm SIGALRM
+      logger_info("[SCTP] Connection established");
+      break;                  /* Success */
+    } else {
+      if (errno == EINTR) {
+        logger_fatal("[SCTP] Connection timed out");
+      }
+    }
+
+    sigprocmask(SIG_BLOCK, &old_signals, NULL);  // restoring the previous signal mask
+
+    close(client_fd);
   }
 
   if (rp == NULL) {               /* No address succeeded */
-      logger_fatal("Unable to connect to %s", server_addr_str);
-      exit(EXIT_FAILURE);
+    logger_fatal("[SCTP] Unable to connect at %s:%d", server_addr_str, server_port);
+    client_fd = -1;
   }
 
   freeaddrinfo(result);           /* No longer needed */
 
-  logger_info("[SCTP] Connection established");
   logger_debug("[SCTP] client_fd value is %d", client_fd);
 
   return client_fd;

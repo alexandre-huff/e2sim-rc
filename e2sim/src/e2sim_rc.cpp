@@ -20,6 +20,7 @@
 #include <thread>
 #include <getopt.h>
 #include <functional>
+#include <csignal>
 #include <prometheus/registry.h>
 #include <prometheus/exposer.h>
 #include <prometheus/histogram.h>
@@ -49,8 +50,6 @@ extern "C" {
     #include "RICcontrolAckRequest.h"
 }
 
-E2Sim *e2sim;
-
 args_t cmd_args;        // command line arguments
 metrics_t metrics;
 
@@ -62,13 +61,20 @@ volatile bool ok2run;   // controls if the experiment should keep running
 int main(int argc, char *argv[]) {
     using namespace std::placeholders;
 
+    // signal handler to stop e2sim gracefully
+	sigset_t monitoredSignals;
+	int deliveredSignal;
+
+    sigfillset(&monitoredSignals);
+    sigprocmask(SIG_BLOCK, &monitoredSignals, NULL);    // from now all new threads inherit this signal mask
+
     cmd_args = parse_input_options(argc, argv);
 
     logger_force(LOGGER_INFO, "Starting E2 Simulator for E2SM-RC");
 
     init_prometheus(metrics);
 
-    e2sim = new E2Sim((uint8_t *)"747", cmd_args.gnb_id);
+    E2Sim *e2sim = new E2Sim((uint8_t *)"747", cmd_args.gnb_id);
 
     asn_codec_ctx_t *opt_cod;
 
@@ -100,7 +106,7 @@ int main(int argc, char *argv[]) {
 
     e2sim->register_e2sm(1, reg_func);
 
-    InsertLoopCallback insert_cb = std::bind(&run_insert_loop, _1, _2, _3, _4);
+    InsertLoopCallback insert_cb = std::bind(&run_insert_loop, _1, _2, _3, _4, e2sim);
     SubscriptionCallback subscription_request_cb = std::bind(&callback_rc_subscription_request, _1, e2sim, insert_cb);
     e2sim->register_subscription_callback(1, subscription_request_cb);
 
@@ -111,7 +117,28 @@ int main(int argc, char *argv[]) {
     e2sim->register_control_callback(1, control_request_cb);
     // TODO e2sim->register_e2ap_removal_callback...
 
-    e2sim->run_loop(cmd_args.server_ip.c_str(), cmd_args.server_port);
+    e2sim->run(cmd_args.server_ip.c_str(), cmd_args.server_port);
+
+    do {
+        int ret_val = sigwait(&monitoredSignals, &deliveredSignal);	// we just wait for a signal to proceed
+        if (ret_val == -1) {
+            logger_error("sigwait failed");
+        } else {
+            switch (deliveredSignal) {
+            	case SIGINT:
+            		logger_info("SIGINT was received");
+            		break;
+            	case SIGTERM:
+            		logger_info("SIGTERM was received");
+            		break;
+            	default:
+            		logger_warn("sigwait returned signal %d (%s). Ignored!", deliveredSignal, strsignal(deliveredSignal));
+            }
+        }
+
+    } while (deliveredSignal != SIGTERM && deliveredSignal != SIGINT);
+
+    e2sim->shutdown();
 
     delete e2sim;
 
@@ -120,7 +147,7 @@ int main(int argc, char *argv[]) {
     ASN_STRUCT_RESET(asn_DEF_OCTET_STRING, &reg_func->ran_function_ostr);
     free(reg_func);
 
-    logger_force(LOGGER_INFO, "E2 Simulator finished gracefully");
+    logger_force(LOGGER_INFO, "E2 Simulator has finished");
 
     return 0;
 }
@@ -248,7 +275,7 @@ void init_prometheus(metrics_t &metrics) {
         }, 0.0);
 }
 
-void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId, long reqActionId) {
+void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId, long reqActionId, E2Sim *e2sim) {
     uint16_t seqNum = 0;
     unsigned int cpid = 0;
     struct timespec sent_time;  // timestamp of the sent message

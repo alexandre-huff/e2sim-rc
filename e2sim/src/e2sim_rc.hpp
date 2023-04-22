@@ -24,6 +24,8 @@
 #include <prometheus/histogram.h>
 #include <functional>
 
+#include "e2sim.hpp"
+
 using namespace prometheus;
 
 // helper for prometheus metrics
@@ -53,7 +55,7 @@ typedef std::function<void(long requestorId, long instanceId, long ranFunctionId
 void init_prometheus(metrics_t &metrics);
 args_t parse_input_options(int argc, char *argv[]);
 
-void run_insert_loop(long requestorId, long instanceId, long ranFunctionId, long actionId);
+void run_insert_loop(long requestorId, long instanceId, long ranFunctionId, long actionId, E2Sim *e2sim);
 void save_timestamp_report();
 
 #endif
