@@ -51,16 +51,14 @@ extern "C"
 using namespace std;
 using namespace prometheus;
 
-void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2sim, InsertLoopCallback run_insert_loop)
-{
-
-    logger_trace("Calling callback_rc_subscription_request");
-
+void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2sim, InsertLoopCallback run_insert_loop, e2sm_rc_subscription_t *current_sub) {
     // Record RIC Request ID
     // Go through RIC action to be Setup List
     // Find first entry with INSERT action Type
     // Record ricActionID
     // Encode subscription response
+
+    logger_trace("Calling %s", __func__);
 
     RICsubscriptionRequest_t orig_req =
         sub_req_pdu->choice.initiatingMessage->value.choice.RICsubscriptionRequest;
@@ -200,10 +198,16 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2sim, Ins
 
     // Start thread for sending REPORT messages
     if (accept_size > 0) {  // we only call the simulation if the RIC subscription has succeeded
+        current_sub->reqRequestorId = reqRequestorId;
+        current_sub->reqInstanceId = reqInstanceId;
+        current_sub->reqFunctionId = reqFunctionId;
+        current_sub->reqActionId = reqActionId;
+
         logger_trace("about to call run_insert_loop thread");
         std::thread th(run_insert_loop, reqRequestorId, reqInstanceId, reqFunctionId, reqActionId);
         th.detach();
-        logger_trace("run_insert_loop thread has spawned");
+        logger_debug("run_insert_loop thread has spawned with reqRequestorId=%ld, reqInstanceId=%ld, reqFunctionId=%ld, reqActionId=%ld",
+                    reqRequestorId, reqInstanceId, reqFunctionId, reqActionId);
     }
 }
 
@@ -212,7 +216,7 @@ void callback_rc_subscription_delete_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2s
     long reqInstanceId;
     long reqFunctionId;
 
-    logger_trace("Calling callback_rc_subscription_delete_request");
+    logger_trace("Calling %s", __func__);
 
     // Record RIC Request ID
     // Record RAN Function ID
@@ -283,7 +287,7 @@ void callback_rc_subscription_delete_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2s
 }
 
 void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv_ts, unsigned long num2send, Histogram *histogram, Gauge *gauge, std::unordered_map<unsigned int, unsigned long> *sent_ts_map, std::unordered_map<unsigned int, unsigned long> *recv_ts_map) {
-    logger_trace("Calling callback_rc_control_request");
+    logger_trace("Calling %s", __func__);
 
     RICcontrolRequest_t orig_req =
         ctrl_req_pdu->choice.initiatingMessage->value.choice.RICcontrolRequest;

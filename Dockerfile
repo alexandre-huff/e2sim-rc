@@ -54,6 +54,7 @@ RUN apt-get update \
 	iproute2 \
 	tcpdump \
 	libcurl4-openssl-dev \
+	libcpprest-dev \
 	&& apt-get clean
 
 #
@@ -86,6 +87,12 @@ RUN mkdir build && \
 # generating the final and smaller image with only the required artifacts
 #
 FROM ubuntu:20.04
+
+RUN apt-get update \
+	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+	libcurl4-openssl-dev \
+	libcpprest-dev \
+	&& apt-get clean
 
 COPY --from=e2sim-rc /usr/local/bin/e2sim-rc /usr/local/bin/e2sim-rc
 

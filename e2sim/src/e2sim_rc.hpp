@@ -54,8 +54,10 @@ typedef std::function<void(long requestorId, long instanceId, long ranFunctionId
 
 void init_prometheus(metrics_t &metrics);
 args_t parse_input_options(int argc, char *argv[]);
-
-void run_insert_loop(long requestorId, long instanceId, long ranFunctionId, long actionId, E2Sim *e2sim);
+encoded_ran_function_t *encode_ran_function_definition();
+void run_insert_loop(long requestorId, long instanceId, long ranFunctionId, long actionId, E2Sim *e2sim, int sleep_seconds);
 void save_timestamp_report();
+void start_http_listener();
+void shutdown_http_listener();
 
 #endif

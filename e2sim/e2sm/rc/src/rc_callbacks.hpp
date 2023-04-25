@@ -35,11 +35,12 @@ extern "C" {
 
 using namespace prometheus;
 
-void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2sim, InsertLoopCallback run_insert_loop);
-
-void callback_rc_subscription_delete_request(E2AP_PDU_t *pdu, E2Sim *e2sim, volatile bool *ok2run);
-
-void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts, unsigned long num2send, Histogram *histogram, Gauge *gauge, std::unordered_map<unsigned int, unsigned long> *sent_ts_map, std::unordered_map<unsigned int, unsigned long> *recv_ts_map);
+typedef struct {
+    long reqRequestorId;
+    long reqInstanceId;
+    long reqActionId;
+    long reqFunctionId;
+} e2sm_rc_subscription_t;
 
 static inline unsigned long elapsed_nanoseconds(struct timespec ts) {
     return ts.tv_sec * 1000000000 + ts.tv_nsec;
@@ -48,5 +49,11 @@ static inline unsigned long elapsed_nanoseconds(struct timespec ts) {
 static inline double elapsed_seconds(unsigned long sent_ns, unsigned long recv_ns) {
     return (recv_ns - sent_ns) / 1000000000.0;     // converting to seconds
 }
+
+void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2sim, InsertLoopCallback run_insert_loop, e2sm_rc_subscription_t *current_sub);
+
+void callback_rc_subscription_delete_request(E2AP_PDU_t *pdu, E2Sim *e2sim, volatile bool *ok2run);
+
+void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts, unsigned long num2send, Histogram *histogram, Gauge *gauge, std::unordered_map<unsigned int, unsigned long> *sent_ts_map, std::unordered_map<unsigned int, unsigned long> *recv_ts_map);
 
 #endif

@@ -24,6 +24,11 @@
 #include <prometheus/registry.h>
 #include <prometheus/exposer.h>
 #include <prometheus/histogram.h>
+#include <cpprest/http_listener.h>
+#include <cpprest/uri.h>
+#include <cpprest/json.h>
+
+#include <bits/stdc++.h>
 
 #include "e2sim_rc.hpp"
 #include "e2sim.hpp"
@@ -58,56 +63,41 @@ std::unordered_map<unsigned int, unsigned long> recv_ts_map; // timestamp of rec
 
 volatile bool ok2run;   // controls if the experiment should keep running
 
+std::unique_ptr<web::http::experimental::listener::http_listener> listener;
+std::vector<E2Sim *> e2sims;
+
+uint16_t seqNum = 0;        // guarded by seqNumCpidLock
+unsigned int cpid = 0;      // guarded by seqNumCpidLock
+std::mutex seqNumCpidLock;
+
+e2sm_rc_subscription_t current_subscription;    // stores the received subscription to use in e2term handover
+
 int main(int argc, char *argv[]) {
     using namespace std::placeholders;
 
     // signal handler to stop e2sim gracefully
-	sigset_t monitoredSignals;
-	int deliveredSignal;
-
-    sigfillset(&monitoredSignals);
-    sigprocmask(SIG_BLOCK, &monitoredSignals, NULL);    // from now all new threads inherit this signal mask
+    int delivered_signal;
+    sigset_t monitored_signals;
+    sigfillset(&monitored_signals);
+    sigprocmask(SIG_BLOCK, &monitored_signals, NULL);    // from now all new threads inherit this signal mask
 
     cmd_args = parse_input_options(argc, argv);
 
     logger_force(LOGGER_INFO, "Starting E2 Simulator for E2SM-RC");
 
     init_prometheus(metrics);
+    start_http_listener();
 
     E2Sim *e2sim = new E2Sim((uint8_t *)"747", cmd_args.gnb_id);
+    e2sims.emplace_back(e2sim);
 
-    asn_codec_ctx_t *opt_cod;
-
-    E2SM_RC_RANFunctionDefinition_t *ranfunc_def =
-        (E2SM_RC_RANFunctionDefinition_t *)calloc(1, sizeof(E2SM_RC_RANFunctionDefinition_t));
-    encode_rc_function_definition(ranfunc_def);
-
-    uint8_t e2smbuffer[8192] = {0, };
-    size_t e2smbuffer_size = 8192;
-
-    asn_enc_rval_t er =
-        asn_encode_to_buffer(opt_cod,
-                             ATS_ALIGNED_BASIC_PER,
-                             &asn_DEF_E2SM_RC_RANFunctionDefinition,
-                             ranfunc_def, e2smbuffer, e2smbuffer_size);
-
-    logger_debug("er encoded is %ld", er.encoded);
-    logger_trace("after encoding message");
-    logger_debug("here is encoded message %s", e2smbuffer);
-
-    encoded_ran_function_t *reg_func = (encoded_ran_function_t *) calloc(1, sizeof(encoded_ran_function_t));
-    reg_func->oid.size = ranfunc_def->ranFunction_Name.ranFunction_E2SM_OID.size;
-    reg_func->oid.buf = (uint8_t *) calloc(1, reg_func->oid.size);
-    memcpy(reg_func->oid.buf, ranfunc_def->ranFunction_Name.ranFunction_E2SM_OID.buf, reg_func->oid.size);
-
-    reg_func->ran_function_ostr.size = er.encoded;
-    reg_func->ran_function_ostr.buf = (uint8_t *) calloc(1, er.encoded);
-    memcpy(reg_func->ran_function_ostr.buf, e2smbuffer, er.encoded);
-
+    encoded_ran_function_t *reg_func = encode_ran_function_definition();
     e2sim->register_e2sm(1, reg_func);
 
-    InsertLoopCallback insert_cb = std::bind(&run_insert_loop, _1, _2, _3, _4, e2sim);
-    SubscriptionCallback subscription_request_cb = std::bind(&callback_rc_subscription_request, _1, e2sim, insert_cb);
+    // first insert_cb takes 2 seconds to the xApp to reply due to subscription and routing setup
+    InsertLoopCallback insert_cb = std::bind(&run_insert_loop, _1, _2, _3, _4, e2sim, 2);
+
+    SubscriptionCallback subscription_request_cb = std::bind(&callback_rc_subscription_request, _1, e2sim, insert_cb, &current_subscription);
     e2sim->register_subscription_callback(1, subscription_request_cb);
 
     SubscriptionDeleteCallback subscription_delete_cb = std::bind(&callback_rc_subscription_delete_request, _1, e2sim, &ok2run);
@@ -120,32 +110,33 @@ int main(int argc, char *argv[]) {
     e2sim->run(cmd_args.server_ip.c_str(), cmd_args.server_port);
 
     do {
-        int ret_val = sigwait(&monitoredSignals, &deliveredSignal);	// we just wait for a signal to proceed
+        int ret_val = sigwait(&monitored_signals, &delivered_signal);	// we just wait for a signal to proceed
         if (ret_val == -1) {
             logger_error("sigwait failed");
         } else {
-            switch (deliveredSignal) {
-            	case SIGINT:
-            		logger_info("SIGINT was received");
-            		break;
-            	case SIGTERM:
-            		logger_info("SIGTERM was received");
-            		break;
-            	default:
-            		logger_warn("sigwait returned signal %d (%s). Ignored!", deliveredSignal, strsignal(deliveredSignal));
+            switch (delivered_signal) {
+                case SIGINT:
+                    logger_info("SIGINT was received");
+                    break;
+                case SIGTERM:
+                    logger_info("SIGTERM was received");
+                    break;
+                default:
+                    logger_warn("sigwait returned signal %d (%s). Ignored!", delivered_signal, strsignal(delivered_signal));
             }
         }
 
-    } while (deliveredSignal != SIGTERM && deliveredSignal != SIGINT);
+    } while (delivered_signal != SIGTERM && delivered_signal != SIGINT);
 
-    e2sim->shutdown();
+    shutdown_http_listener();
 
-    delete e2sim;
+    for(E2Sim *e2sim : e2sims) {
+        e2sim->shutdown();  // async
+    }
 
-    ASN_STRUCT_FREE(asn_DEF_E2SM_RC_RANFunctionDefinition, ranfunc_def);
-    ASN_STRUCT_RESET(asn_DEF_PrintableString, &reg_func->oid);
-    ASN_STRUCT_RESET(asn_DEF_OCTET_STRING, &reg_func->ran_function_ostr);
-    free(reg_func);
+    for(E2Sim *e2sim : e2sims) {
+        delete e2sim;   // sync: unfortunately this has to run here to shutdown all running e2sims quickly
+    }
 
     logger_force(LOGGER_INFO, "E2 Simulator has finished");
 
@@ -275,9 +266,253 @@ void init_prometheus(metrics_t &metrics) {
         }, 0.0);
 }
 
-void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId, long reqActionId, E2Sim *e2sim) {
-    uint16_t seqNum = 0;
-    unsigned int cpid = 0;
+encoded_ran_function_t *encode_ran_function_definition() {
+    using namespace std::placeholders;
+
+    asn_codec_ctx_t *opt_cod;
+
+    E2SM_RC_RANFunctionDefinition_t *ranfunc_def =
+        (E2SM_RC_RANFunctionDefinition_t *)calloc(1, sizeof(E2SM_RC_RANFunctionDefinition_t));
+    encode_rc_function_definition(ranfunc_def);
+
+    uint8_t e2smbuffer[8192] = {0, };
+    size_t e2smbuffer_size = 8192;
+
+    asn_enc_rval_t er =
+        asn_encode_to_buffer(opt_cod,
+                             ATS_ALIGNED_BASIC_PER,
+                             &asn_DEF_E2SM_RC_RANFunctionDefinition,
+                             ranfunc_def, e2smbuffer, e2smbuffer_size);
+
+    logger_debug("er encoded is %ld", er.encoded);
+    logger_trace("after encoding message");
+    logger_debug("here is encoded message %s", e2smbuffer);
+
+    encoded_ran_function_t *reg_func = (encoded_ran_function_t *) calloc(1, sizeof(encoded_ran_function_t));
+    reg_func->oid.size = ranfunc_def->ranFunction_Name.ranFunction_E2SM_OID.size;
+    reg_func->oid.buf = (uint8_t *) calloc(1, reg_func->oid.size);
+    memcpy(reg_func->oid.buf, ranfunc_def->ranFunction_Name.ranFunction_E2SM_OID.buf, reg_func->oid.size);
+
+    reg_func->ran_function_ostr.size = er.encoded;
+    reg_func->ran_function_ostr.buf = (uint8_t *) calloc(1, er.encoded);
+    memcpy(reg_func->ran_function_ostr.buf, e2smbuffer, er.encoded);
+
+    ASN_STRUCT_FREE(asn_DEF_E2SM_RC_RANFunctionDefinition, ranfunc_def);
+
+    return reg_func;
+}
+
+/*
+    TODO this callback is not yet being used. The idea is to stop the old insert_loop (using old sctp connection)
+         only upon receiving the first control msg in the new sctp connection.
+
+    This callback is intented to receive the first control message while the handover is ongoing
+
+    It will drive the old run_insert_loop down and set the regular control callback for the following messages
+*/
+void callback_receive_1st_control_handover(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv_ts, E2Sim *e2sim, std::string old_e2term_addr, int old_e2term_port, InsertLoopCallback insert_cb) {
+    using namespace std::placeholders;
+
+    logger_force(LOGGER_TRACE, "in func %s", __func__);
+
+    ControlCallback control_request_cb = std::bind(&callback_rc_control_request, _1, _2, cmd_args.num2send, metrics.histogram, metrics.gauge, &sent_ts_map, &recv_ts_map);
+    e2sim->register_control_callback(1, control_request_cb);   // change the control callback to the regular one
+
+    // call manually first control callback
+    control_request_cb(ctrl_req_pdu, recv_ts);
+
+    logger_force(LOGGER_TRACE, "about to call run_insert_loop thread in %s", __func__);
+    std::thread th(insert_cb, current_subscription.reqRequestorId, current_subscription.reqInstanceId,
+                    current_subscription.reqFunctionId, current_subscription.reqActionId);
+    th.detach();
+    logger_force(LOGGER_TRACE, "run_insert_loop thread has spawned in %s with reqRequestorId=%ld, reqInstanceId=%ld, reqFunctionId=%ld, reqActionId=%ld",
+                __func__, current_subscription.reqRequestorId, current_subscription.reqInstanceId,
+                    current_subscription.reqFunctionId, current_subscription.reqActionId);
+
+    E2Sim *old_sim = NULL;
+    std::vector<E2Sim*>::iterator it;
+    for (it = e2sims.begin(); it != e2sims.end(); it++) {
+        if (it.operator*()->is_e2term_endpoint(old_e2term_addr, old_e2term_port)) {
+            old_sim = it.operator*();
+            break;
+        }
+    }
+
+    if (old_sim) {
+        logger_force(LOGGER_TRACE, "about to shutdown old E2Sim");
+        old_sim->shutdown();
+
+        e2sims.erase(it);
+        delete old_sim;
+    } else {
+        logger_force(LOGGER_ERROR, "old E2Sim not found in e2sims");
+    }
+
+    ok2run = false; // this will stop the old run_insert_loop, which will release seqNumCpidLock mutex for the new run_insert_loop
+
+    logger_force(LOGGER_TRACE, "end of func %s", __func__);
+}
+
+void drive_e2term_handover(std::string old_e2term_addr, int old_e2term_port, std::string new_e2term_addr, int new_e2term_port) {
+    using namespace std::placeholders;
+    bool new_connection = false;
+
+    logger_trace("in func %s", __func__);
+
+    E2Sim *e2sim = NULL;
+    for (E2Sim *sim : e2sims) {
+        if (sim->is_e2term_endpoint(new_e2term_addr, new_e2term_port)) {
+            e2sim = sim;
+            break;
+        }
+    }
+
+    if (e2sim == NULL) {
+        new_connection = true;
+        e2sim = new E2Sim((uint8_t *)"747", cmd_args.gnb_id);
+        e2sims.emplace_back(e2sim);
+
+        encoded_ran_function_t *reg_func = encode_ran_function_definition();
+        e2sim->register_e2sm(1, reg_func);
+
+    }
+
+    InsertLoopCallback insert_cb = std::bind(&run_insert_loop, _1, _2, _3, _4, e2sim, 0);
+
+    SubscriptionCallback subscription_request_cb = std::bind(&callback_rc_subscription_request, _1, e2sim, insert_cb, &current_subscription);
+    e2sim->register_subscription_callback(1, subscription_request_cb);
+
+    SubscriptionDeleteCallback subscription_delete_cb = std::bind(&callback_rc_subscription_delete_request, _1, e2sim, &ok2run);
+    e2sim->register_subscription_delete_callback(1, subscription_delete_cb);
+
+    // ControlCallback control_request_cb = std::bind(&callback_receive_1st_control_handover, _1, _2, e2sim, old_e2term_addr, old_e2term_port, insert_cb);
+    ControlCallback control_request_cb = std::bind(&callback_rc_control_request, _1, _2, cmd_args.num2send, metrics.histogram, metrics.gauge, &sent_ts_map, &recv_ts_map);
+    e2sim->register_control_callback(1, control_request_cb);
+    // TODO e2sim->register_e2ap_removal_callback...
+
+    if (new_connection) {
+        e2sim->run(new_e2term_addr.c_str(), new_e2term_port);
+    }
+
+    logger_trace("about to call run_insert_loop thread in %s", __func__);
+    std::thread th(insert_cb, current_subscription.reqRequestorId, current_subscription.reqInstanceId,
+                    current_subscription.reqFunctionId, current_subscription.reqActionId);
+    th.detach();
+    logger_debug("run_insert_loop thread has spawned in %s with reqRequestorId=%ld, reqInstanceId=%ld, reqFunctionId=%ld, reqActionId=%ld",
+                __func__, current_subscription.reqRequestorId, current_subscription.reqInstanceId,
+                    current_subscription.reqFunctionId, current_subscription.reqActionId);
+
+    ok2run = false;
+}
+
+void handle_error(pplx::task<void>& t, const utility::string_t msg) {
+    try {
+        t.get();
+    } catch (std::exception& e) {
+        logger_error("%s : Reason = %s", msg.c_str(), e.what());
+    }
+}
+
+/*
+    Handles O1 requests to handover the E2Term SCTP connection
+
+    Expects:
+    {
+        e2term: {
+            from: {
+                addr: E2Term address,
+                port: E2Term port,
+            },
+            to: {
+                addr: E2Term address,
+                port: E2Term port
+            }
+        }
+    }
+
+    Replies HTTP status code 204 on success
+*/
+void handle_e2term_handover(web::http::http_request request) {
+    auto answer = web::json::value::object();
+    request
+        .extract_json()
+        .then([&answer, request](pplx::task<web::json::value> task) {
+            try {
+                answer = task.get();
+                logger_info("Received RESTCONF request %s", answer.serialize().c_str());
+
+                // do something useful here
+                auto e2term = answer.at(U("e2term"));
+                auto from = e2term.at(U("from"));
+                auto to = e2term.at(U("to"));
+                auto from_addr = from.at(U("addr")).as_string();
+                auto from_port = from.at(U("port")).as_integer();
+                auto to_addr = to.at(U("addr")).as_string();
+                auto to_port = to.at(U("port")).as_integer();
+                logger_info("E2Term handover from %s:%d to %s:%d", from_addr.c_str(), from_port, to_addr.c_str(), to_port);
+
+                drive_e2term_handover(from_addr.c_str(), from_port, to_addr.c_str(), to_port);
+
+                request.reply(web::http::status_codes::NoContent)
+                    .then([](pplx::task<void> t) {
+                        handle_error(t, "handle reply exception");
+                    });
+
+            } catch (std::exception const &e) { // http_exception and json_exception inherits from exception
+                logger_error("unable to process JSON payload from http request. Reason = %s", e.what());
+
+                request.reply(web::http::status_codes::InternalError)
+                    .then([](pplx::task<void> t)
+                    {
+                        handle_error(t, "http reply exception");
+                    });
+            }
+
+        }).wait();
+}
+
+void shutdown_http_listener() {
+    logger_info("Shutting down HTTP Listener");
+
+    try {
+        listener->close().wait();
+    } catch (std::exception const &e) {
+        logger_error("shutdown http listener exception: %s", e.what());
+    }
+}
+
+/*
+    throws std:exception
+*/
+void start_http_listener() {
+    logger_info("Starting up HTTP listener");
+
+    using namespace web;
+    using namespace http;
+    using namespace http::experimental::listener;
+
+    utility::string_t address = U("http://0.0.0.0:8090/restconf/operations/handover");
+    uri_builder uri(address);
+
+    auto addr = uri.to_uri().to_string();
+    if (!uri::validate(addr)) {
+        throw std::runtime_error("unable starting up the http listener due to invalid URI: " + addr);
+    }
+
+    listener = std::make_unique<web::http::experimental::listener::http_listener>(addr);
+    listener->support(methods::POST, &handle_e2term_handover);
+    try {
+        listener
+            ->open()
+            .wait();        // non-blocking operation
+
+    } catch (std::exception const &e) {
+        logger_error("startup http listener exception: %s", e.what());
+        throw;
+    }
+}
+
+void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId, long reqActionId, E2Sim *e2sim, int sleep_seconds) {
     struct timespec sent_time;  // timestamp of the sent message
     unsigned long sent_ns;  // sent_time in nanoseconds
 
@@ -290,14 +525,17 @@ void run_insert_loop(long reqRequestorId, long reqInstanceId, long ranFunctionId
         Should we do not wait, then all messages sent within these 2 seconds will also include the
         latency of the subscription setup (i.e. xApps don't receive any INSERT message prior the subscription has finished).
     */
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::seconds(sleep_seconds));
 
     OCTET_STRING_t *ostr_cpid = (OCTET_STRING_t *) calloc(1, sizeof(OCTET_STRING_t));
     ostr_cpid->buf = (uint8_t *) calloc(1, sizeof(cpid));
     ostr_cpid->size = sizeof(cpid);
 
-    ok2run = true;
+    logger_debug("about to lock in %s", __func__);
+    std::lock_guard<std::mutex> guard(seqNumCpidLock);  // required to lock to block insert loop to new e2term start before this loop finishes
+    logger_debug("lock acquired in %s", __func__);
 
+    ok2run = true;  // on handoff this will only get here after the old run_insert_loop sets ok2run to false and gets out of this function
     while (ok2run && (cmd_args.num2send == UNLIMITED_MESSAGES || cpid < cmd_args.num2send)) {
 
         E2SM_RC_IndicationHeader_t *ind_header =

@@ -54,9 +54,12 @@ private:
   PLMN_Identity_t plmn_id;
   BIT_STRING_t gnb_id;
 
+  std::string e2_addr;  // E2Term address
+  int e2_port;          // E2Term port
+
   int client_fd;
   bool ok2run;  // controls the sctp receiver run loop
-  std::atomic<bool> retryConnection;  // controls if the E2Sim should reconnect to the E2Term
+  std::atomic<bool> retryConnection;  // controls if the E2Sim should resend E2-SETUP-REQUEST
 
   std::thread sctp_listener_th;
 
@@ -80,6 +83,8 @@ public:
   PLMN_Identity_t *get_plmn_id_cpy();
 
   BIT_STRING_t *get_gnb_id_cpy();
+
+  bool is_e2term_endpoint(std::string address, int port);
 
   void register_e2sm(long func_id, encoded_ran_function_t* ran_func);
 

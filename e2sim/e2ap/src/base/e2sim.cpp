@@ -81,11 +81,22 @@ E2Sim::E2Sim(uint8_t *plmn_id, uint32_t gnb_id) {
 }
 
 E2Sim::~E2Sim() {
+  logger_trace("in func %s", __func__);
+
   if(sctp_listener_th.joinable()) {
     sctp_listener_th.join();
   }
   ASN_STRUCT_RESET(asn_DEF_PLMN_Identity, &this->plmn_id);
   ASN_STRUCT_RESET(asn_DEF_BIT_STRING, &this->gnb_id);
+
+  for(auto reg_func : ran_functions_registered ) {
+    ASN_STRUCT_RESET(asn_DEF_PrintableString, &reg_func.second->oid);
+    ASN_STRUCT_RESET(asn_DEF_OCTET_STRING, &reg_func.second->ran_function_ostr);
+    free(reg_func.second);
+  }
+
+  logger_debug("about to close client_fd %d", client_fd);
+  close(client_fd);
 }
 
 std::unordered_map<long, encoded_ran_function_t *> E2Sim::getRegistered_ran_functions() {
@@ -173,7 +184,16 @@ BIT_STRING_t *E2Sim::get_gnb_id_cpy() {
   return gnb;
 }
 
-void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func) {
+bool E2Sim::is_e2term_endpoint(std::string addr, int port) {
+  if (e2_addr.compare(addr) == 0 && e2_port == port) {
+    return true;
+  }
+
+  return false;
+}
+
+void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func)
+{
 
   //Error conditions:
   //If we already have an entry for func_id
@@ -186,9 +206,7 @@ void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func) {
   } else {
     logger_error("function with id %ld is already registered");
   }
-
 }
-
 
 void E2Sim::encode_and_send_sctp_data(E2AP_PDU_t* pdu, struct timespec *ts)
 {
@@ -240,7 +258,6 @@ void E2Sim::connection_helper() {
   while (retryConnection && retries) {
 
     E2AP_PDU_t* pdu_setup = (E2AP_PDU_t*)calloc(1,sizeof(E2AP_PDU));
-
 
     PLMN_Identity_t *plmn_id_cpy = get_plmn_id_cpy(); // ptr no longer available after calling setup_request_parameterized function
     BIT_STRING_t *gnb_id_cpy = get_gnb_id_cpy();  // ptr no longer available after calling setup_request_parameterized function
@@ -297,8 +314,7 @@ void E2Sim::connection_helper() {
 
   if (retries == 0 && retryConnection) {
     logger_fatal("giving up E2-SETUP-REQUEST. Closing the application...");
-    retryConnection = false;
-    ok2run = false;
+    kill(getpid(), SIGTERM);  // main application should drive shutdown on SIGTERM
   }
 }
 
@@ -374,6 +390,9 @@ void E2Sim::run(const char *e2term_addr, int e2term_port) {
     kill(getpid(), SIGTERM);
     return;
   }
+
+  e2_addr.assign(e2term_addr);
+  e2_port = e2term_port;
 
   logger_trace("After starting SCTP client");
 

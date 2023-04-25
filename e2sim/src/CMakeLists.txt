@@ -16,6 +16,7 @@
 #
 
 find_package(prometheus-cpp CONFIG REQUIRED)
+find_package(cpprestsdk REQUIRED)
 
 add_executable( e2sim-rc e2sim_rc.cpp )
 
@@ -28,6 +29,7 @@ target_link_libraries( e2sim-rc PRIVATE e2ap_asn1_objects
                                         sctp_objects
                                         messagerouting_objects
                                         rc_objects )
+target_link_libraries( e2sim-rc PRIVATE cpprestsdk::cpprest)
 
 target_include_directories (e2sim-rc PUBLIC
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
