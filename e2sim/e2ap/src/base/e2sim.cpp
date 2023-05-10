@@ -44,27 +44,27 @@ std::condition_variable cond; // condition to wait/awake the connection helper t
 
   throws std::invalid_argument
 */
-E2Sim::E2Sim(uint8_t *plmn_id, uint32_t gnb_id) {
+E2Sim::E2Sim(const char *mcc, const char *mnc, uint32_t gnb_id) {
   logger_trace("in %s constructor", __func__);
 
-  size_t len = strlen((char *)plmn_id); // maximum plmn_id size must be 3 octet string bytes
-  if (len > 3) {
-    throw invalid_argument("maximum plmn_id size is 3");
+  if (strlen(mcc) != 3) {
+    throw invalid_argument("MCC requires 3 digits");
+  }
+
+  size_t mnc_len = strlen(mnc);
+  if (mnc_len != 2 && mnc_len != 3) {
+    throw invalid_argument("MNC requires 2 or 3 digits");
   }
 
   if (gnb_id >= 1<<29) {
     throw invalid_argument("maximum gnb_id value is 2^29-1");
   }
 
-  memset(&this->plmn_id, 0, sizeof(PLMN_Identity_t));
-  memset(&this->gnb_id, 0, sizeof(BIT_STRING_t));
-
   // encoding PLMN identity
-  this->plmn_id.size = len;
-  this->plmn_id.buf = (uint8_t *) calloc(this->plmn_id.size, sizeof(uint8_t));
-  memcpy(this->plmn_id.buf, plmn_id, this->plmn_id.size);
+  this->plmn_id = encoding::encodePlmnId(mcc, mnc);
 
   // encoding gNodeB identity
+  memset(&this->gnb_id, 0, sizeof(BIT_STRING_t));
   this->gnb_id.buf = (uint8_t *) calloc(1, 4); // maximum size is 32 bits
   this->gnb_id.size = 4;
   this->gnb_id.bits_unused = 3; // we are using 29 bits for gnb_id so that 7 bits (3+4) is left for the NR Cell Identity
@@ -86,7 +86,7 @@ E2Sim::~E2Sim() {
   if(sctp_listener_th.joinable()) {
     sctp_listener_th.join();
   }
-  ASN_STRUCT_RESET(asn_DEF_PLMN_Identity, &this->plmn_id);
+  ASN_STRUCT_FREE(asn_DEF_PLMN_Identity, this->plmn_id);
   ASN_STRUCT_RESET(asn_DEF_BIT_STRING, &this->gnb_id);
 
   for(auto reg_func : ran_functions_registered ) {
@@ -164,9 +164,9 @@ ControlCallback E2Sim::get_control_callback(long func_id) {
 PLMN_Identity_t *E2Sim::get_plmn_id_cpy() {
   // we return a copy since ASN structs are freed after encoding and we don't want to loose this value
   auto *plmn = (PLMN_Identity_t *) calloc(1, sizeof(PLMN_Identity_t));
-  plmn->buf = (uint8_t *) calloc(plmn_id.size, sizeof(uint8_t));
-  plmn->size = plmn_id.size;
-  memcpy(plmn->buf, plmn_id.buf, plmn->size);
+  plmn->buf = (uint8_t *) calloc(plmn_id->size, sizeof(uint8_t));
+  plmn->size = plmn_id->size;
+  memcpy(plmn->buf, plmn_id->buf, plmn->size);
   return plmn;
 }
 

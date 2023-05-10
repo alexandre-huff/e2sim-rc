@@ -48,6 +48,8 @@ typedef struct {
     unsigned long num2send;         // number of messages to send in the simulation
     uint32_t gnb_id;                // gNodeB Identity
     uint32_t simulation_id;         // Simulation ID for prometheus reports
+    std::string mcc;                // gNodeB Mobile Country Code
+    std::string mnc;                // gNodeB Mobile Network Code
 } args_t;
 
 typedef std::function<void(long requestorId, long instanceId, long ranFunctionId, long actionId)> InsertLoopCallback;

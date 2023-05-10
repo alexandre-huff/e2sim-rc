@@ -50,8 +50,6 @@ namespace encoding {
 
   long get_function_id_from_control(E2AP_PDU_t *e2ap_pdu);
 
-  void buildSubsReq(E2AP_PDU_t *pdu);
-
   void generate_e2ap_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, const std::vector<ran_func_info>& all_funcs, PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id);
 
   void generate_e2ap_setup_response(E2AP_PDU_t *setup_resp_pdu);
@@ -75,6 +73,8 @@ namespace encoding {
   void generate_e2ap_config_update(E2AP_PDU_t *e2ap_edu);
 
   void generate_e2ap_removal_request(E2AP_PDU_t *e2ap_pdu);
+
+  PLMN_Identity_t *encodePlmnId(const char *mcc, const char *mnc);
 }
 
 #endif

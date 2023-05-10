@@ -51,7 +51,7 @@ private:
   std::unordered_map<long, SubscriptionCallback> subscription_callbacks;
   std::unordered_map<long, SubscriptionDeleteCallback> subscription_delete_callbacks;
   std::unordered_map<long, ControlCallback> control_callbacks;
-  PLMN_Identity_t plmn_id;
+  PLMN_Identity_t *plmn_id;
   BIT_STRING_t gnb_id;
 
   std::string e2_addr;  // E2Term address
@@ -68,7 +68,7 @@ private:
 
 public:
 
-  E2Sim(uint8_t *plmn_id, uint32_t gnb_id);
+  E2Sim(const char *mcc, const char *mnc, uint32_t gnb_id);
 
   ~E2Sim();
 

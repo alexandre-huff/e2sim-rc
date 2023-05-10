@@ -1261,3 +1261,44 @@ void encoding::generate_e2ap_removal_request(E2AP_PDU_t *e2ap_pdu) {
     xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
   }
 }
+
+PLMN_Identity_t *encoding::encodePlmnId(const char *mcc, const char *mnc) {
+  logger_trace("in function %s", __func__);
+
+  PLMN_Identity_t *plmn = (PLMN_Identity_t *) calloc(1, sizeof(PLMN_Identity_t));
+  plmn->size = 3; // the size according to E2AP specification
+  plmn->buf = (uint8_t *) calloc(3, sizeof(uint8_t));
+
+  char buf = mcc[1];
+  plmn->buf[0] |= (atoi(&buf)) << 4;
+  buf = mcc[0];
+  plmn->buf[0] |= (atoi(&buf));
+
+  if (strlen((char *) mnc) == 3) {
+    buf = mnc[0];
+    plmn->buf[1] |= (atoi(&buf)) << 4;
+    buf = mcc[2];
+    plmn->buf[1] |= (atoi(&buf));
+    buf = mnc[2];
+    plmn->buf[2] |= (atoi(&buf)) << 4;
+    buf = mnc[1];
+    plmn->buf[2] |= (atoi(&buf));
+
+  } else {
+    plmn->buf[1] |= 0x0F << 4;
+    buf = mcc[2];
+    plmn->buf[1] |= (atoi(&buf));
+    buf = mnc[1];
+    plmn->buf[2] |= (atoi(&buf)) << 4;
+    buf = mnc[0];
+    plmn->buf[2] |= (atoi(&buf));
+  }
+
+  logger_debug("PLMN Identity encoded for mcc=%s mnc=%s", mcc, mnc);
+
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    xer_fprint(stderr, &asn_DEF_PLMN_Identity, plmn);
+  }
+
+  return plmn;
+}

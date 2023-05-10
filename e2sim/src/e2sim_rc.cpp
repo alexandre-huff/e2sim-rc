@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
     init_prometheus(metrics);
     start_http_listener();
 
-    E2Sim *e2sim = new E2Sim((uint8_t *)"747", cmd_args.gnb_id);
+    E2Sim *e2sim = new E2Sim(cmd_args.mcc.c_str(), cmd_args.mnc.c_str(), cmd_args.gnb_id);
     e2sims.emplace_back(e2sim);
 
     encoded_ran_function_t *reg_func = encode_ran_function_definition();
@@ -152,15 +152,18 @@ args_t parse_input_options(int argc, char *argv[]) {
     args.num2send = UNLIMITED_MESSAGES;
     args.gnb_id = 1;
     args.simulation_id = 0;
+    args.mcc = "001";
+    args.mnc = "01";
 
     static struct option long_options[] =
     {
-        {"ip", required_argument, 0, 'i'},
+        {"interval", required_argument, 0, 'i'},
         {"port", required_argument, 0, 'p'},
-        {"loop_interval", required_argument, 0, 'l'},
         {"wait_report", required_argument, 0, 'w'},
         {"num2send", required_argument, 0, 'n'},
-        {"gnodeb", required_argument, 0, 'g'},
+        {"nodebid", required_argument, 0, 'b'},
+        {"mcc", required_argument, 0, 'm'},
+        {"mnc", required_argument, 0, 'c'},
         {"simulation", required_argument, 0, 's'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
@@ -169,7 +172,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     int c;
     while(1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "p:n:g:i:w:s:h", long_options, &option_index);
+        c = getopt_long(argc, argv, "i:p:w:n:b:m:c:s:h", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -183,8 +186,18 @@ args_t parse_input_options(int argc, char *argv[]) {
             case 'i':
                 args.loop_interval = strtoul(optarg, NULL, 10);
                 break;
-            case 'g':
-                args.gnb_id = strtoumax(optarg, NULL, 10);
+            case 'b':
+                if ((strlen(optarg) > 2) && (optarg[0] == '0') && (optarg[1] == 'x' || optarg[1] == 'X')) {	// check if hex value
+                    args.gnb_id = strtoumax(optarg, NULL, 16);
+                } else {	// we assume it is decimal
+                    args.gnb_id = strtoumax(optarg, NULL, 10);
+                }
+                break;
+            case 'm':
+                args.mcc = optarg;
+                break;
+            case 'c':
+                args.mnc = optarg;
                 break;
             case 's':
                 args.simulation_id = strtoumax(optarg, NULL, 10);
@@ -204,10 +217,12 @@ args_t parse_input_options(int argc, char *argv[]) {
                     "  -p  --port         E2Term SCTP port number\n"
                     "  -n  --num2send     Number of messages to send\n"
                     "  -i  --interval     Interval in milliseconds between sending each message to the RIC\n"
-                    "  -g  --gnodeb       gNodeB Identity of the simulation (0...2^29-1)\n"
+                    "  -m  --mcc          gNodeB Mobile Country Code\n"
+                    "  -c  --mnc          gNodeB Mobile Network Code\n"
+                    "  -b  --nodebid      gNodeB Identity 0..2^29-1 (e.g. 15 or 0xF)\n"
                     "  -w  --wait4report  Wait seconds for draining replies and generate the final report\n"
                     "                     Requires --num2send argument\n"
-                    "  -s  --simulation   Simulation ID for prometheus reports (0...2^32-1)\n"
+                    "  -s  --simulation   Simulation ID for prometheus reports (0..2^32-1)\n"
                     "  -h  --help         Display this information and quit\n\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
@@ -369,7 +384,7 @@ void drive_e2term_handover(std::string old_e2term_addr, int old_e2term_port, std
 
     if (e2sim == NULL) {
         new_connection = true;
-        e2sim = new E2Sim((uint8_t *)"747", cmd_args.gnb_id);
+        e2sim = new E2Sim(cmd_args.mcc.c_str(), cmd_args.mnc.c_str(), cmd_args.gnb_id);
         e2sims.emplace_back(e2sim);
 
         encoded_ran_function_t *reg_func = encode_ran_function_definition();
