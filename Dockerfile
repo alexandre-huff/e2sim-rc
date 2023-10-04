@@ -55,6 +55,7 @@ RUN apt-get update \
 	tcpdump \
 	libcurl4-openssl-dev \
 	libcpprest-dev \
+	meson \
 	&& apt-get clean
 
 #
@@ -65,16 +66,27 @@ RUN apt-get update \
 # Stage to build E2SM-RC
 FROM e2sim-base AS e2sim-rc
 
+RUN git clone --depth 1 https://github.com/pistacheio/pistache.git /pistache && cd /pistache \
+	&& meson setup build --prefix=/usr/local --libdir=lib -Ddebug=true && meson install -C build \
+	&& ldconfig && cd / && rm -fr /pistache
+
+RUN git clone --depth 1 https://github.com/nlohmann/json.git /json && mkdir -p /json/build \
+	&& cd /json/build && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DJSON_BuildTests=OFF \
+	&& make && make install && ldconfig && cd / && rm -fr /json
+
 COPY . /playpen/
 
 WORKDIR /playpen/e2sim
 
+RUN mkdir -p environment_manager/build && cd environment_manager/build \
+	&& cmake ../ && make -j4 && make install
+
 # build and install submodule dependencies
-RUN git submodule update --init --recursive 3rdparty/prometheus-cpp \
+RUN git submodule update --init --recursive --recommend-shallow 3rdparty/prometheus-cpp \
     && cd 3rdparty/prometheus-cpp/ && mkdir build && cd build \
     && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig
 
-RUN git submodule update --init --recursive 3rdparty/nlohmann_json_release
+RUN git submodule update --init --recursive --recommend-shallow 3rdparty/nlohmann_json_release
 
 # build and install the e2sim-rc application
 RUN mkdir build && \
@@ -92,9 +104,13 @@ RUN apt-get update \
 	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 	libcurl4-openssl-dev \
 	libcpprest-dev \
+	gdb \
 	&& apt-get clean
 
-COPY --from=e2sim-rc /usr/local/bin/e2sim-rc /usr/local/bin/e2sim-rc
+COPY --from=e2sim-rc /usr/local/bin /usr/local/bin
+COPY --from=e2sim-rc /usr/local/lib /usr/local/lib
+
+RUN ldconfig
 
 # CMD e2sim-rc 10.110.102.29 -p 36422
 CMD sleep 100000000

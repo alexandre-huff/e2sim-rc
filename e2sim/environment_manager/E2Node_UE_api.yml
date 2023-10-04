@@ -1,0 +1,191 @@
+openapi: '3.0.2'
+info:
+  title: E2 Node UE API
+  version: '1.0'
+servers:
+  - url: https://api.server.test/v1
+tags:
+  - name: Testing
+    description: Testing endpoints
+  - name: UE Management
+    description: APIs for UE management
+paths:
+  /test:
+    get:
+      tags:
+        - Testing
+      summary: Test API connectivity
+      responses:
+        '200':
+          description: API is reachable
+  /UE/{IMSI}:
+    put:
+      tags:
+        - UE Management
+      summary: Create or update information for a mobile UE
+      description: >-
+        If the IMSI exists, update the metrics for the mobile UE.
+        Otherwise, create a new mobile UE.
+      parameters:
+        - name: IMSI
+          in: path
+          required: true
+          schema:
+            type: string
+          description: International Mobile Subscriber Identity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - latency
+                - averageThroughput
+              properties:
+                averageThroughput:
+                  type: number
+                  description: Average throughput in Mbps. Required if updating or creating.
+                  example: 55.5
+                latency:
+                  type: integer
+                  description: Latency in milliseconds. Required if updating or creating.
+                  example: 90
+                RSRP:
+                  type: integer
+                  description: Reference Signal Received Power in dBm. Optional if updating.
+                  example: -98
+                SINR:
+                  type: integer
+                  description: Signal-to-Interference-plus-Noise Ratio in dB. Optional if updating.
+                  example: 22
+                CQI:
+                  type: integer
+                  description: Channel Quality Indicator. Optional if updating.
+                  example: 10
+                RSRQ:
+                  type: integer
+                  description: Reference Signal Received Quality. Optional if updating.
+                  example: -14
+                BLER:
+                  type: integer
+                  description: Block Error Rate in percentage. Optional if updating.
+                  example: 1
+                available_gNBs:
+                  type: array
+                  description: List of available gNB and their respective RSRP and RSSI in dBm. Optional if updating.
+                  items:
+                    type: object
+                    properties:
+                      gNB_ID:
+                        type: string
+                        description: Identifier of the gNB.
+                      gNB_RSRP:
+                        type: integer
+                        description: Reference Signal Received Power from this gNB in dBm.
+                      gNB_RSSI:
+                        type: integer
+                        description: Reference Signal Strength Indicator from this gNB in dBm.
+                      gNB_RSRQ:
+                        type: integer
+                        description: Reference Signal Stringth Quality from this gNB ins dBm.
+                      connected:
+                        type: boolean
+                        description: Status of the gNB. Can be "true" to connected or "false" to disconnected.
+                    required:
+                      - gNB_ID
+                      - gNB_RSRP
+                  example:
+                    - gNB_ID: "gNB12345"
+                      gNB_RSRP: -96
+                      connected: true
+                    - gNB_ID: "gNB67890"
+                      gNB_RSRP: -100
+                      connected: false
+      responses:
+        '200':
+          description: UE information successfully updated
+          content:
+            application/json:
+              example: { "status": "UE Updated Successfully" }
+        '201':
+          description: UE created successfully
+          content:
+            application/json:
+              example: { "status": "UE Created Successfully" }
+        '400':
+          description: Bad Request, Invalid input. Could be due to invalid IMSI or missing parameters.
+        '500':
+          description: Internal Server Error. Could be due to database issues or other internal problems.
+
+    delete:
+      tags:
+        - UE Management
+      summary: Unregister a mobile UE
+      description: Unregister a mobile UE based on their IMSI.
+      parameters:
+        - name: IMSI
+          in: path
+          required: true
+          schema:
+            type: string
+          description: International Mobile Subscriber Identity to be Unregistrered
+      responses:
+        '200':
+          description: UE successfully unregistrered
+          content:
+            application/json:
+              example: { "status": "UE Unregistrered Successfully" }
+        '404':
+          description: UE not found
+        '500':
+          description: Internal Server Error. Could be due to database issues or other internal problems.
+  /UEs:
+    get:
+      tags:
+        - UE Management
+      summary: List all active UE's IMSIs
+      description: Retrieve a list of all IMSIs that are currently active on this E2 Node.
+      responses:
+        '200':
+          description: Successfully retrieved list. The list could be empty if no IMSIs are active.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imsisActive:
+                    type: array
+                    items:
+                      type: string
+                  message:
+                    type: string
+                example:
+                  imsisActive: ["123456789012345", "234567890123456"]
+                  message: "IMSI list retrieved successfully"
+        '404':
+          description: No UE found on this E2 Node
+        '500':
+          description: Internal Server Error. Could be due to database issues or other internal problems.
+  /E2Node:
+    get:
+      tags:
+        - E2 Node Management
+      summary: Get E2Node informations, for example E2Node ID
+      description: Retrieve the E2Node informations with this E2 Node.
+      responses:
+        '200':
+          description: Successfully retrieved E2Node ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gNBId:
+                    type: string
+              example:
+                gNBId: "gNB1234567"
+        '404':
+          description: gNB ID not found
+        '500':
+          description: Internal Server Error

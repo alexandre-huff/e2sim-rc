@@ -30,6 +30,9 @@
 
 #include <bits/stdc++.h>
 
+// Needs to be included before asn1c, because of the min definition
+#include "environment_manager_impl.h"
+
 #include "e2sim_rc.hpp"
 #include "e2sim.hpp"
 #include "logger.h"
@@ -85,6 +88,7 @@ int main(int argc, char *argv[]) {
 
     logger_force(LOGGER_INFO, "Starting E2 Simulator for E2SM-RC");
 
+    start_environment_manager(8081);
     init_prometheus(metrics);
     start_http_listener();
 
@@ -133,6 +137,8 @@ int main(int argc, char *argv[]) {
     for(E2Sim *e2sim : e2sims) {
         e2sim->shutdown();  // async
     }
+
+    stop_invironment_manager();
 
     for(E2Sim *e2sim : e2sims) {
         delete e2sim;   // sync: unfortunately this has to run here to shutdown all running e2sims quickly

@@ -81,6 +81,7 @@ else()
 	set( CMAKE_CXX_FLAGS "-g " )
 	message( "+++ profiling is off" )
 endif()
+set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17" )
 unset( GPROF CACHE )					# ensure this does not persist
 
 # each binary is built from a subset

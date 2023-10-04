@@ -1,0 +1,121 @@
+openapi: '3.0.2'
+info:
+  title: UE Manager API
+  version: '1.0'
+servers:
+  - url: https://api.server.test/v1
+tags:
+  - name: Testing
+    description: Testing endpoints
+  - name: UE Management
+    description: APIs for UE management
+  - name: E2 Node Management
+    description: APIs for E2 Node management
+paths:
+  /test:
+    get:
+      tags:
+        - Testing
+      summary: Test API connectivity
+      responses:
+        '200':
+          description: API is reachable
+  /UE/handover:
+    post:
+      tags:
+        - UE Management
+      summary: Initiate UE handover
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                imsi:
+                  type: string
+                  description: The International Mobile Subscriber Identity of the UE
+                gnbId:
+                  type: string
+                  description: The gNB ID to which the UE is being handed over
+      responses:
+        '200':
+          description: Handover initiated successfully
+        '400':
+          description: Bad Request. Missing or invalid parameters.
+        '500':
+          description: Internal Server Error. Handover failed.
+  /UE/disconnect:
+    delete:
+      tags:
+        - UE Management
+      summary: Disconnect UE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                imsi:
+                  type: string
+                  description: The International Mobile Subscriber Identity of the UE to disconnect
+      responses:
+        '200':
+          description: UE disconnected successfully
+        '400':
+          description: Bad Request. Missing or invalid parameters.
+        '404':
+          description: Not Found. UE not found.
+        '500':
+          description: Internal Server Error. Disconnection failed.
+  /E2Node/{E2NodeID}:
+    put:
+      tags:
+        - E2 Node Management
+      summary: Register or update a E2Node
+      description: >-
+        If the E2NodeID exists, update the existing E2Node.
+        Otherwise, register a new E2Node with the given E2NodeID.
+      parameters:
+        - name: E2NodeID
+          in: path
+          description: The ID of the E2Node to create or update
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: E2Node updated successfully
+        '201':
+          description: E2Node registered successfully
+        '400':
+          description: Bad Request. Missing or invalid parameters.
+        '500':
+          description: Internal Server Error. E2Node creation or update failed.
+    delete:
+      tags:
+        - E2 Node Management
+      summary: Unregister a E2Node
+      parameters:
+        - name: E2NodeId
+          in: path
+          description: The ID of the E2Node to unregister
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: E2Node Unregister successfully
+        '400':
+          description: Bad Request. Missing or invalid parameters.
+        '404':
+          description: Not Found. E2Node not found.
+        '500':
+          description: Internal Server Error. E2Node unregistration failed.

@@ -18,7 +18,7 @@
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(cpprestsdk REQUIRED)
 
-add_executable( e2sim-rc e2sim_rc.cpp )
+add_executable( e2sim-rc e2sim_rc.cpp environment_manager_impl.cpp )
 
 target_link_libraries( e2sim-rc PRIVATE e2ap_asn1_objects
                                         e2sm_rc_asn1_objects
@@ -28,7 +28,9 @@ target_link_libraries( e2sim-rc PRIVATE e2ap_asn1_objects
                                         def_objects
                                         sctp_objects
                                         messagerouting_objects
-                                        rc_objects )
+                                        rc_objects
+				        e2sim_envman
+				        pistache )
 target_link_libraries( e2sim-rc PRIVATE cpprestsdk::cpprest)
 
 target_include_directories (e2sim-rc PUBLIC
@@ -38,6 +40,7 @@ PRIVATE src)
 
 # Prometheus
 target_include_directories( e2sim-rc PRIVATE /usr/include/prometheus )
+target_include_directories( e2sim-rc PRIVATE environment_manager/src )
 if(PROMETHEUS_CPP_ENABLE_PUSH)
     target_link_libraries(e2sim-rc PRIVATE prometheus-cpp::push)
 endif()
