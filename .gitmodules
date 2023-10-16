@@ -4,3 +4,6 @@
 [submodule "e2sim/3rdparty/nlohmann_json_release"]
 	path = e2sim/3rdparty/nlohmann_json_release
 	url = https://github.com/azadkuh/nlohmann_json_release.git
+[submodule "e2sim/3rdparty/manager_api"]
+	path = e2sim/3rdparty/manager_api
+	url = https://github.com/LABORA-INF-UFG/e2sim_environment_manager.git

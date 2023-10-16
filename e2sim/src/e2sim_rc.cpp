@@ -138,7 +138,7 @@ int main(int argc, char *argv[]) {
         e2sim->shutdown();  // async
     }
 
-    stop_invironment_manager();
+    stop_environment_manager();
 
     for(E2Sim *e2sim : e2sims) {
         delete e2sim;   // sync: unfortunately this has to run here to shutdown all running e2sims quickly

@@ -78,8 +78,9 @@ COPY . /playpen/
 
 WORKDIR /playpen/e2sim
 
-RUN mkdir -p environment_manager/build && cd environment_manager/build \
-	&& cmake ../ && make -j4 && make install
+RUN git submodule update --init --recursive --recommend-shallow 3rdparty/manager_api \
+	&& mkdir 3rdparty/manager_api/simulator/build && cd 3rdparty/manager_api/simulator/build \
+	&& cmake .. && make -j4 && make install && ldconfig
 
 # build and install submodule dependencies
 RUN git submodule update --init --recursive --recommend-shallow 3rdparty/prometheus-cpp \

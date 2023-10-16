@@ -1,5 +1,0 @@
-.openapi-generator-ignore
-.openapi-generator
-external
-main-api-server.cpp
-impl

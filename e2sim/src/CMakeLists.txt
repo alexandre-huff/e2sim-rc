@@ -40,7 +40,6 @@ PRIVATE src)
 
 # Prometheus
 target_include_directories( e2sim-rc PRIVATE /usr/include/prometheus )
-target_include_directories( e2sim-rc PRIVATE environment_manager/src )
 if(PROMETHEUS_CPP_ENABLE_PUSH)
     target_link_libraries(e2sim-rc PRIVATE prometheus-cpp::push)
 endif()
