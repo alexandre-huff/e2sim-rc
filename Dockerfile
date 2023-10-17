@@ -78,16 +78,14 @@ COPY . /playpen/
 
 WORKDIR /playpen/e2sim
 
-RUN git submodule update --init --recursive --recommend-shallow 3rdparty/manager_api \
-	&& mkdir 3rdparty/manager_api/simulator/build && cd 3rdparty/manager_api/simulator/build \
+#RUN git submodule update --init --recursive --recommend-shallow
+
+RUN mkdir 3rdparty/manager_api/api_v1/server/build && cd 3rdparty/manager_api/api_v1/server/build \
 	&& cmake .. && make -j4 && make install && ldconfig
 
 # build and install submodule dependencies
-RUN git submodule update --init --recursive --recommend-shallow 3rdparty/prometheus-cpp \
-    && cd 3rdparty/prometheus-cpp/ && mkdir build && cd build \
+RUN cd 3rdparty/prometheus-cpp/ && mkdir build && cd build \
     && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig
-
-RUN git submodule update --init --recursive --recommend-shallow 3rdparty/nlohmann_json_release
 
 # build and install the e2sim-rc application
 RUN mkdir build && \

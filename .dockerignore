@@ -1,3 +1,2 @@
 .dockerignore
 **/build
-**/3rdparty

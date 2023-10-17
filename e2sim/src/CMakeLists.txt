@@ -29,7 +29,7 @@ target_link_libraries( e2sim-rc PRIVATE e2ap_asn1_objects
                                         sctp_objects
                                         messagerouting_objects
                                         rc_objects
-				        e2sim_envman
+				        envman
 				        pistache )
 target_link_libraries( e2sim-rc PRIVATE cpprestsdk::cpprest)
 
@@ -40,6 +40,9 @@ PRIVATE src)
 
 # Prometheus
 target_include_directories( e2sim-rc PRIVATE /usr/include/prometheus )
+target_include_directories( e2sim-rc PRIVATE /usr/local/include/envman )
+target_include_directories( e2sim-rc PRIVATE /usr/local/include/envman/api )
+target_include_directories( e2sim-rc PRIVATE /usr/local/include/envman/model )
 if(PROMETHEUS_CPP_ENABLE_PUSH)
     target_link_libraries(e2sim-rc PRIVATE prometheus-cpp::push)
 endif()

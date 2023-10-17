@@ -11,13 +11,14 @@
 #include <pistache/http.h>
 #include <pistache/router.h>
 
-#include <TestingApi.h>
-#include <E2NodeManagementApi.h>
-#include <UEManagementApi.h>
+#include <api/TestingApi.h>
+#include <api/ManagementApi.h>
+#include <api/MonitoringApi.h>
 
-#include "_E2Node_get_200_response.h"
-#include "_UE__IMSI__put_request.h"
-#include "_UEs_get_200_response.h"
+#include <model/Ue_descriptor.h>
+#include <model/_UE_get_200_response_inner.h>
+#include <model/_UE__iMSI__anr_put_request.h>
+#include <model/_UE__iMSI__flow_put_request.h>
 
 #include "logger.h"
 
@@ -31,87 +32,81 @@ std::map<std::string, struct ue_data *> ue_map;
 std::thread *pistache_server;
 
 namespace org::openapitools::server::api {
-	using namespace org::openapitools::server::model;
+using namespace org::openapitools::server::model;
+class  TestingApiImpl : public org::openapitools::server::api::TestingApi {
+public:
+    explicit TestingApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr);
+    ~TestingApiImpl() override = default;
 
-	class  TestingApiImpl : public org::openapitools::server::api::TestingApi {
-	public:
-		explicit TestingApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr);
-		~TestingApiImpl() override = default;
+    void test_get(Pistache::Http::ResponseWriter &response);
 
-		void test_get(Pistache::Http::ResponseWriter &response);
+};
 
-	};
+TestingApiImpl::TestingApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr)
+    : TestingApi(rtr)
+{ /* pass */ }
 
-	class  E2NodeManagementApiImpl : public org::openapitools::server::api::E2NodeManagementApi {
-	public:
-		explicit E2NodeManagementApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr);
-		~E2NodeManagementApiImpl() override = default;
-
-		void e2_node_get(Pistache::Http::ResponseWriter &response);
-
-	};
-
-	class  UEManagementApiImpl : public org::openapitools::server::api::UEManagementApi {
-	public:
-		explicit UEManagementApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr);
-		~UEManagementApiImpl() override = default;
-
-		void u_eimsi_delete(const std::string &iMSI, Pistache::Http::ResponseWriter &response);
-		void u_eimsi_put(const std::string &iMSI, const _UE__IMSI__put_request &uEIMSIPutRequest, Pistache::Http::ResponseWriter &response);
-		void u_es_get(Pistache::Http::ResponseWriter &response);
-
-	};
-
-
-	TestingApiImpl::TestingApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr)
-		: TestingApi(rtr)
-	{
-	}
-
-	void TestingApiImpl::test_get(Pistache::Http::ResponseWriter &response) {
-		logger_info("envman: test API invoked");
-		response.send(Pistache::Http::Code::Ok, "API reachable\n");
-	}
-
-	E2NodeManagementApiImpl::E2NodeManagementApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr)
-		: E2NodeManagementApi(rtr)
-	{
-	}
-
-	void E2NodeManagementApiImpl::e2_node_get(Pistache::Http::ResponseWriter &response) {
-		response.send(Pistache::Http::Code::Ok, "Do some magic\n");
-	}
-
-	UEManagementApiImpl::UEManagementApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr)
-		: UEManagementApi(rtr)
-	{
-	}
-
-	void UEManagementApiImpl::u_eimsi_delete(const std::string &iMSI, Pistache::Http::ResponseWriter &response) {
-		response.send(Pistache::Http::Code::Ok, "Do some magic\n");
-	}
-	void UEManagementApiImpl::u_eimsi_put(const std::string &iMSI,
-			const _UE__IMSI__put_request &uEIMSIPutRequest,
-			Pistache::Http::ResponseWriter &response) {
-		struct ue_data *ue_data;
-		auto iterator = ue_map.find(iMSI);
-		if (iterator == ue_map.end())
-			ue_data = (struct ue_data *)malloc(sizeof(struct ue_data));
-		else
-			ue_data = iterator->second;
-
-		ue_data->imsi = iMSI;
-
-		ue_map.insert_or_assign(iMSI, ue_data);
-
-		response.send(Pistache::Http::Code::Ok, "Do some magic\n");
-	}
-
-	void UEManagementApiImpl::u_es_get(Pistache::Http::ResponseWriter &response) {
-		response.send(Pistache::Http::Code::Ok, "Do some magic\n");
-	}
-
+void TestingApiImpl::test_get(Pistache::Http::ResponseWriter &response) {
+    response.send(Pistache::Http::Code::Ok, "Do some magic\n");
 }
+
+class  ManagementApiImpl : public org::openapitools::server::api::ManagementApi {
+public:
+    explicit ManagementApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr);
+    ~ManagementApiImpl() override = default;
+
+    void u_eimsi_admission_delete(const std::string &iMSI, Pistache::Http::ResponseWriter &response);
+    void u_eimsi_admission_put(const std::string &iMSI, const Ue_descriptor &ueDescriptor, Pistache::Http::ResponseWriter &response);
+    void u_eimsi_anr_put(const std::string &iMSI, const _UE__iMSI__anr_put_request &uEIMSIAnrPutRequest, Pistache::Http::ResponseWriter &response);
+    void u_eimsi_flow_put(const std::string &iMSI, const _UE__iMSI__flow_put_request &uEIMSIFlowPutRequest, Pistache::Http::ResponseWriter &response);
+
+};
+
+ManagementApiImpl::ManagementApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr)
+    : ManagementApi(rtr)
+{ /* pass */ }
+void ManagementApiImpl::u_eimsi_admission_delete(const std::string &iMSI, Pistache::Http::ResponseWriter &response) {
+    response.send(Pistache::Http::Code::Ok, "Do some magic\n");
+}
+
+void ManagementApiImpl::u_eimsi_admission_put(const std::string &iMSI, const Ue_descriptor &ueDescriptor, Pistache::Http::ResponseWriter &response) {
+    response.send(Pistache::Http::Code::Ok, "Do some magic\n");
+}
+
+void ManagementApiImpl::u_eimsi_anr_put(const std::string &iMSI, const _UE__iMSI__anr_put_request &uEIMSIAnrPutRequest, Pistache::Http::ResponseWriter &response) {
+    response.send(Pistache::Http::Code::Ok, "Do some magic\n");
+}
+
+void ManagementApiImpl::u_eimsi_flow_put(const std::string &iMSI, const _UE__iMSI__flow_put_request &uEIMSIFlowPutRequest, Pistache::Http::ResponseWriter &response) {
+    response.send(Pistache::Http::Code::Ok, "Do some magic\n");
+}
+
+class  MonitoringApiImpl : public org::openapitools::server::api::MonitoringApi {
+public:
+    explicit MonitoringApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr);
+    ~MonitoringApiImpl() override = default;
+
+    void u_e_get(Pistache::Http::ResponseWriter &response);
+    void u_eimsi_info_get(const std::string &iMSI, Pistache::Http::ResponseWriter &response);
+
+};
+
+MonitoringApiImpl::MonitoringApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr)
+    : MonitoringApi(rtr)
+{ /* pass */ }
+
+void MonitoringApiImpl::u_e_get(Pistache::Http::ResponseWriter &response) {
+    response.send(Pistache::Http::Code::Ok, "Do some magic\n");
+}
+
+void MonitoringApiImpl::u_eimsi_info_get(const std::string &iMSI, Pistache::Http::ResponseWriter &response) {
+    response.send(Pistache::Http::Code::Ok, "Do some magic\n");
+}
+
+
+
+} //namespace org::openapitools::server::api
+
 
 using namespace org::openapitools::server::api;
 
@@ -132,9 +127,9 @@ static void run_environment_manager(uint16_t port) {
 	httpEndpoint->init(opts);
 	auto apiImpls = std::vector<std::shared_ptr<ApiBase>>();
 
-	apiImpls.push_back(std::make_shared<E2NodeManagementApiImpl>(router));
+	apiImpls.push_back(std::make_shared<ManagementApiImpl>(router));
 	apiImpls.push_back(std::make_shared<TestingApiImpl>(router));
-	apiImpls.push_back(std::make_shared<UEManagementApiImpl>(router));
+	apiImpls.push_back(std::make_shared<MonitoringApiImpl>(router));
 
 	for (auto api : apiImpls) {
 		api->init();
