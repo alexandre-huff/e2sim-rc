@@ -15,6 +15,7 @@
 #include <api/ManagementApi.h>
 #include <api/MonitoringApi.h>
 
+#include <_endpoints_get_200_response.h>
 #include <model/Ue_descriptor.h>
 #include <model/_UE_get_200_response.h>
 #include <model/_UE__iMSI__anr_put_request.h>
@@ -65,7 +66,7 @@ public:
     ~TestingApiImpl() override = default;
 
     void test_get(Pistache::Http::ResponseWriter &response);
-
+    void endpoints_get(Pistache::Http::ResponseWriter &response);
 };
 
 TestingApiImpl::TestingApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rtr)
@@ -74,6 +75,81 @@ TestingApiImpl::TestingApiImpl(const std::shared_ptr<Pistache::Rest::Router>& rt
 
 void TestingApiImpl::test_get(Pistache::Http::ResponseWriter &response) {
     response.send(Pistache::Http::Code::Ok, "Do some magic\n");
+}
+
+void TestingApiImpl::endpoints_get(Pistache::Http::ResponseWriter &response) {
+    std::vector < _endpoints_get_200_response_endpoints_inner> endpoints;
+    { /* blocks to limit scope and not blow up the stack */
+        _endpoints_get_200_response_endpoints_inner inner;
+        inner.setMethod("GET");
+        inner.setUri("/test");
+        inner.setDescription("Test if the API is available");
+        endpoints.push_back(inner);
+    }
+
+    { /* blocks to limit scope and not blow up the stack */
+        _endpoints_get_200_response_endpoints_inner inner;
+        inner.setMethod("GET");
+        inner.setUri("/endpoints");
+        inner.setDescription("List the endpoints available");
+        endpoints.push_back(inner);
+    }
+
+    { /* blocks to limit scope and not blow up the stack */
+        _endpoints_get_200_response_endpoints_inner inner;
+        inner.setMethod("PUT");
+        inner.setUri("/UE/{iMSI}/admission");
+        inner.setDescription("Associate an UE with the e2node");
+        endpoints.push_back(inner);
+    }
+
+    { /* blocks to limit scope and not blow up the stack */
+        _endpoints_get_200_response_endpoints_inner inner;
+        inner.setMethod("DELETE");
+        inner.setUri("/UE/{iMSI}/admission");
+        inner.setDescription("Disassociate an UE with the e2node");
+        endpoints.push_back(inner);
+    }
+
+    { /* blocks to limit scope and not blow up the stack */
+        _endpoints_get_200_response_endpoints_inner inner;
+        inner.setMethod("PUT");
+        inner.setUri("/UE/{iMSI}/anr");
+        inner.setDescription("Alter the ANR information for this UE");
+        endpoints.push_back(inner);
+    }
+
+    { /* blocks to limit scope and not blow up the stack */
+        _endpoints_get_200_response_endpoints_inner inner;
+        inner.setMethod("PUT");
+        inner.setUri("/UE/{iMSI}/flow");
+        inner.setDescription("Alter the flow information for this UE");
+        endpoints.push_back(inner);
+    }
+
+    { /* blocks to limit scope and not blow up the stack */
+        _endpoints_get_200_response_endpoints_inner inner;
+        inner.setMethod("GET");
+        inner.setUri("/UE/{iMSI}/info");
+        inner.setDescription("Retrieve the information for an UE");
+        endpoints.push_back(inner);
+    }
+
+    { /* blocks to limit scope and not blow up the stack */
+        _endpoints_get_200_response_endpoints_inner inner;
+        inner.setMethod("GET");
+        inner.setUri("/UE");
+        inner.setDescription("List the UEs associated with this e2node");
+        endpoints.push_back(inner);
+    }
+
+    _endpoints_get_200_response response_data;
+    response_data.setEndpoints(endpoints);
+
+    nlohmann::json j;
+    to_json(j, response_data);
+
+    response.send(Pistache::Http::Code::Ok, to_string(j));
 }
 
 class  ManagementApiImpl : public org::openapitools::server::api::ManagementApi {
