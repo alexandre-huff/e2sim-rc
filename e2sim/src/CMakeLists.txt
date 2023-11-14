@@ -18,7 +18,7 @@
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(cpprestsdk REQUIRED)
 
-add_executable( e2sim-rc e2sim_rc.cpp environment_manager_impl.cpp )
+add_executable( e2sim-rc e2sim_rc.cpp )
 
 target_link_libraries( e2sim-rc PRIVATE e2ap_asn1_objects
                                         e2sm_rc_asn1_objects

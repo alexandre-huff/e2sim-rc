@@ -31,7 +31,7 @@
 #include <bits/stdc++.h>
 
 // Needs to be included before asn1c, because of the min definition
-#include "environment_manager_impl.h"
+#include <envman/environment_manager.h>
 
 #include "e2sim_rc.hpp"
 #include "e2sim.hpp"
@@ -61,6 +61,76 @@ extern "C" {
 args_t cmd_args;        // command line arguments
 metrics_t metrics;
 
+class EnvmanObserver : public EnvironmentManagerObserver {
+public:
+    EnvmanObserver() { /* pass */ }
+    ~EnvmanObserver() { /* pass */ }
+
+    /**
+     * Notifies the observer about a new ANR update.
+     * @iMSI UE unique identifier
+     * @entries ANR entries
+     */
+    virtual void anrUpdate(const std::string iMSI,
+                           const std::map<std::string, std::shared_ptr<anr_entry>> &entries)
+    {
+        logger_force(LOGGER_INFO, "ANR update from %s", iMSI.c_str());
+        /* Do your stuff here */
+    }
+
+    /**
+     * Notifies the observer about a new Flow update.
+     * @iMSI UE unique identifier
+     * @entry Flow descriptor
+     */
+    virtual void flowUpdate(const std::string iMSI,
+                            const flow_entry &entry)
+    {
+        logger_force(LOGGER_INFO, "Flow update from %s", iMSI.c_str());
+        /* Do your stuff here */
+    }
+
+    /**
+     * Notifies the observer about a new UE requessting association.
+     * @ue The UE data
+     */
+    virtual void associationRequest(const std::shared_ptr<ue_data> ue)
+    {
+        logger_force(LOGGER_INFO, "Association request from %s", ue->imsi.c_str());
+        /* Do your stuff here */
+    }
+
+    /**
+     * Notifiess the observer about a new UE requesting disassociation.
+     * @ue The UE description
+     */
+    virtual void disassociationRequest(const std::shared_ptr<ue_data> ue)
+    {
+        logger_force(LOGGER_INFO, "Disassociation request from %s", ue->imsi.c_str());
+        /* Do your stuff here */
+    }
+};
+
+EnvironmentManager *envman;
+std::thread *envman_thread;
+
+void run_envman(uint16_t port)
+{
+    std::shared_ptr<EnvmanObserver> observer = std::make_shared<EnvmanObserver>();
+    envman = new EnvironmentManager(port, 2, observer);
+    envman->start();
+}
+
+void start_envman(uint16_t port)
+{
+    envman_thread = new std::thread(run_envman, port);
+}
+
+void stop_envman()
+{
+    envman->stop();
+}
+
 std::unordered_map<unsigned int, unsigned long> sent_ts_map; // timestamp of sent messages (INSERT) in nanoseconds
 std::unordered_map<unsigned int, unsigned long> recv_ts_map; // timestamp of received messages (CONTROL) in nanoseconds
 
@@ -88,7 +158,7 @@ int main(int argc, char *argv[]) {
 
     logger_force(LOGGER_INFO, "Starting E2 Simulator for E2SM-RC");
 
-    start_environment_manager(8081);
+    start_envman(8081);
     init_prometheus(metrics);
     start_http_listener();
 
@@ -138,7 +208,7 @@ int main(int argc, char *argv[]) {
         e2sim->shutdown();  // async
     }
 
-    stop_environment_manager();
+    stop_envman();
 
     for(E2Sim *e2sim : e2sims) {
         delete e2sim;   // sync: unfortunately this has to run here to shutdown all running e2sims quickly
