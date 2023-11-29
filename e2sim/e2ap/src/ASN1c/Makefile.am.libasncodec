@@ -19,10 +19,49 @@ ASN_MODULE_SRCS=	\
 	RICsubscriptionDeleteRequired.c	\
 	RICsubscription-List-withCause.c	\
 	RICsubscription-withCause-Item.c	\
+	RICsubscriptionModificationRequest.c	\
+	RICactions-ToBeRemovedForModification-List.c	\
+	RICaction-ToBeRemovedForModification-Item.c	\
+	RICactions-ToBeModifiedForModification-List.c	\
+	RICaction-ToBeModifiedForModification-Item.c	\
+	RICactions-ToBeAddedForModification-List.c	\
+	RICaction-ToBeAddedForModification-Item.c	\
+	RICsubscriptionModificationResponse.c	\
+	RICactions-RemovedForModification-List.c	\
+	RICaction-RemovedForModification-Item.c	\
+	RICactions-FailedToBeRemovedForModification-List.c	\
+	RICaction-FailedToBeRemovedForModification-Item.c	\
+	RICactions-ModifiedForModification-List.c	\
+	RICaction-ModifiedForModification-Item.c	\
+	RICactions-FailedToBeModifiedForModification-List.c	\
+	RICaction-FailedToBeModifiedForModification-Item.c	\
+	RICactions-AddedForModification-List.c	\
+	RICaction-AddedForModification-Item.c	\
+	RICactions-FailedToBeAddedForModification-List.c	\
+	RICaction-FailedToBeAddedForModification-Item.c	\
+	RICsubscriptionModificationFailure.c	\
+	RICsubscriptionModificationRequired.c	\
+	RICactions-RequiredToBeModified-List.c	\
+	RICaction-RequiredToBeModified-Item.c	\
+	RICactions-RequiredToBeRemoved-List.c	\
+	RICaction-RequiredToBeRemoved-Item.c	\
+	RICsubscriptionModificationConfirm.c	\
+	RICactions-ConfirmedForModification-List.c	\
+	RICaction-ConfirmedForModification-Item.c	\
+	RICactions-RefusedToBeModified-List.c	\
+	RICaction-RefusedToBeModified-Item.c	\
+	RICactions-ConfirmedForRemoval-List.c	\
+	RICaction-ConfirmedForRemoval-Item.c	\
+	RICactions-RefusedToBeRemoved-List.c	\
+	RICaction-RefusedToBeRemoved-Item.c	\
+	RICsubscriptionModificationRefuse.c	\
 	RICindication.c	\
 	RICcontrolRequest.c	\
 	RICcontrolAcknowledge.c	\
 	RICcontrolFailure.c	\
+	RICQueryRequest.c	\
+	RICQueryResponse.c	\
+	RICQueryFailure.c	\
 	ErrorIndication.c	\
 	E2setupRequest.c	\
 	E2setupResponse.c	\
@@ -115,6 +154,7 @@ ASN_MODULE_SRCS=	\
 	RANfunctionOID.c	\
 	RANfunctionRevision.c	\
 	RICactionDefinition.c	\
+	RICactionExecutionOrder.c	\
 	RICactionID.c	\
 	RICactionType.c	\
 	RICcallProcessID.c	\
@@ -128,8 +168,12 @@ ASN_MODULE_SRCS=	\
 	RICindicationSN.c	\
 	RICindicationType.c	\
 	RICrequestID.c	\
+	RICsubscriptionTime.c	\
 	RICsubsequentAction.c	\
 	RICsubsequentActionType.c	\
+	RICqueryHeader.c	\
+	RICqueryDefinition.c	\
+	RICqueryOutcome.c	\
 	RICtimeToWait.c	\
 	TimeToWait.c	\
 	TNLinformation.c	\
@@ -170,10 +214,49 @@ ASN_MODULE_HDRS=	\
 	RICsubscriptionDeleteRequired.h	\
 	RICsubscription-List-withCause.h	\
 	RICsubscription-withCause-Item.h	\
+	RICsubscriptionModificationRequest.h	\
+	RICactions-ToBeRemovedForModification-List.h	\
+	RICaction-ToBeRemovedForModification-Item.h	\
+	RICactions-ToBeModifiedForModification-List.h	\
+	RICaction-ToBeModifiedForModification-Item.h	\
+	RICactions-ToBeAddedForModification-List.h	\
+	RICaction-ToBeAddedForModification-Item.h	\
+	RICsubscriptionModificationResponse.h	\
+	RICactions-RemovedForModification-List.h	\
+	RICaction-RemovedForModification-Item.h	\
+	RICactions-FailedToBeRemovedForModification-List.h	\
+	RICaction-FailedToBeRemovedForModification-Item.h	\
+	RICactions-ModifiedForModification-List.h	\
+	RICaction-ModifiedForModification-Item.h	\
+	RICactions-FailedToBeModifiedForModification-List.h	\
+	RICaction-FailedToBeModifiedForModification-Item.h	\
+	RICactions-AddedForModification-List.h	\
+	RICaction-AddedForModification-Item.h	\
+	RICactions-FailedToBeAddedForModification-List.h	\
+	RICaction-FailedToBeAddedForModification-Item.h	\
+	RICsubscriptionModificationFailure.h	\
+	RICsubscriptionModificationRequired.h	\
+	RICactions-RequiredToBeModified-List.h	\
+	RICaction-RequiredToBeModified-Item.h	\
+	RICactions-RequiredToBeRemoved-List.h	\
+	RICaction-RequiredToBeRemoved-Item.h	\
+	RICsubscriptionModificationConfirm.h	\
+	RICactions-ConfirmedForModification-List.h	\
+	RICaction-ConfirmedForModification-Item.h	\
+	RICactions-RefusedToBeModified-List.h	\
+	RICaction-RefusedToBeModified-Item.h	\
+	RICactions-ConfirmedForRemoval-List.h	\
+	RICaction-ConfirmedForRemoval-Item.h	\
+	RICactions-RefusedToBeRemoved-List.h	\
+	RICaction-RefusedToBeRemoved-Item.h	\
+	RICsubscriptionModificationRefuse.h	\
 	RICindication.h	\
 	RICcontrolRequest.h	\
 	RICcontrolAcknowledge.h	\
 	RICcontrolFailure.h	\
+	RICQueryRequest.h	\
+	RICQueryResponse.h	\
+	RICQueryFailure.h	\
 	ErrorIndication.h	\
 	E2setupRequest.h	\
 	E2setupResponse.h	\
@@ -266,6 +349,7 @@ ASN_MODULE_HDRS=	\
 	RANfunctionOID.h	\
 	RANfunctionRevision.h	\
 	RICactionDefinition.h	\
+	RICactionExecutionOrder.h	\
 	RICactionID.h	\
 	RICactionType.h	\
 	RICcallProcessID.h	\
@@ -279,8 +363,12 @@ ASN_MODULE_HDRS=	\
 	RICindicationSN.h	\
 	RICindicationType.h	\
 	RICrequestID.h	\
+	RICsubscriptionTime.h	\
 	RICsubsequentAction.h	\
 	RICsubsequentActionType.h	\
+	RICqueryHeader.h	\
+	RICqueryDefinition.h	\
+	RICqueryOutcome.h	\
 	RICtimeToWait.h	\
 	TimeToWait.h	\
 	TNLinformation.h	\
