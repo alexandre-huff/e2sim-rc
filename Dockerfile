@@ -34,8 +34,9 @@
 
 # the builder has: git, wget, cmake, gcc/g++, make, python2/3.
 #
-ARG CONTAINER_PULL_REGISTRY=nexus3.o-ran-sc.org:10002
-FROM ${CONTAINER_PULL_REGISTRY}/o-ran-sc/bldr-ubuntu20-c-go:1.0.0 as e2sim-base
+# ARG CONTAINER_PULL_REGISTRY=nexus3.o-ran-sc.org:10002
+# FROM ${CONTAINER_PULL_REGISTRY}/o-ran-sc/bldr-ubuntu20-c-go:1.0.0 as e2sim-base
+FROM ubuntu:22.04 as e2sim-base
 
 WORKDIR /playpen
 
@@ -97,7 +98,7 @@ RUN mkdir build && \
 #
 # generating the final and smaller image with only the required artifacts
 #
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 RUN apt-get update \
 	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -112,4 +113,4 @@ COPY --from=e2sim-rc /usr/local/lib /usr/local/lib
 RUN ldconfig
 
 # CMD e2sim-rc 10.110.102.29 -p 36422
-CMD sleep 100000000
+CMD while true; do sleep 3600; done

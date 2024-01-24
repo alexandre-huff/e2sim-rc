@@ -19,19 +19,25 @@
 # For clarity: this generates object, not a lib as the CM command implies.
 #
 
-add_library( base_objects OBJECT e2sim.cpp)
+add_library( base_objects OBJECT e2sim.cpp )
 
-target_link_libraries( base_objects PRIVATE e2ap_asn1_objects
-                                            logger_objects
-                                            def_objects
-                                            sctp_objects
-                                            encoding_objects
-                                            messagerouting_objects )
+target_link_libraries( base_objects PRIVATE logger_objects
+  ranfunction_objects
+  e2sm_objects
+  procedure_objects
+  def_objects
+  e2ap_asn1_objects
+  e2model_objects
+  sctp_objects
+  messagerouting_objects
+  encoding_objects
+  common_objects
+	)
 
 target_include_directories (base_objects PUBLIC
-$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-$<INSTALL_INTERFACE:include>
-PRIVATE src)
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include> )
+  # PRIVATE src )
 
 if( DEV_PKG )
   install( FILES

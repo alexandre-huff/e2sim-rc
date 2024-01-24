@@ -70,7 +70,7 @@ extern "C" {
 
 #define LOGGER_USE_COLOR		// comment if too fancy, or compile with -DLOGGER_USE_COLOR
 
-#define LOGGER_VERSION "0.2.1"
+#define LOGGER_VERSION "0.2.2"
 
 #define LOGGER_PADDING 20
 
@@ -89,8 +89,12 @@ extern "C" {
 
 #if LOGGER_LEVEL >= LOGGER_TRACE
 #define logger_trace(message, args...) logger_log(LOGGER_TRACE, __FILE__, __LINE__, message "\n", ## args)
+#define LOGGER_TRACE_FUNCTION_IN logger_trace("start function %s", __func__);
+#define LOGGER_TRACE_FUNCTION_OUT logger_trace("end function %s", __func__);
 #else
 #define logger_trace(message, args...)
+#define LOGGER_TRACE_FUNCTION_IN
+#define LOGGER_TRACE_FUNCTION_OUT
 #endif
 
 #if LOGGER_LEVEL >= LOGGER_DEBUG

@@ -22,9 +22,11 @@ file(GLOB SOURCES "*.c")
 file(GLOB HEADERS "*.h")
 
 add_library( e2sm_rc_asn1_objects STATIC ${SOURCES} ${HEADERS} )
+
 target_include_directories (e2sm_rc_asn1_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
-  PRIVATE src)
+  # PRIVATE src
+  )
 
 

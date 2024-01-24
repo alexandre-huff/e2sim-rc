@@ -23,7 +23,7 @@
 #ifndef E2SIM_SCTP_H
 #define E2SIM_SCTP_H
 
-void *handle_connection(void *thread_data);
+// void *handle_connection(void *thread_data);
 
 int sctp_start_server(const char *server_ip_str, const int server_port);
 

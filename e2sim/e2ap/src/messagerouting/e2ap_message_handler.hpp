@@ -21,7 +21,8 @@
 #define E2AP_MESSAGE_HANDLER_HPP
 
 #include "e2sim.hpp"
-#include "e2sim_sctp.hpp"
+// #include "e2sim_sctp.hpp"
+#include "messages.hpp"
 
 
 extern "C" {
@@ -31,22 +32,15 @@ extern "C" {
 
 void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, struct timespec *ts);
 
-void e2ap_handle_X2SetupRequest(E2AP_PDU_t* pdu, int &socket_fd);
+// void e2ap_handle_E2SetupRequest(E2AP_PDU_t* pdu, int &socket_fd);
 
-void e2ap_handle_X2SetupResponse(E2AP_PDU_t* pdu, int &socket_fd);
+// void e2ap_handle_RICSubscriptionRequest(E2AP_PDU_t* pdu, int &socket_fd);
 
-void e2ap_handle_ENDCX2SetupRequest(E2AP_PDU_t* pdu, int &socket_fd);
+e2sim::messages::RICSubscriptionRequest *e2ap_handle_RICSubscriptionRequest(E2AP_PDU_t *pdu);
+e2sim::messages::RICSubscriptionDeleteRequest *e2ap_handle_RICSubscriptionDeleteRequest(E2AP_PDU_t *pdu);
 
-void e2ap_handle_E2SetupRequest(E2AP_PDU_t* pdu, int &socket_fd);
+// void e2ap_handle_E2SeviceRequest(E2AP_PDU_t* pdu, int &socket_fd, E2Sim *e2sim);
 
-void e2ap_handle_RICSubscriptionRequest(E2AP_PDU_t* pdu, int &socket_fd);
-
-void e2ap_handle_RICSubscriptionRequest_securityDemo(E2AP_PDU_t* pdu, int &socket_fd);
-
-void e2ap_handle_ResourceStatusRequest(E2AP_PDU_t* pdu, int &socket_fd);
-
-void e2ap_handle_E2SeviceRequest(E2AP_PDU_t* pdu, int &socket_fd, E2Sim *e2sim);
-
-void e2ap_send_e2nodeConfigUpdate(int &socket_fd);
+// void e2ap_send_e2nodeConfigUpdate(int &socket_fd);
 
 #endif

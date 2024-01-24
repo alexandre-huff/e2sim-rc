@@ -22,6 +22,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <vector>
 #include <signal.h>
 #include <chrono>
@@ -44,35 +45,11 @@ std::condition_variable cond; // condition to wait/awake the connection helper t
 
   throws std::invalid_argument
 */
-E2Sim::E2Sim(const char *mcc, const char *mnc, uint32_t gnb_id) {
+
+E2Sim::E2Sim(std::shared_ptr<GlobalE2NodeData> &global_data) {
   logger_trace("in %s constructor", __func__);
 
-  if (strlen(mcc) != 3) {
-    throw invalid_argument("MCC requires 3 digits");
-  }
-
-  size_t mnc_len = strlen(mnc);
-  if (mnc_len != 2 && mnc_len != 3) {
-    throw invalid_argument("MNC requires 2 or 3 digits");
-  }
-
-  if (gnb_id >= 1<<29) {
-    throw invalid_argument("maximum gnb_id value is 2^29-1");
-  }
-
-  // encoding PLMN identity
-  this->plmn_id = encoding::encodePlmnId(mcc, mnc);
-
-  // encoding gNodeB identity
-  memset(&this->gnb_id, 0, sizeof(BIT_STRING_t));
-  this->gnb_id.buf = (uint8_t *) calloc(1, 4); // maximum size is 32 bits
-  this->gnb_id.size = 4;
-  this->gnb_id.bits_unused = 3; // we are using 29 bits for gnb_id so that 7 bits (3+4) is left for the NR Cell Identity
-  gnb_id = ((gnb_id & 0X1FFFFFFF) << 3);
-  this->gnb_id.buf[0] = ((gnb_id & 0XFF000000) >> 24);
-  this->gnb_id.buf[1] = ((gnb_id & 0X00FF0000) >> 16);
-  this->gnb_id.buf[2] = ((gnb_id & 0X0000FF00) >> 8);
-  this->gnb_id.buf[3] = (gnb_id & 0X000000FF);
+  globalE2NodeData = global_data;
 
   retryConnection = true;
   client_fd = -1;
@@ -81,108 +58,130 @@ E2Sim::E2Sim(const char *mcc, const char *mnc, uint32_t gnb_id) {
 }
 
 E2Sim::~E2Sim() {
-  logger_trace("in func %s", __func__);
+    logger_trace("in func %s", __func__);
 
-  if(sctp_listener_th.joinable()) {
-    sctp_listener_th.join();
+    if (sctp_listener_th.joinable()) {
+        sctp_listener_th.join();
+    }
+
+    // for(auto reg_func : ran_functions_registered ) {
+    //   ASN_STRUCT_RESET(asn_DEF_PrintableString, &reg_func.second->oid);
+    //   ASN_STRUCT_RESET(asn_DEF_OCTET_STRING, &reg_func.second->ran_function_ostr);
+    //   free(reg_func.second);
+    // }
+
+    logger_debug("about to close client_fd %d", client_fd);
+    close(client_fd);
+}
+
+std::shared_ptr<RANFunction> const E2Sim::getRanFunction(long func_id) {
+  const auto &func = ranFunctions.find(func_id);
+  if (func == ranFunctions.end()) {
+    return std::shared_ptr<RANFunction>();
   }
-  ASN_STRUCT_FREE(asn_DEF_PLMN_Identity, this->plmn_id);
-  ASN_STRUCT_RESET(asn_DEF_BIT_STRING, &this->gnb_id);
-
-  for(auto reg_func : ran_functions_registered ) {
-    ASN_STRUCT_RESET(asn_DEF_PrintableString, &reg_func.second->oid);
-    ASN_STRUCT_RESET(asn_DEF_OCTET_STRING, &reg_func.second->ran_function_ostr);
-    free(reg_func.second);
-  }
-
-  logger_debug("about to close client_fd %d", client_fd);
-  close(client_fd);
-}
-
-std::unordered_map<long, encoded_ran_function_t *> E2Sim::getRegistered_ran_functions() {
-  return ran_functions_registered;
-}
-
-void E2Sim::register_subscription_callback(long func_id, SubscriptionCallback cb) {
-  logger_debug("about to register callback for subscription for func id %ld", func_id);
-  subscription_callbacks[func_id] = cb;
-}
-
-void E2Sim::register_subscription_delete_callback(long func_id, SubscriptionDeleteCallback cb) {
-  logger_debug("about to register callback for subscription delete for func id %ld", func_id);
-  subscription_delete_callbacks[func_id] = cb;
-}
-
-void E2Sim::register_control_callback(long func_id, ControlCallback cb) {
-  logger_debug("about to register callback for control for func id %ld", func_id);
-  control_callbacks[func_id] = cb;
-}
-
-SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
-  logger_debug("we are getting the subscription callback for func id %ld", func_id);
-  SubscriptionCallback cb;
-
-  try {
-    cb = subscription_callbacks.at(func_id);
-  } catch(const std::out_of_range& e) {
-    throw std::out_of_range("Function ID is not registered");
-  }
-  return cb;
-
-}
-
-SubscriptionDeleteCallback E2Sim::get_subscription_delete_callback(long func_id) {
-  logger_debug("we are getting the subscription delete callback for func id %ld", func_id);
-  SubscriptionDeleteCallback cb;
-
-  try {
-    cb = subscription_delete_callbacks.at(func_id);
-  } catch(const std::out_of_range& e) {
-    throw std::out_of_range("Function ID is not registered");
-  }
-  return cb;
-
-}
-
-ControlCallback E2Sim::get_control_callback(long func_id) {
-  logger_debug("we are getting the control callback for func id %ld", func_id);
-  ControlCallback cb;
-
-  try {
-    cb = control_callbacks.at(func_id);
-  } catch(const std::out_of_range& e) {
-    throw std::out_of_range("Function ID is not registered");
-  }
-  return cb;
-
+  return func->second;
 }
 
 /*
-  Return a copy of the PLMN Indentity.
-  It is the caller responsibility to free the returned pointer.
+  Returns all registered ran functions
 */
-PLMN_Identity_t *E2Sim::get_plmn_id_cpy() {
-  // we return a copy since ASN structs are freed after encoding and we don't want to loose this value
-  auto *plmn = (PLMN_Identity_t *) calloc(1, sizeof(PLMN_Identity_t));
-  plmn->buf = (uint8_t *) calloc(plmn_id->size, sizeof(uint8_t));
-  plmn->size = plmn_id->size;
-  memcpy(plmn->buf, plmn_id->buf, plmn->size);
-  return plmn;
+std::vector<std::shared_ptr<RANFunction>> const E2Sim::getRanFunctions() const {
+  std::vector<std::shared_ptr<RANFunction>> list;
+  for (auto &func : ranFunctions) {
+      list.emplace_back(func.second);
+  }
+  return std::move(list);
 }
 
-/*
-  Return a copy of the Global gNodeb ID.
-  It is the caller responsibility to free the returned pointer.
-*/
-BIT_STRING_t *E2Sim::get_gnb_id_cpy() {
-  // we return a copy since ASN structs are freed after encoding and we don't want to loose this value
-  auto *gnb = (BIT_STRING_t *) calloc(1, sizeof(BIT_STRING_t));
-  gnb->buf = (uint8_t *) calloc(gnb_id.size, sizeof(uint8_t));
-  gnb->size = gnb_id.size;
-  gnb->bits_unused = gnb_id.bits_unused;
-  memcpy(gnb->buf, gnb_id.buf, gnb->size);
-  return gnb;
+bool E2Sim::addRanFunction(std::shared_ptr<RANFunction> function) {
+  auto ret = ranFunctions.insert({function->getRanFunctionID(), function});
+  return ret.second;
 }
+
+// std::unordered_map<long, encoded_ran_function_t *> E2Sim::getRegistered_ran_functions() {
+//   return ran_functions_registered;
+// }
+
+// void E2Sim::register_subscription_callback(long func_id, SubscriptionCallback cb) {
+//   logger_debug("about to register callback for subscription for func id %ld", func_id);
+//   subscription_callbacks[func_id] = cb;
+// }
+
+// void E2Sim::register_subscription_delete_callback(long func_id, SubscriptionDeleteCallback cb) {
+//   logger_debug("about to register callback for subscription delete for func id %ld", func_id);
+//   subscription_delete_callbacks[func_id] = cb;
+// }
+
+// void E2Sim::register_control_callback(long func_id, ControlCallback cb) {
+//   logger_debug("about to register callback for control for func id %ld", func_id);
+//   control_callbacks[func_id] = cb;
+// }
+
+// SubscriptionCallback E2Sim::get_subscription_callback(long func_id) {
+//   logger_debug("we are getting the subscription callback for func id %ld", func_id);
+//   SubscriptionCallback cb;
+
+//   try {
+//     cb = subscription_callbacks.at(func_id);
+//   } catch(const std::out_of_range& e) {
+//     throw std::out_of_range("Function ID is not registered");
+//   }
+//   return cb;
+
+// }
+
+// SubscriptionDeleteCallback E2Sim::get_subscription_delete_callback(long func_id) {
+//   logger_debug("we are getting the subscription delete callback for func id %ld", func_id);
+//   SubscriptionDeleteCallback cb;
+
+//   try {
+//     cb = subscription_delete_callbacks.at(func_id);
+//   } catch(const std::out_of_range& e) {
+//     throw std::out_of_range("Function ID is not registered");
+//   }
+//   return cb;
+
+// }
+
+// ControlCallback E2Sim::get_control_callback(long func_id) {
+//   logger_debug("we are getting the control callback for func id %ld", func_id);
+//   ControlCallback cb;
+
+//   try {
+//     cb = control_callbacks.at(func_id);
+//   } catch(const std::out_of_range& e) {
+//     throw std::out_of_range("Function ID is not registered");
+//   }
+//   return cb;
+
+// }
+
+// /*
+//   Return a copy of the PLMN Indentity.
+//   It is the caller responsibility to free the returned pointer.
+// */
+// PLMN_Identity_t *E2Sim::get_plmn_id_cpy() {
+//   // we return a copy since ASN structs are freed after encoding and we don't want to loose this value
+//   auto *plmn = (PLMN_Identity_t *) calloc(1, sizeof(PLMN_Identity_t));
+//   plmn->buf = (uint8_t *) calloc(plmn_id->size, sizeof(uint8_t));
+//   plmn->size = plmn_id->size;
+//   memcpy(plmn->buf, plmn_id->buf, plmn->size);
+//   return plmn;
+// }
+
+// /*
+//   Return a copy of the Global gNodeb ID.
+//   It is the caller responsibility to free the returned pointer.
+// */
+// BIT_STRING_t *E2Sim::get_gnb_id_cpy() {
+//   // we return a copy since ASN structs are freed after encoding and we don't want to loose this value
+//   auto *gnb = (BIT_STRING_t *) calloc(1, sizeof(BIT_STRING_t));
+//   gnb->buf = (uint8_t *) calloc(gnb_id.size, sizeof(uint8_t));
+//   gnb->size = gnb_id.size;
+//   gnb->bits_unused = gnb_id.bits_unused;
+//   memcpy(gnb->buf, gnb_id.buf, gnb->size);
+//   return gnb;
+// }
 
 bool E2Sim::is_e2term_endpoint(std::string addr, int port) {
   if (e2_addr.compare(addr) == 0 && e2_port == port) {
@@ -192,21 +191,21 @@ bool E2Sim::is_e2term_endpoint(std::string addr, int port) {
   return false;
 }
 
-void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func)
-{
+// void E2Sim::register_e2sm(long func_id, encoded_ran_function_t *ran_func)
+// {
 
-  //Error conditions:
-  //If we already have an entry for func_id
+//   //Error conditions:
+//   //If we already have an entry for func_id
 
-  logger_debug("about to register e2sm func id %ld", func_id);
+//   logger_debug("about to register e2sm func id %ld", func_id);
 
-  auto res = ran_functions_registered.find(func_id);
-  if (res == ran_functions_registered.end()) {
-    ran_functions_registered[func_id] = ran_func;
-  } else {
-    logger_error("function with id %ld is already registered");
-  }
-}
+//   auto res = ran_functions_registered.find(func_id);
+//   if (res == ran_functions_registered.end()) {
+//     ran_functions_registered[func_id] = ran_func;
+//   } else {
+//     logger_error("function with id %ld is already registered");
+//   }
+// }
 
 void E2Sim::encode_and_send_sctp_data(E2AP_PDU_t* pdu, struct timespec *ts)
 {
@@ -241,37 +240,24 @@ void E2Sim::wait_for_sctp_data()
 void E2Sim::connection_helper() {
   int retries = 3;
 
-  std::vector<encoding::ran_func_info> all_funcs;
-  //Loop through RAN function definitions that are registered
-  for (std::pair<long, encoded_ran_function_t *> elem : ran_functions_registered) {
-    logger_trace("looping through ran func");
-    encoding::ran_func_info next_func;
-
-    next_func.ranFunctionId = elem.first;
-    next_func.ranFunctionDesc = &elem.second->ran_function_ostr;
-    next_func.ranFunctionRev = (long)2;
-    next_func.ranFunctionOId = &elem.second->oid;
-
-    all_funcs.push_back(next_func);
-  }
+  const std::vector<std::shared_ptr<RANFunction>> all_funcs = getRanFunctions();
 
   while (retryConnection && retries) {
 
     E2AP_PDU_t* pdu_setup = (E2AP_PDU_t*)calloc(1,sizeof(E2AP_PDU));
 
-    PLMN_Identity_t *plmn_id_cpy = get_plmn_id_cpy(); // ptr no longer available after calling setup_request_parameterized function
-    BIT_STRING_t *gnb_id_cpy = get_gnb_id_cpy();  // ptr no longer available after calling setup_request_parameterized function
+    GlobalE2node_ID_t *e2node_id = globalE2NodeData->getGlobalE2NodeId();
 
     logger_trace("about to call setup request encode");
-    generate_e2ap_setup_request_parameterized(pdu_setup, all_funcs, plmn_id_cpy, gnb_id_cpy);
+    encoding::generate_e2ap_setup_request_parameterized(pdu_setup, all_funcs, e2node_id);
 
     logger_trace("After generating e2setup req");
 
     if (LOGGER_LEVEL >= LOGGER_DEBUG) {
-      xer_fprint(stderr, &asn_DEF_E2AP_PDU, pdu_setup);
+      asn_fprint(stderr, &asn_DEF_E2AP_PDU, pdu_setup);
     }
 
-    logger_trace("After XER Encoding");
+    logger_trace("After asn_fprint");
 
     auto buffer_size = MAX_SCTP_BUFFER;
     unsigned char buffer[MAX_SCTP_BUFFER];
@@ -279,7 +265,7 @@ void E2Sim::connection_helper() {
     sctp_buffer_t data;
 
     char error_buf[300] = {0, };
-    size_t errlen = 0;
+    size_t errlen = 300;
 
     int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, pdu_setup, error_buf, &errlen);
     if (ret != 0) {

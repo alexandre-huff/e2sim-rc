@@ -22,8 +22,11 @@
 
 #include <unordered_map>
 #include <atomic>
-#include <functional>
+// #include <functional>
 #include <thread>
+
+#include "ran_function.hpp"
+#include "global_data.hpp"
 
 extern "C" {
   #include "E2AP-PDU.h"
@@ -34,25 +37,26 @@ extern "C" {
   #include "PLMN-Identity.h"
 }
 
-typedef struct {
-  PrintableString_t oid;
-  OCTET_STRING_t ran_function_ostr;  // RAN function definition octet string
-} encoded_ran_function_t;
+// typedef struct { // FIXME remove all unused code comments
+//   PrintableString_t oid;
+//   OCTET_STRING_t ran_function_ostr;  // RAN function definition octet string
+// } encoded_ran_function_t;
 
-typedef std::function<void(E2AP_PDU_t*)> SubscriptionCallback;
-typedef std::function<void(E2AP_PDU_t*)> SubscriptionDeleteCallback;
-typedef std::function<void(E2AP_PDU_t*, struct timespec*)> ControlCallback;
+// typedef std::function<void(E2AP_PDU_t*)> SubscriptionCallback;
+// typedef std::function<void(E2AP_PDU_t*)> SubscriptionDeleteCallback;
+// typedef std::function<void(E2AP_PDU_t*, struct timespec*)> ControlCallback;
 
 class E2Sim {
 
 private:
 
-  std::unordered_map<long, encoded_ran_function_t *> ran_functions_registered;
-  std::unordered_map<long, SubscriptionCallback> subscription_callbacks;
-  std::unordered_map<long, SubscriptionDeleteCallback> subscription_delete_callbacks;
-  std::unordered_map<long, ControlCallback> control_callbacks;
-  PLMN_Identity_t *plmn_id;
-  BIT_STRING_t gnb_id;
+  std::unordered_map<long, std::shared_ptr<RANFunction>> ranFunctions;
+
+  // std::unordered_map<long, encoded_ran_function_t *> ran_functions_registered;
+  // std::unordered_map<long, SubscriptionCallback> subscription_callbacks;
+  // std::unordered_map<long, SubscriptionDeleteCallback> subscription_delete_callbacks;
+  // std::unordered_map<long, ControlCallback> control_callbacks;
+  std::shared_ptr<GlobalE2NodeData> globalE2NodeData;
 
   std::string e2_addr;  // E2Term address
   int e2_port;          // E2Term port
@@ -68,31 +72,35 @@ private:
 
 public:
 
-  E2Sim(const char *mcc, const char *mnc, uint32_t gnb_id);
+  E2Sim(std::shared_ptr<GlobalE2NodeData> &global_data);
 
   ~E2Sim();
 
-  std::unordered_map<long, encoded_ran_function_t *> getRegistered_ran_functions();
+  std::shared_ptr<RANFunction> const getRanFunction(long func_id);
+  std::vector<std::shared_ptr<RANFunction>> const getRanFunctions() const;
+  bool addRanFunction(std::shared_ptr<RANFunction> function);
 
-  SubscriptionCallback get_subscription_callback(long func_id);
+  // std::unordered_map<long, encoded_ran_function_t *> getRegistered_ran_functions();
 
-  SubscriptionDeleteCallback get_subscription_delete_callback(long func_id);
+  // SubscriptionCallback get_subscription_callback(long func_id);
 
-  ControlCallback get_control_callback(long func_id);
+  // SubscriptionDeleteCallback get_subscription_delete_callback(long func_id);
 
-  PLMN_Identity_t *get_plmn_id_cpy();
+  // ControlCallback get_control_callback(long func_id);
 
-  BIT_STRING_t *get_gnb_id_cpy();
+  // PLMN_Identity_t *get_plmn_id_cpy();
+
+  // BIT_STRING_t *get_gnb_id_cpy();
 
   bool is_e2term_endpoint(std::string address, int port);
 
-  void register_e2sm(long func_id, encoded_ran_function_t* ran_func);
+  // void register_e2sm(long func_id, encoded_ran_function_t* ran_func);
 
-  void register_subscription_callback(long func_id, SubscriptionCallback cb);
+  // void register_subscription_callback(long func_id, SubscriptionCallback cb);
 
-  void register_subscription_delete_callback(long func_id, SubscriptionDeleteCallback cb);
+  // void register_subscription_delete_callback(long func_id, SubscriptionDeleteCallback cb);
 
-  void register_control_callback(long func_id, ControlCallback cb);
+  // void register_control_callback(long func_id, ControlCallback cb);
 
   void encode_and_send_sctp_data(E2AP_PDU_t* pdu, struct timespec *ts);
 

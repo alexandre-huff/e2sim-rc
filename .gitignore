@@ -2,4 +2,3 @@ build
 .build
 *.deb
 *.vscode
-e2sim/3rdparty

@@ -18,39 +18,47 @@
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(cpprestsdk REQUIRED)
 
-add_executable( e2sim-rc e2sim_rc.cpp )
+add_executable( e2sim e2node.cpp )
 
-target_link_libraries( e2sim-rc PRIVATE e2ap_asn1_objects
-                                        e2sm_rc_asn1_objects
-                                        base_objects
-                                        logger_objects
-                                        encoding_objects
-                                        def_objects
-                                        sctp_objects
-                                        messagerouting_objects
-                                        rc_objects
-				        envman
-				        pistache )
-target_link_libraries( e2sim-rc PRIVATE cpprestsdk::cpprest)
+target_link_libraries( e2sim PRIVATE
+    base_objects
+    ranfunction_objects
+    e2sm_objects
+    procedure_objects
+    def_objects
+    e2ap_asn1_objects
+    e2model_objects
+    logger_objects
+    rc_objects
+    e2sm_rc_asn1_objects
+    sctp_objects
+    messagerouting_objects
+    common_objects
+    envman
+	pistache
+    )
 
-target_include_directories (e2sim-rc PUBLIC
-$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-$<INSTALL_INTERFACE:include>
-PRIVATE src)
+target_link_libraries( e2sim PRIVATE cpprestsdk::cpprest )
+
+target_include_directories (e2sim PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+    # PRIVATE src
+    )
 
 # Prometheus
-target_include_directories( e2sim-rc PRIVATE /usr/include/prometheus )
-target_include_directories( e2sim-rc PRIVATE /usr/local/include/envman )
-target_include_directories( e2sim-rc PRIVATE /usr/local/include/envman/api )
-target_include_directories( e2sim-rc PRIVATE /usr/local/include/envman/model )
+target_include_directories( e2sim PRIVATE /usr/include/prometheus )
+target_include_directories( e2sim PRIVATE /usr/local/include/envman )
+target_include_directories( e2sim PRIVATE /usr/local/include/envman/api )
+target_include_directories( e2sim PRIVATE /usr/local/include/envman/model )
 if(PROMETHEUS_CPP_ENABLE_PUSH)
-    target_link_libraries(e2sim-rc PRIVATE prometheus-cpp::push)
+    target_link_libraries(e2sim PRIVATE prometheus-cpp::push)
 endif()
 if(PROMETHEUS_CPP_ENABLE_PULL)
-    target_link_libraries(e2sim-rc PRIVATE prometheus-cpp::pull)
+    target_link_libraries(e2sim PRIVATE prometheus-cpp::pull)
 endif()
 
 install(
-    TARGETS e2sim-rc
+    TARGETS e2sim
     DESTINATION ${install_bin}
 )

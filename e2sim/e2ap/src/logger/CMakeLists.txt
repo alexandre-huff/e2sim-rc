@@ -22,8 +22,8 @@ add_library( logger_objects OBJECT logger.c)
 
 target_include_directories (logger_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-  $<INSTALL_INTERFACE:include>
-  PRIVATE src)
+  $<INSTALL_INTERFACE:include> )
+  # PRIVATE src)
 
 if( DEV_PKG )
   install( FILES

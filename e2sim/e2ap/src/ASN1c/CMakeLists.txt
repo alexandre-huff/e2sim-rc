@@ -23,12 +23,13 @@
 file(GLOB SOURCES "*.c")
 file(GLOB HEADERS "*.h")
 
-add_library( e2ap_asn1_objects OBJECT ${SOURCES})
+add_library( e2ap_asn1_objects STATIC ${SOURCES} )
 
 target_include_directories (e2ap_asn1_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
-  PRIVATE src)
+  # PRIVATE src
+  )
 
 if( DEV_PKG )
   install( FILES

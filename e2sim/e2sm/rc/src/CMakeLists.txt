@@ -15,25 +15,32 @@
 #==================================================================================
 #
 
-add_library( rc_objects OBJECT encode_rc.cpp rc_callbacks.cpp )
+add_library( rc_objects STATIC e2sm_rc.cpp e2sm_rc_builder.cpp encode_rc.cpp )
 
-target_link_libraries( rc_objects PRIVATE e2ap_asn1_objects
-                                        e2sm_rc_asn1_objects
-                                        logger_objects
-                                        base_objects
-                                        def_objects
-                                        encoding_objects )
+target_link_libraries( rc_objects PRIVATE logger_objects
+    e2sm_objects
+    procedure_objects
+    def_objects
+    e2ap_asn1_objects
+    e2model_objects
+    e2sm_rc_asn1_objects
+    encoding_objects
+    ranfunction_objects
+    rc_service_objects
+    common_objects
+    )
 
 target_include_directories (rc_objects PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
-    PRIVATE ../../../src/
+    # PRIVATE ../../../src/
     )
 
 if( DEV_PKG )
     install( FILES
+        e2sm_rc_builder.hpp
+        e2sm_rc.hpp
         encode_rc.hpp
-        rc_callbacks.hpp
         DESTINATION ${install_inc}
     )
 endif()

@@ -61,10 +61,10 @@ extern "C" {
 args_t cmd_args;        // command line arguments
 metrics_t metrics;
 
-class EnvmanObserver : public EnvironmentManagerObserver {
+class RRCStateObserver : public EnvironmentManagerObserver {
 public:
-    EnvmanObserver() { /* pass */ }
-    ~EnvmanObserver() { /* pass */ }
+    RRCStateObserver() { /* pass */ }
+    ~RRCStateObserver() { /* pass */ }
 
     /**
      * Notifies the observer about a new ANR update.
@@ -116,7 +116,7 @@ std::thread *envman_thread;
 
 void run_envman(uint16_t port)
 {
-    std::shared_ptr<EnvmanObserver> observer = std::make_shared<EnvmanObserver>();
+    std::shared_ptr<RRCStateObserver> observer = std::make_shared<RRCStateObserver>();
     envman = new EnvironmentManager(port, 2, observer);
     envman->start();
 }
@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
     e2sims.emplace_back(e2sim);
 
     encoded_ran_function_t *reg_func = encode_ran_function_definition();
-    e2sim->register_e2sm(1, reg_func);
+    e2sim->addRanFunction(1, reg_func);
 
     // first insert_cb takes 2 seconds to the xApp to reply due to subscription and routing setup
     InsertLoopCallback insert_cb = std::bind(&run_insert_loop, _1, _2, _3, _4, e2sim, 2);
@@ -464,7 +464,7 @@ void drive_e2term_handover(std::string old_e2term_addr, int old_e2term_port, std
         e2sims.emplace_back(e2sim);
 
         encoded_ran_function_t *reg_func = encode_ran_function_definition();
-        e2sim->register_e2sm(1, reg_func);
+        e2sim->addRanFunction(1, reg_func);
 
     }
 

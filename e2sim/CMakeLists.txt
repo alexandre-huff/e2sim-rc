@@ -16,9 +16,13 @@
 #
 
 project( e2sim )
-cmake_minimum_required( VERSION 3.5 )
+cmake_minimum_required( VERSION 3.16 )
 
-set( major_version "1" )		# until CI supports auto tagging; must hard set
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED On)
+set(CMAKE_CXX_EXTENSIONS Off)
+
+set( major_version "2" )		# until CI supports auto tagging; must hard set
 set( minor_version "0" )
 set( patch_level "0" )
 
@@ -65,7 +69,7 @@ add_definitions(
 )
 
 add_definitions( -DASN_DISABLE_OER_SUPPORT )
-add_definitions( -DLOGGER_LEVEL=LOGGER_INFO ) # NONE, FATAL, ERROR, WARN, INFO, DEBUG, TRACE
+add_definitions( -DLOGGER_LEVEL=LOGGER_DEBUG ) # NONE, FATAL, ERROR, WARN, INFO, DEBUG, TRACE
 
 # Compiler flags
 #
@@ -85,6 +89,7 @@ set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17" )
 unset( GPROF CACHE )					# ensure this does not persist
 
 # each binary is built from a subset
+add_subdirectory( common )
 add_subdirectory( e2ap/src )
-add_subdirectory( e2sm/rc )
+add_subdirectory( e2sm )
 add_subdirectory( src )

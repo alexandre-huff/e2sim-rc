@@ -21,18 +21,27 @@
 #
 add_library( encoding_objects OBJECT encode_e2ap.cpp)
 
-target_link_libraries(encoding_objects PRIVATE e2ap_asn1_objects logger_objects)
+target_link_libraries(encoding_objects PRIVATE
+	logger_objects
+	ranfunction_objects
+	e2sm_objects
+	procedure_objects
+	def_objects
+	e2ap_asn1_objects
+	e2model_objects
+	common_objects
+	)
 
 target_include_directories (encoding_objects PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-  $<INSTALL_INTERFACE:include>
-  PRIVATE src )
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+	$<INSTALL_INTERFACE:include> )
+	# PRIVATE src )
 
 
 if( DEV_PKG )
-  install( FILES
-    encode_e2ap.hpp
-    DESTINATION ${install_inc}
-    )
+	install( FILES
+	encode_e2ap.hpp
+	DESTINATION ${install_inc}
+	)
 endif()
 # ---------------------------------------------------------------------------

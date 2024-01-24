@@ -25,14 +25,112 @@
 
 #include "encode_rc.hpp"
 #include "logger.h"
+#include "utils.hpp"
+
+extern "C" {
+    #include "E2SM-RC-IndicationHeader.h"
+    #include "E2SM-RC-IndicationHeader-Format1.h"
+    #include "E2SM-RC-IndicationMessage-Format2.h"
+    #include "E2SM-RC-IndicationMessage-Format2-Item.h"
+}
 
 using namespace std;
 
-void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def) {
+
+/**
+ * Encodes the RANFunctionDefinition_Report of E2SM_RC_RANFunctionDefinition_t
+*/
+void common::rc::encode_report_function_definition(void *report_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles) {
+    LOGGER_TRACE_FUNCTION_IN
+
+    E2SM_RC_RANFunctionDefinition_t *ranfunc_def = (E2SM_RC_RANFunctionDefinition_t *) report_func_def;
+    ranfunc_def->ranFunctionDefinition_Report = (RANFunctionDefinition_Report_t *) calloc(1, sizeof(RANFunctionDefinition_Report_t));
+
+    for (auto &style : styles) {
+        RANFunctionDefinition_Report_Item_t *report_item = (RANFunctionDefinition_Report_Item_t *) calloc(1, sizeof(RANFunctionDefinition_Report_Item_t));
+        report_item->ric_ReportStyle_Type = style->getRicStyleType();
+        OCTET_STRING_fromBuf(&report_item->ric_ReportStyle_Name, style->getRicStyleName().c_str(), style->getRicStyleName().length());
+        report_item->ric_IndicationHeaderFormat_Type = style->getRicHeaderFormatType();
+        report_item->ric_IndicationMessageFormat_Type = style->getRicMessageFormatType();
+        report_item->ric_SupportedEventTriggerStyle_Type = style->getTriggerDefinition()->getStyleType();
+        report_item->ric_ReportActionFormat_Type = style->getActionDefinition()->getFormat();
+
+        for (auto &param : style->getActionDefinition()->getRanParameters()) {
+            Report_RANParameter_Item_t *item = (Report_RANParameter_Item_t *) calloc(1, sizeof(Report_RANParameter_Item_t));
+            item->ranParameter_ID = param->getParamId();
+            OCTET_STRING_fromBuf(&item->ranParameter_name, param->getParamName().c_str(), param->getParamName().length());
+            ASN_SEQUENCE_ADD(&report_item->ran_ReportParameters_List->list, item);
+        }
+
+        ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Report->ric_ReportStyle_List.list, report_item);
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+}
+
+/*
+    Encodes the E2SM-RC Indication Header Format 1
+
+    Params:
+        *condition: it is OPTIONAL as per E2SM-RC-R003-v03.00 so that NULL is also accepted
+
+    Returns a pointer with the encoded data, or NULL on error.
+*/
+RICindicationHeader_t *common::rc::encode_indication_header_format1(RIC_EventTriggerCondition_ID_t *condition) {
+    E2SM_RC_IndicationHeader_t *header = (E2SM_RC_IndicationHeader_t *) calloc(1, sizeof(E2SM_RC_IndicationHeader_t));
+    header->ric_indicationHeader_formats.present = E2SM_RC_IndicationHeader__ric_indicationHeader_formats_PR_indicationHeader_Format1;
+    header->ric_indicationHeader_formats.choice.indicationHeader_Format1 =
+            (E2SM_RC_IndicationHeader_Format1_t *) calloc(1, sizeof(E2SM_RC_IndicationHeader_Format1_t));
+
+    if (condition) {
+        header->ric_indicationHeader_formats.choice.indicationHeader_Format1->ric_eventTriggerCondition_ID =
+                (RIC_EventTriggerCondition_ID_t *) calloc(1, sizeof(RIC_EventTriggerCondition_ID_t));
+        *header->ric_indicationHeader_formats.choice.indicationHeader_Format1->ric_eventTriggerCondition_ID = *condition;
+    }
+
+    RICindicationHeader_t *ric_header = utils::asn1_check_and_encode(&asn_DEF_E2SM_RC_IndicationHeader, header); // returns NULL on error
+
+    return ric_header;
+}
+
+/*
+    Encodes the E2SM-RC Indication Message Format 2
+
+    Returns a pointer with the encoded data, or NULL on error.
+*/
+RICindicationMessage_t *common::rc::encode_indication_message_format2(const std::vector<indication_msg_format2_ueid_t> &ue_ids) {
+    E2SM_RC_IndicationMessage_t *msg =
+            (E2SM_RC_IndicationMessage_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_t));
+    msg->ric_indicationMessage_formats.present = E2SM_RC_IndicationMessage__ric_indicationMessage_formats_PR_indicationMessage_Format2;
+    msg->ric_indicationMessage_formats.choice.indicationMessage_Format2 =
+            (E2SM_RC_IndicationMessage_Format2_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_t));
+    E2SM_RC_IndicationMessage_Format2_t *msg_fmt2 = msg->ric_indicationMessage_formats.choice.indicationMessage_Format2;
+
+    for (auto &ue_id : ue_ids) {
+        // Sequence of UE Identifiers as per 9.2.1.4.2 in E2SM-RC-R003-v03.00
+        E2SM_RC_IndicationMessage_Format2_Item_t *fmt2_item =
+                (E2SM_RC_IndicationMessage_Format2_Item_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_Item_t));
+        ASN_SEQUENCE_ADD(&msg_fmt2->ueParameter_List.list, fmt2_item);
+
+        /* ################ UE ID ################ */
+        fmt2_item->ueID = ue_id.ueid;
+
+        /* ###### Sequence of RAN Parameters for each UE ID ###### */
+        for (auto &param : ue_id.ranp_list) {
+            ASN_SEQUENCE_ADD(&fmt2_item->ranP_List.list, param);
+        }
+    }
+
+    RICindicationMessage_t *ric_msg = utils::asn1_check_and_encode(&asn_DEF_E2SM_RC_IndicationMessage, msg); // returns NULL on error
+
+    return ric_msg;
+}
+
+void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t *ranfunc_def) {
     int ret;    // Temporary return value
     size_t len; // Temporary length to avoid unnecessary strlen calls
 
-    logger_trace("in %s function", __func__);
+    LOGGER_TRACE_FUNCTION_IN
 
     uint8_t *buf = (uint8_t*)"ORAN-E2SM-RC";	// short name
     uint8_t *buf2 = (uint8_t*)"RAN Control";	// ran function description
@@ -128,10 +226,12 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
         xer_fprint(stderr, &asn_DEF_E2SM_RC_RANFunctionDefinition, ranfunc_def);
     }
 
-    logger_trace("end of %s", __func__);
+
+	LOGGER_TRACE_FUNCTION_OUT
 }
 
-void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIdentity_t *plmn_id, BIT_STRING_t *gnb_id) {
+void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIdentity_t *plmn_id, BIT_STRING_t *gnb_id)
+{
     logger_trace("in %s function", __func__);
 
     char error_buf[300] = {0, };

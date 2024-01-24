@@ -1,8 +1,10 @@
 
 add_subdirectory( ASN1c )
-add_subdirectory( DEF )
-add_subdirectory( SCTP )
-add_subdirectory( messagerouting )
 add_subdirectory( base )
+add_subdirectory( DEF )
 add_subdirectory( encoding )
 add_subdirectory( logger )
+add_subdirectory( messagerouting )
+add_subdirectory( procedures )
+add_subdirectory( ranfunction )
+add_subdirectory( SCTP )

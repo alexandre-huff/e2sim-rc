@@ -20,20 +20,32 @@
 # For clarity: this generates object, not a lib as the CM command implies.
 #
 add_library( messagerouting_objects OBJECT
-         e2ap_message_handler.cpp
-         e2ap_asn1c_codec.c
-	 )
+        e2ap_message_handler.cpp
+        e2ap_asn1c_codec.c
+  )
 
-target_link_libraries( messagerouting_objects PRIVATE logger_objects encoding_objects e2ap_asn1_objects sctp_objects def_objects )
+target_link_libraries( messagerouting_objects PRIVATE
+        logger_objects
+        ranfunction_objects
+        e2sm_objects
+        procedure_objects
+        def_objects
+        e2ap_asn1_objects
+        e2model_objects
+        encoding_objects
+        common_objects
+        # e2sm_rc_asn1_objects # FIXME remove if not required
+        )
 
 target_include_directories (messagerouting_objects PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-  $<INSTALL_INTERFACE:include>
-  PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../base>)
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:include>
+        PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../base>)
 
 if( DEV_PKG )
   install( FILES
     e2ap_message_handler.hpp
+    messages.hpp
     DESTINATION ${install_inc}
     )
 endif()

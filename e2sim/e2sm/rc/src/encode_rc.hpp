@@ -20,6 +20,10 @@
 #ifndef ENCODE_RC_HPP
 #define ENCODE_RC_HPP
 
+#include <memory>
+
+#include "service_style.hpp"
+
 extern "C" {
     #include "OCTET_STRING.h"
     #include "asn_application.h"
@@ -33,6 +37,9 @@ extern "C" {
     #include "RANFunctionDefinition-Control.h"
     #include "RANFunctionDefinition-Control-Item.h"
     #include "RANFunctionDefinition-Control-Action-Item.h"
+    #include "RANFunctionDefinition-Report.h"
+    #include "RANFunctionDefinition-Report-Item.h"
+    #include "Report-RANParameter-Item.h"
     #include "RIC-Format-Type.h"
     #include "E2SM-RC-IndicationMessage-Format5.h"
     #include "E2SM-RC-IndicationMessage-Format5-Item.h"
@@ -45,45 +52,30 @@ extern "C" {
     #include "E2SM-RC-IndicationHeader-Format2.h"
     #include "UEID-GNB.h"
     #include "GUAMI.h"
+    #include "RICindicationHeader.h"
+    #include "RICindicationMessage.h"
+    #include "RIC-EventTriggerCondition-ID.h"
+    #include "E2SM-RC-IndicationMessage-Format2-RANParameter-Item.h"
 }
 
-// void encode_kpm(E2SM_KPM_IndicationMessage_t* indicationmessage);
+namespace common {
+namespace rc {
+    typedef struct {
+        UEID_t ueid;
+        std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> ranp_list;
+    } indication_msg_format2_ueid_t;
 
-// void encode_kpm_bak(E2SM_KPM_IndicationMessage_t* indicationmessage);
+    void encode_report_function_definition(void *report_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles);
+    RICindicationHeader_t *encode_indication_header_format1(RIC_EventTriggerCondition_ID_t *condition);
+    RICindicationMessage_t *encode_indication_message_format2(const std::vector<indication_msg_format2_ueid_t> &ue_ids);
+}
+}
 
-void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def);
+void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t *ranfunc_def);
 
 void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIdentity_t *plmn_id, BIT_STRING_t *gnb_id);
 
 void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header, PLMNIdentity_t *plmn_id);
-
-// void encode_kpm_report_style5(E2SM_KPM_IndicationMessage_t* indicationmessage);
-
-// void encode_kpm_odu_user_level(RAN_Container_t *ranco);
-
-// void encode_kpm_ocucp_user_level(RAN_Container_t *ranco);
-
-// void encode_e2sm_kpm_indication_header(E2SM_KPM_IndicationHeader_t *ihead, uint8_t *plmnid_buf, uint8_t *sst_buf, uint8_t *sd_buf, long fqival, long qcival, uint8_t *nrcellid_buf, uint8_t *gnbid_buf, int gnbid_unused, uint8_t *cuupid_buf, uint8_t *duid_buf, uint8_t *cuupname_buf);
-
-// void encode_kpm_ocuup_user_level(RAN_Container_t *ranco);
-
-// void encode_kpm_report_rancontainer_du(E2SM_KPM_IndicationMessage_t *indMsg);
-
-// void encode_kpm_report_rancontainer_cucp(E2SM_KPM_IndicationMessage_t *indMsg);
-
-// void encode_kpm_report_rancontainer_cuup(E2SM_KPM_IndicationMessage_t *indMsg);
-
-// void encode_kpm_report_style1(E2SM_KPM_IndicationMessage_t* indicationmessage);
-
-// void encode_kpm_report_rancontainer_du_parameterized(E2SM_KPM_IndicationMessage_t *indMsg, uint8_t *plmnid_buf, uint8_t *nrcellid_buf, uint8_t *crnti_buf, long prb_usage_dl, long prb_usage_ul);
-
-// void encode_kpm_report_rancontainer_cucp_parameterized(E2SM_KPM_IndicationMessage_t* indicationmessage,uint8_t *plmnid_buf,uint8_t *nrcellid_buf,uint8_t *crnti_buf,const uint8_t *serving_buf, const uint8_t *neighbor_buf);
-
-// void encode_kpm_report_rancontainer_cuup_parameterized(E2SM_KPM_IndicationMessage_t* indicationmessage, uint8_t *plmnid_buf, uint8_t *nrcellid_buf, uint8_t *crnti_buf,int pdcp_bytesdl, int pdcp_bytesul);
-
-// void encode_kpm_report_style1_parameterized(E2SM_KPM_IndicationMessage_t* indicationmessage, long fiveqi, long dl_prb_usage, long ul_prb_usage, uint8_t* sst_buf, uint8_t* sd_buf, uint8_t* plmnid_buf, uint8_t* nrcellid_buf, long *dl_prbs, long *ul_prbs);
-
-// void encode_kpm_report_style5_parameterized(E2SM_KPM_IndicationMessage_t* indicationmessage, uint8_t *gnbcuupname_buf, int bytes_dl,int bytes_ul, uint8_t *sst_buf, uint8_t *sd_buf, uint8_t *plmnid_buf);
 
 
 #endif

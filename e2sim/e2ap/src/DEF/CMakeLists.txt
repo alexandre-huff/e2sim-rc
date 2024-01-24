@@ -20,17 +20,19 @@
 #
 add_library( def_objects OBJECT e2sim_defs.cpp)
 
-target_link_libraries( def_objects PRIVATE logger_objects )
+target_link_libraries( def_objects PRIVATE logger_objects e2ap_asn1_objects )
 
 target_include_directories (def_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
-  PRIVATE src)
+  # PRIVATE src
+  )
 
 
 if( DEV_PKG )
   install( FILES
     e2sim_defs.h
+    messages.hpp
     DESTINATION ${install_inc}
     )
 endif()
