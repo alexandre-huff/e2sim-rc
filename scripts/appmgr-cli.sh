@@ -3,6 +3,8 @@
 
 # set -e -o pipefail
 
+
+
 usage() {
 	echo "
 Usage: $0 [[-r|--register] [-d|--deregister] {config-file.json}] [-l|--list]
@@ -16,7 +18,10 @@ if [[ "$#" -lt 1 || "$#" -gt 2 ]]; then
 fi
 
 
-APP_MGR_IP=10.152.183.79
+APP_MGR_IP=$(kubectl -n ricplt get po -l release=r4-appmgr -o jsonpath='{.items[0].status.podIP}')
+APP_MGR_PORT=$(kubectl -n ricplt get service service-ricplt-appmgr-http -o jsonpath='{.spec.ports[0].port}')
+APP_MGR_ADDR=${APP_MGR_IP}:${APP_MGR_PORT}
+
 OPT=$1
 CONFIG_FILE=$2
 
@@ -66,18 +71,18 @@ do_register() {
 EOF
 
 	# POST
-	curl -v "http://${APP_MGR_IP}:8080/ric/v1/register" -H "accept: application/json" -H "Content-Type: application/json" -d "@${XAPP_NAME}-register.json"
+	curl -v "http://${APP_MGR_ADDR}/ric/v1/register" -H "accept: application/json" -H "Content-Type: application/json" -d "@${XAPP_NAME}-register.json"
 }
 
 do_deregister() {
 	do_set_xapp_name
 	# POST
-	curl "http://${APP_MGR_IP}:8080/ric/v1/deregister" -H "accept: application/json" -H "Content-Type: application/json" -d "{\"appName\": \"${XAPP_NAME}\", \"appInstanceName\": \"${XAPP_NAME}\"}"
+	curl "http://${APP_MGR_ADDR}/ric/v1/deregister" -H "accept: application/json" -H "Content-Type: application/json" -d "{\"appName\": \"${XAPP_NAME}\", \"appInstanceName\": \"${XAPP_NAME}\"}"
 }
 
 do_list() {
 	# GET
-	curl -v "http://${APP_MGR_IP}:8080/ric/v1/xapps/list" -H "accept: application/json" -H "Content-Type: application/json"
+	curl -v "http://${APP_MGR_ADDR}/ric/v1/xapps/list" -H "accept: application/json" -H "Content-Type: application/json"
 }
 
 
