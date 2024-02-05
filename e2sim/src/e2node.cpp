@@ -73,8 +73,8 @@ args_t parse_input_options(int argc, char *argv[]) {
     {
         {"port", required_argument, 0, 'p'},
         {"nodebid", required_argument, 0, 'b'},
-        {"mcc", required_argument, 0, 'm'},
-        {"mnc", required_argument, 0, 'c'},
+        {"mcc", required_argument, 0, 'c'},
+        {"mnc", required_argument, 0, 'n'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
     };
@@ -82,7 +82,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     int c;
     while(1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "p:b:m:c:h", long_options, &option_index);
+        c = getopt_long(argc, argv, "p:b:c:n:h", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -97,10 +97,10 @@ args_t parse_input_options(int argc, char *argv[]) {
                     args.gnb_id = strtoumax(optarg, NULL, 10);
                 }
                 break;
-            case 'm':
+            case 'c':
                 args.mcc = optarg;
                 break;
-            case 'c':
+            case 'n':
                 args.mnc = optarg;
                 break;
             case 'h':
@@ -110,8 +110,8 @@ args_t parse_input_options(int argc, char *argv[]) {
                     "\nUsage: %s [options] e2term-address\n\n"
                     "Options:\n"
                     "  -p  --port         E2Term SCTP port number\n"
-                    "  -m  --mcc          gNodeB Mobile Country Code\n"
-                    "  -c  --mnc          gNodeB Mobile Network Code\n"
+                    "  -c  --mcc          gNodeB Mobile Country Code\n"
+                    "  -n  --mnc          gNodeB Mobile Network Code\n"
                     "  -b  --nodebid      gNodeB Identity 0..2^29-1 (e.g. 15 or 0xF)\n"
                     "  -h  --help         Display this information and quit\n\n", argv[0]);
                 exit(EXIT_FAILURE);
