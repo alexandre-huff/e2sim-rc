@@ -46,6 +46,9 @@ GlobalE2NodeData::GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gn
         throw std::invalid_argument("maximum gnb_id value is 2^29-1");
     }
 
+    uint32_t gnbid_copy;
+    gnbid_copy = gnb_id;
+
     // Building the Global E2 Node ID of the simulator
     globalE2NodeId = (GlobalE2node_ID_t *) calloc(1, sizeof(GlobalE2node_ID_t));
     globalE2NodeId->present = GlobalE2node_ID_PR_gNB;
@@ -71,6 +74,11 @@ GlobalE2NodeData::GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gn
     gnb_bstr->buf[1] = ((gnb_id & 0X00FF0000) >> 16);
     gnb_bstr->buf[2] = ((gnb_id & 0X0000FF00) >> 8);
     gnb_bstr->buf[3] = (gnb_id & 0X000000FF);
+
+    if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+        logger_debug("Global gNodeB Identity encoded for %u", gnbid_copy);
+        xer_fprint(stderr , &asn_DEF_BIT_STRING, gnb_bstr);
+    }
 }
 
 GlobalE2NodeData::~GlobalE2NodeData() {
@@ -92,12 +100,13 @@ GlobalE2node_ID_t *GlobalE2NodeData::getGlobalE2NodeId() {
 
     copy->choice.gNB->global_gNB_ID.gnb_id.present = globalE2NodeId->choice.gNB->global_gNB_ID.gnb_id.present;
     copy->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.buf =
-            (uint8_t *) calloc(copy->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.size, sizeof(uint8_t));
+            (uint8_t *) calloc(globalE2NodeId->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.size, sizeof(uint8_t));
+
+    copy->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.size = globalE2NodeId->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.size;
+    copy->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.bits_unused = globalE2NodeId->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.bits_unused;
     mempcpy(copy->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.buf,
             globalE2NodeId->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.buf,
             copy->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.size);
-    copy->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.size = globalE2NodeId->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.size;
-    copy->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.bits_unused = globalE2NodeId->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.bits_unused;
 
     return copy;
 }
