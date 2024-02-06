@@ -28,7 +28,7 @@ spec:
               containerPort: 8081
               protocol: TCP
           command: ["{{ .Values.image.command }}"]
-          args: ["{{ .Values.image.args.e2term }}", "-m", "{{ .Values.image.args.mcc }}", "-c", "{{ .Values.image.args.mnc }}", "-b", "{{ .Values.image.args.nodebid }}", "-p", "{{ .Values.image.args.port }}"]          
+          args: ["{{ .Values.image.args.e2term }}", "--mcc", "{{ .Values.image.args.mcc }}", "--mnc", "{{ .Values.image.args.mnc }}", "--nodebid", "{{ .Values.image.args.nodebid }}", "-p", "{{ .Values.image.args.port }}"]          
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
