@@ -52,7 +52,7 @@ public:
      * @iMSI UE unique identifier
      * @entries ANR entries
      */
-    virtual void anrUpdate(const std::string iMSI, const std::map<std::string, std::shared_ptr<anr_entry>> &entries) override;
+    virtual void anrUpdate(const std::string iMSI, const std::map<int32_t, std::shared_ptr<anr_entry>> &entries) override;
 
     /**
      * Notifies the observer about a new Flow update.
@@ -65,7 +65,7 @@ public:
      * Notifies the observer about a new UE requessting association.
      * @ue The UE data
      */
-    virtual void associationRequest(const std::shared_ptr<ue_data> ue) override;
+    virtual bool associationRequest(const std::shared_ptr<ue_data> ue, const int32_t &cell) override;
 
     /**
      * Notifiess the observer about a new UE requesting disassociation.

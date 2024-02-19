@@ -33,7 +33,7 @@ extern "C" {
     #include "E2nodeComponentInterfaceType.h"
 }
 
-void RRCStateObserver::anrUpdate(const std::string iMSI, const std::map<std::string, std::shared_ptr<anr_entry>> &entries) {
+void RRCStateObserver::anrUpdate(const std::string iMSI, const std::map<int32_t, std::shared_ptr<anr_entry>> &entries) {
     logger_debug("ANR update from %s. Nothing to do here.", iMSI.c_str());
 }
 
@@ -41,15 +41,14 @@ void RRCStateObserver::flowUpdate(const std::string iMSI, const flow_entry &entr
     logger_debug("Flow update from %s. Nothing to do here.", iMSI.c_str());
 }
 
-void RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue) {
+bool RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue, const int32_t &cell) {
     LOGGER_TRACE_FUNCTION_IN
 
     int rsrp;
     int rsrq;
     int sinr;
 
-    // const auto &data = ue->anr.find(ue->imsi);
-    const auto &data = ue->anr.find("bbu1");
+    const auto &data = ue->anr.find(cell);
     if (data != ue->anr.end()) {
         rsrp = (int) data->second->rsrp;
         rsrq = (int) data->second->rsrq;
@@ -77,7 +76,7 @@ void RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue) {
 
     if (!match) {
         logger_debug("Association request did not match expected event triggers for IMSI %s", ue->imsi.c_str());
-        return;
+        return true;
     }
 
     logger_info("Association request from UE %s", ue->imsi.c_str());
@@ -103,6 +102,8 @@ void RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue) {
     ASN_STRUCT_RESET(asn_DEF_UEID, &ueid);
 
     LOGGER_TRACE_FUNCTION_OUT
+
+    return true;
 }
 
 void RRCStateObserver::disassociationRequest(const std::shared_ptr<ue_data> ue) {
@@ -112,7 +113,7 @@ void RRCStateObserver::disassociationRequest(const std::shared_ptr<ue_data> ue) 
     int rsrq;
     int sinr;
 
-    const auto &data = ue->anr.find("bbu1");
+    const auto &data = ue->anr.find(globalE2NodeData->gnbid);
     if (data != ue->anr.end()) {
         rsrp = (int) data->second->rsrp;
         rsrq = (int) data->second->rsrq;

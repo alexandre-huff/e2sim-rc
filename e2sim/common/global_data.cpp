@@ -32,7 +32,7 @@ extern "C" {
 /**
  * Throws std::invalid_argument
 */
-GlobalE2NodeData::GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id) {
+GlobalE2NodeData::GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id) : gnbid(gnb_id) {
     if (mcc.length() != 3) {
         throw std::invalid_argument("MCC requires 3 digits");
     }

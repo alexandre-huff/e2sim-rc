@@ -81,7 +81,7 @@ WORKDIR /playpen/e2sim
 
 RUN git submodule update --init --recursive --recommend-shallow
 
-RUN mkdir 3rdparty/manager_api/api_v1/server/build && cd 3rdparty/manager_api/api_v1/server/build \
+RUN mkdir 3rdparty/manager_api/api_v1/nodeb_server/build && cd 3rdparty/manager_api/api_v1/nodeb_server/build \
 	&& cmake .. && make -j4 && make install && ldconfig
 
 # build and install submodule dependencies
