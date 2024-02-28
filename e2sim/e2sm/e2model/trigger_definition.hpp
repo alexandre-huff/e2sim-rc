@@ -21,8 +21,6 @@
 
 #include <string>
 
-#include <envman/environment_manager.h>
-
 class TriggerDefinition {
 public:
     TriggerDefinition(int style_type, std::string style_name) : styleType(style_type), styleName(style_name) { }

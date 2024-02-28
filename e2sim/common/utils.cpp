@@ -75,7 +75,6 @@ bool common::utils::asn1_decode_and_check(const asn_TYPE_descriptor_s *type_to_d
 
     // asn_dec_rval_t dval = aper_decode_complete(nullptr, type_to_decode, structure_to_decode, buffer, bufsize);
     asn_dec_rval_t dval = asn_decode(nullptr, ATS_ALIGNED_BASIC_PER, type_to_decode, structure_to_decode, buffer, bufsize);
-
     if (dval.code != RC_OK) {
         logger_error("Failed to decode %s. Length of data = %lu, return code = %d", type_to_decode->name, dval.consumed, dval.code);
         return false;
@@ -91,6 +90,10 @@ bool common::utils::asn1_decode_and_check(const asn_TYPE_descriptor_s *type_to_d
         logger_error("Check constraints failed for %s: error length = %lu, error buf = %s", type_to_decode->name, errlen, error_buf);
         ASN_STRUCT_FREE(*type_to_decode, *structure_to_decode);
         return false;
+    }
+
+    if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+        asn_fprint(stderr, type_to_decode, *structure_to_decode);
     }
 
     LOGGER_TRACE_FUNCTION_OUT

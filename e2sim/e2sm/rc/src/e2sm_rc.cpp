@@ -148,7 +148,7 @@ OCTET_STRING_t *E2SM_RC::encodeRANFunctionDefinition() {
     return encoded_e2sm;
 }
 
-// FIXME this is specific for TriggerDefinitionFormat4
+// FIXME this is specific for TriggerDefinitionFormat4 and is working
 e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_request(e2sim::messages::RICSubscriptionRequest *request) {
     LOGGER_TRACE_FUNCTION_IN
 
@@ -353,9 +353,6 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
 //         response->cause.present = Cause_PR_protocol;
 //         response->cause.choice.protocol = CauseProtocol_transfer_syntax_error;
 //         return response;
-//     }
-//     if (LOGGER_LEVEL >= LOGGER_DEBUG) {
-//         asn_fprint(stderr, &asn_DEF_E2SM_RC_EventTrigger, trigger);
 //     }
 
 //     // validating if we support the requested event trigger

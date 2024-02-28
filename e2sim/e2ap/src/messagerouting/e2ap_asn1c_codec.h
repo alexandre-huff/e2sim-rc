@@ -19,14 +19,20 @@
 #ifndef E2AP_ASN1C_CODEC_H
 #define E2AP_ASN1C_CODEC_H
 
+
 #include "e2sim_defs.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "E2AP-PDU.h"
 #include "InitiatingMessage.h"
 #include "SuccessfulOutcome.h"
 #include "UnsuccessfulOutcome.h"
-
 #include "GlobalE2node-ID.h"
 #include "E2setupRequest.h"
+
 
 #define ASN1C_PDU_PRINT_BUFFER     4096
 #define MAX_XML_BUFFER             10000
@@ -44,5 +50,9 @@ int e2ap_asn1c_encode_pdu(E2AP_PDU_t* pdu, unsigned char **buffer);
 void e2ap_asn1c_decode_pdu(E2AP_PDU_t* pdu, unsigned char *buffer, int len);
 
 int e2ap_asn1c_get_procedureCode(E2AP_PDU_t* pdu);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
