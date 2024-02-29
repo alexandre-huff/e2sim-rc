@@ -29,6 +29,13 @@
 #include <condition_variable>
 #include <mutex>
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <stddef.h>
+#include <string.h>
+
 #include "e2sim.hpp"
 #include "e2sim_defs.h"
 #include "e2sim_sctp.hpp"
@@ -349,9 +356,15 @@ void E2Sim::listener(){
 void E2Sim::run(const char *e2term_addr, int e2term_port) {
   logger_force(LOGGER_INFO, "Starting E2AP Agent");
 
-  char *addr = (char *)e2term_addr;
+  char *addr = strdup(e2term_addr);
+  struct hostent *he;
+
   if (addr == NULL) {
     addr = (char *)DEFAULT_SCTP_IP;
+  }
+
+  if ((he = gethostbyname(addr)) != NULL) {
+    addr = inet_ntoa(*(struct in_addr *)he->h_addr);
   }
 
   if (e2term_port < 1 || e2term_port > 65535) {

@@ -38,6 +38,8 @@ public:
     // OCTET_STRING_t *getGlobalE2NodePlmnIdEncoded();  // FIXME remove
     BIT_STRING_t *getGlobalE2Node_gNBId();
 
+    const uint32_t gnbid;
+
 private:
     GlobalE2node_ID_t *globalE2NodeId;
 
