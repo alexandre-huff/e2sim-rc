@@ -34,11 +34,12 @@ target_link_libraries( e2sim PRIVATE
     sctp_objects
     messagerouting_objects
     common_objects
+    o1_objects
     envman
 	pistache
     )
 
-target_link_libraries( e2sim PRIVATE cpprestsdk::cpprest )
+target_link_libraries( e2sim PRIVATE cpprestsdk::cpprest OpenSSL::Crypto )
 
 target_include_directories (e2sim PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

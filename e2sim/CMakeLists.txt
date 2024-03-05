@@ -92,4 +92,5 @@ unset( GPROF CACHE )					# ensure this does not persist
 add_subdirectory( common )
 add_subdirectory( e2ap/src )
 add_subdirectory( e2sm )
+add_subdirectory( o1 )
 add_subdirectory( src )

@@ -33,8 +33,10 @@
 // #include <bits/stdc++.h>
 
 
-// Needs to be included before asn1c, because of the min definition
+// ################ Needs to be included before asn1c, because of the min definition ################
 #include <envman/environment_manager.h>
+#include "smo_du.hpp"
+// ################ up  to here ################
 
 #include "e2node.hpp"
 #include "e2sim.hpp"
@@ -142,6 +144,9 @@ int main(int argc, char *argv[]) {
 
     std::shared_ptr<GlobalE2NodeData> global_data = std::make_shared<GlobalE2NodeData>(cmd_args.mcc, cmd_args.mnc, cmd_args.gnb_id);
 
+    O1Handler o1(global_data);
+    o1.start_http_listener();
+
     std::shared_ptr<E2Sim> e2sim = std::make_shared<E2Sim>(global_data);
     E2APMessageSender e2ap_sender = std::bind(&E2Sim::encode_and_send_sctp_data, e2sim, _1, _2);
 
@@ -178,6 +183,8 @@ int main(int argc, char *argv[]) {
     e2sim->shutdown();
 
     stop_envman();
+
+    o1.shutdown_http_listener();
 
     logger_force(LOGGER_INFO, "E2 Node Simulator has finished");
 
