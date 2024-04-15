@@ -23,11 +23,15 @@
 
 #include "service_style.hpp"
 #include "action_definition.hpp"
+#include "e2sm_rc.hpp"
 
 namespace common{
     namespace rc {
-        std::shared_ptr<ServiceStyle> build_report_style4(std::shared_ptr<TriggerDefinition> &triggerDefinition, std::shared_ptr<ActionDefinition> &actionDefinition);
-        std::shared_ptr<ActionDefinition> build_action_definition_format1(ActionStartStopHandler &handler);
+        std::shared_ptr<ServiceStyle> build_report_style4(E2SM_RC &e2sm_rc);
+        std::shared_ptr<ServiceStyle> build_control_style3(E2SM_RC &e2sm_rc);
+
+        std::shared_ptr<ActionDefinition> build_report_action_definition_format1(ActionStartStopHandler &handler);
+        std::shared_ptr<ActionDefinition> build_handover_control_action_id1(ControlActionHandler &handler);
     }
 }
 

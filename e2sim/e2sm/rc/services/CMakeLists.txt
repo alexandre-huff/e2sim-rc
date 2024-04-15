@@ -15,7 +15,7 @@
 #==================================================================================
 #
 
-add_library( rc_service_objects STATIC report_style4.cpp )
+add_library( rc_service_objects STATIC report_style4.cpp control_style3.cpp )
 
 target_link_libraries( rc_service_objects PRIVATE logger_objects
     procedure_objects
@@ -38,6 +38,7 @@ target_include_directories ( rc_service_objects PUBLIC
 if( DEV_PKG )
     install( FILES
         report_style4.hpp
+        control_style3.hpp
         DESTINATION ${install_inc}
     )
 endif()

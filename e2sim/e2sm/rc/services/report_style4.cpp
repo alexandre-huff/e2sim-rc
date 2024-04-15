@@ -207,18 +207,14 @@ void RRCStateObserver::setMySharedPtr(std::shared_ptr<RRCStateObserver> my_share
 }
 
 bool RRCStateObserver::generate_ueid_report_info(UEID_t &ueid, const std::string &imsi) {
-    // if (!ueid) { // FIXME remove
-    //     logger_error("UEID_t must have a value. nil?");
-    //     return false;
-    // }
-
     if (imsi.length() != 15) {
         logger_error("IMSI must have 15 digits [0-9]");
         return false;
     }
 
     std::string mcc = imsi.substr(0, 3);
-    std::string mnc = imsi.substr(3, 3);
+    // TODO check how to dinamically figure out if MNC is 2 or 3 digits https://patents.google.com/patent/WO2008092821A2/en
+    std::string mnc = imsi.substr(3, 3);    // for now we assume MNC size is always 3 digits
     std::string msin = imsi.substr(6, 9);
 
     long msin_number;
@@ -248,11 +244,6 @@ bool RRCStateObserver::generate_ueid_report_info(UEID_t &ueid, const std::string
         return false;
     }
 
-    // ueid_gnb->amf_UE_NGAP_ID.buf = (uint8_t *) calloc(4, sizeof(uint8_t)); // FIXME remove
-    // ueid_gnb->amf_UE_NGAP_ID.buf[0] = (uint8_t) 1;
-    // ueid_gnb->amf_UE_NGAP_ID.size = 4 * sizeof(uint8_t);
-
-    // ASN_STRUCT_RESET(asn_DEF_PLMNIdentity, &ueid_gnb->guami.pLMNIdentity);
     PLMN_Identity_t *plmnid = common::utils::encodePlmnId(mcc.c_str(), mnc.c_str());
     ueid_gnb->guami.pLMNIdentity = *plmnid;
     if (plmnid) free(plmnid);
@@ -430,7 +421,9 @@ bool RRCStateObserver::generate_ran_params_report_info(const e_RRC_State changed
                 p17015->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueBitS = *gnbid; // THE value
                 if (gnbid) free(gnbid);
 
-                asn_fprint(stdout, &asn_DEF_E2SM_RC_IndicationMessage_Format2_RANParameter_Item, p17011);   // FIXME remove
+                if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+                    asn_fprint(stdout, &asn_DEF_E2SM_RC_IndicationMessage_Format2_RANParameter_Item, p17011);
+                }
 
                 params.emplace_back(p17011);
                 break;

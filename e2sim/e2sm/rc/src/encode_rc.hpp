@@ -56,6 +56,8 @@ extern "C" {
     #include "RICindicationMessage.h"
     #include "RIC-EventTriggerCondition-ID.h"
     #include "E2SM-RC-IndicationMessage-Format2-RANParameter-Item.h"
+    #include "E2SM-RC-ControlHeader.h"
+    #include "E2SM-RC-ControlMessage.h"
 }
 
 namespace common {
@@ -65,7 +67,9 @@ namespace rc {
         std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> ranp_list;
     } indication_msg_format2_ueid_t;
 
-    void encode_report_function_definition(void *report_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles);
+    void encode_report_function_definition(void *e2sm_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles);
+    void encode_control_function_definition(void *e2sm_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles);
+
     RICindicationHeader_t *encode_indication_header_format1(RIC_EventTriggerCondition_ID_t *condition);
     RICindicationMessage_t *encode_indication_message_format2(const std::vector<indication_msg_format2_ueid_t> &ue_ids);
 }

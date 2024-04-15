@@ -1,8 +1,6 @@
 /*****************************************************************************
 #                                                                            *
-# Copyright 2019 AT&T Intellectual Property                                  *
-# Copyright 2019 Nokia                                                       *
-# Copyright (c) 2020 Samsung Electronics Co., Ltd. All Rights Reserved.      *
+# Copyright 2024 Alexandre Huff                                              *
 #                                                                            *
 # Licensed under the Apache License, Version 2.0 (the "License");            *
 # you may not use this file except in compliance with the License.           *
@@ -17,31 +15,33 @@
 # limitations under the License.                                             *
 #                                                                            *
 ******************************************************************************/
-#ifndef E2AP_MESSAGE_HANDLER_HPP
-#define E2AP_MESSAGE_HANDLER_HPP
 
-#include "e2sim.hpp"
-// #include "e2sim_sctp.hpp"
+#ifndef RC_CONTROL_STYLE3_HPP
+#define RC_CONTROL_STYLE3_HPP
+
 #include "messages.hpp"
-
+#include "types_rc.hpp"
 
 extern "C" {
-  #include "e2sim_defs.h"
-  #include "e2ap_asn1c_codec.h"
+    #include "E2SM-RC-ControlHeader-Format1.h"
+    #include "E2SM-RC-ControlMessage-Format1.h"
 }
 
-void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, struct timespec *ts);
+/**
+ * This class implements the E2SM-RC Service Style 3 with CONTROL Action ID 1 feature
+*/
+class HandoverControl {
+public:
+    HandoverControl(e2sim::messages::RICControlRequest *request, common::rc::control_header_fmt1_data &hdr_data,
+        common::rc::control_message_fmt1_data &msg_data) : request(request), headerData(hdr_data), msgData(msg_data) { };
 
-// void e2ap_handle_E2SetupRequest(E2AP_PDU_t* pdu, int &socket_fd);
+    void runHandoverControl(e2sim::messages::RICControlResponse *response);
 
-// void e2ap_handle_RICSubscriptionRequest(E2AP_PDU_t* pdu, int &socket_fd);
+private:
+    common::rc::control_header_fmt1_data &headerData;
+    common::rc::control_message_fmt1_data &msgData;
+    e2sim::messages::RICControlRequest *request;
+};
 
-e2sim::messages::RICSubscriptionRequest *e2ap_handle_RICSubscriptionRequest(E2AP_PDU_t *pdu);
-e2sim::messages::RICSubscriptionDeleteRequest *e2ap_handle_RICSubscriptionDeleteRequest(E2AP_PDU_t *pdu);
-e2sim::messages::RICControlRequest *e2ap_handle_RICControlRequest(E2AP_PDU_t *pdu);
-
-// void e2ap_handle_E2SeviceRequest(E2AP_PDU_t* pdu, int &socket_fd, E2Sim *e2sim);
-
-// void e2ap_send_e2nodeConfigUpdate(int &socket_fd);
 
 #endif

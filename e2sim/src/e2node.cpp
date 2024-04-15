@@ -16,22 +16,9 @@
 #                                                                            *
 ******************************************************************************/
 
-// FIXME remove unused includes
-// #include <fstream>
-// #include <thread>
 #include <getopt.h>
-// #include <functional>
 #include <csignal>
 #include <stdexcept>
-// #include <prometheus/registry.h>
-// #include <prometheus/exposer.h>
-// #include <prometheus/histogram.h>
-// #include <cpprest/http_listener.h>
-// #include <cpprest/uri.h>
-// #include <cpprest/json.h>
-
-// #include <bits/stdc++.h>
-
 
 // ################ Needs to be included before asn1c, because of the min definition ################
 #include <envman/environment_manager.h>
@@ -69,7 +56,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     args.server_port = E2AP_SCTP_PORT;
     args.gnb_id = 1;
     args.mcc = "001";
-    args.mnc = "01";
+    args.mnc = "001";
 
     static struct option long_options[] =
     {
@@ -172,12 +159,15 @@ int main(int argc, char *argv[]) {
                 case SIGTERM:
                     logger_info("SIGTERM was received");
                     break;
+                case SIGTRAP:
+                    logger_info("SIGTRAP was received");
+                    break;
                 default:
                     logger_warn("sigwait returned signal %d (%s). Ignored!", delivered_signal, strsignal(delivered_signal));
             }
         }
 
-    } while (delivered_signal != SIGTERM && delivered_signal != SIGINT);
+    } while (delivered_signal != SIGTERM && delivered_signal != SIGINT && delivered_signal != SIGTRAP);
 
 
     e2sim->shutdown();

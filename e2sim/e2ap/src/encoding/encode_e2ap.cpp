@@ -1359,6 +1359,180 @@ E2AP_PDU_t *encoding::generate_e2ap_indication_pdu(e2sim::messages::RICIndicatio
   return e2ap_pdu;
 }
 
+E2AP_PDU_t *encoding::generate_e2ap_control_acknowledge(e2sim::messages::RICControlResponse *msg) {
+  LOGGER_TRACE_FUNCTION_IN
+
+  // Implements E2AP-R003-v03.00
+
+  if (!msg) {
+    logger_error("[E2AP] RicControlReponse message is required, nil?");
+    return NULL;
+  }
+
+  E2AP_PDU *pdu = (E2AP_PDU *)calloc(1, sizeof(E2AP_PDU));
+
+  pdu->present = E2AP_PDU_PR_successfulOutcome;
+  pdu->choice.successfulOutcome = (SuccessfulOutcome_t *) calloc(1, sizeof(SuccessfulOutcome_t));
+  pdu->choice.successfulOutcome->criticality = Criticality_reject;
+  pdu->choice.successfulOutcome->procedureCode = ProcedureCode_id_RICcontrol;
+  pdu->choice.successfulOutcome->value.present = SuccessfulOutcome__value_PR_RICcontrolAcknowledge;
+
+  // RIC Request ID
+  RICcontrolAcknowledge_IEs_t *req_id = (RICcontrolAcknowledge_IEs_t *) calloc(1, sizeof(RICcontrolAcknowledge_IEs_t));
+  req_id->criticality = Criticality_reject;
+  req_id->id = ProtocolIE_ID_id_RICrequestID;
+  req_id->value.present = RICcontrolAcknowledge_IEs__value_PR_RICrequestID;
+  req_id->value.choice.RICrequestID.ricInstanceID = msg->ricRequestId.ricInstanceID;
+  req_id->value.choice.RICrequestID.ricRequestorID = msg->ricRequestId.ricRequestorID;
+  ASN_SEQUENCE_ADD(&pdu->choice.successfulOutcome->value.choice.RICcontrolAcknowledge.protocolIEs.list, req_id);
+
+  // RAN Function ID
+  RICcontrolAcknowledge_IEs_t *func_id = (RICcontrolAcknowledge_IEs_t *) calloc(1, sizeof(RICcontrolAcknowledge_IEs_t));
+  func_id->criticality = Criticality_reject;
+  func_id->id = ProtocolIE_ID_id_RANfunctionID;
+  func_id->value.present = RICcontrolAcknowledge_IEs__value_PR_RANfunctionID;
+  func_id->value.choice.RANfunctionID = msg->ranFunctionId;
+  ASN_SEQUENCE_ADD(&pdu->choice.successfulOutcome->value.choice.RICcontrolAcknowledge.protocolIEs.list, func_id);
+
+  // RIC Call process ID
+  RICcontrolAcknowledge_IEs_t *proc_id = NULL;
+  if (msg->callProcessId) {
+    proc_id = (RICcontrolAcknowledge_IEs_t *) calloc(1, sizeof(RICcontrolAcknowledge_IEs_t));
+    proc_id->criticality = Criticality_reject;
+    proc_id->id = ProtocolIE_ID_id_RICcallProcessID;
+    proc_id->value.present = RICcontrolAcknowledge_IEs__value_PR_RICcallProcessID;
+    if (OCTET_STRING_fromBuf(&proc_id->value.choice.RICcallProcessID, (const char *)msg->callProcessId->buf, msg->callProcessId->size) == -1) {
+      logger_error("[E2AP] Unable to copy contents from RICControlResponse to RICcallProcessID");
+      // FIXME what to do on this error?
+    }
+    ASN_SEQUENCE_ADD(&pdu->choice.successfulOutcome->value.choice.RICcontrolAcknowledge.protocolIEs.list, proc_id);
+  }
+
+  // RIC Call process ID
+  RICcontrolAcknowledge_IEs_t *outcome = NULL;
+  if (msg->controlOutcome) {
+    outcome = (RICcontrolAcknowledge_IEs_t *) calloc(1, sizeof(RICcontrolAcknowledge_IEs_t));
+    outcome->criticality = Criticality_reject;
+    outcome->id = ProtocolIE_ID_id_RICcontrolOutcome;
+    outcome->value.present = RICcontrolAcknowledge_IEs__value_PR_RICcontrolOutcome;
+    if (OCTET_STRING_fromBuf(&outcome->value.choice.RICcontrolOutcome, (const char *)msg->controlOutcome->buf, msg->controlOutcome->size) == -1) {
+      logger_error("[E2AP] Unable to copy contents from RICControlResponse to RICcontrolOutcome");
+      // FIXME what to do on this error?
+    }
+    ASN_SEQUENCE_ADD(&pdu->choice.successfulOutcome->value.choice.RICcontrolAcknowledge.protocolIEs.list, outcome);
+  }
+
+  char error_buf[300] = {0, };
+  size_t errlen = 300;
+
+  int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, pdu, error_buf, &errlen);
+  if (ret != 0) {
+    logger_error("E2AP_PDU check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+  }
+
+  logger_debug("E2AP Control Acknowledge PDU generated");
+
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    asn_fprint(stderr, &asn_DEF_E2AP_PDU, pdu);
+  }
+
+  LOGGER_TRACE_FUNCTION_OUT
+
+  return pdu;
+}
+
+E2AP_PDU_t *encoding::generate_e2ap_control_failure(e2sim::messages::RICControlResponse *msg) {
+  LOGGER_TRACE_FUNCTION_IN
+
+  // Implements E2AP-R003-v03.00
+
+  if (!msg) {
+    logger_error("[E2AP] RicControlReponse message is required, nil?");
+    return NULL;
+  }
+
+  E2AP_PDU *pdu = (E2AP_PDU *)calloc(1, sizeof(E2AP_PDU));
+
+  pdu->present = E2AP_PDU_PR_unsuccessfulOutcome;
+  pdu->choice.unsuccessfulOutcome = (UnsuccessfulOutcome_t *) calloc(1, sizeof(UnsuccessfulOutcome_t));
+  pdu->choice.unsuccessfulOutcome->criticality = Criticality_reject;
+  pdu->choice.unsuccessfulOutcome->procedureCode = ProcedureCode_id_RICcontrol;
+  pdu->choice.unsuccessfulOutcome->value.present = UnsuccessfulOutcome__value_PR_RICcontrolFailure;
+
+  // RIC Request ID
+  RICcontrolFailure_IEs_t *req_id = (RICcontrolFailure_IEs_t *) calloc(1, sizeof(RICcontrolFailure_IEs_t));
+  req_id->criticality = Criticality_reject;
+  req_id->id = ProtocolIE_ID_id_RICrequestID;
+  req_id->value.present = RICcontrolFailure_IEs__value_PR_RICrequestID;
+  req_id->value.choice.RICrequestID.ricInstanceID = msg->ricRequestId.ricInstanceID;
+  req_id->value.choice.RICrequestID.ricRequestorID = msg->ricRequestId.ricRequestorID;
+  ASN_SEQUENCE_ADD(&pdu->choice.unsuccessfulOutcome->value.choice.RICcontrolFailure.protocolIEs.list, req_id);
+
+  // RAN Function ID
+  RICcontrolFailure_IEs_t *func_id = (RICcontrolFailure_IEs_t *) calloc(1, sizeof(RICcontrolFailure_IEs_t));
+  func_id->criticality = Criticality_reject;
+  func_id->id = ProtocolIE_ID_id_RANfunctionID;
+  func_id->value.present = RICcontrolFailure_IEs__value_PR_RANfunctionID;
+  func_id->value.choice.RANfunctionID = msg->ranFunctionId;
+  ASN_SEQUENCE_ADD(&pdu->choice.unsuccessfulOutcome->value.choice.RICcontrolFailure.protocolIEs.list, func_id);
+
+  // RIC Call process ID
+  RICcontrolFailure_IEs_t *proc_id = NULL;
+  if (msg->callProcessId) {
+    proc_id = (RICcontrolFailure_IEs_t *) calloc(1, sizeof(RICcontrolFailure_IEs_t));
+    proc_id->criticality = Criticality_reject;
+    proc_id->id = ProtocolIE_ID_id_RICcallProcessID;
+    proc_id->value.present = RICcontrolFailure_IEs__value_PR_RICcallProcessID;
+    if (OCTET_STRING_fromBuf(&proc_id->value.choice.RICcallProcessID, (const char *)msg->callProcessId->buf, msg->callProcessId->size) == -1) {
+      logger_error("[E2AP] Unable to copy contents from RICControlResponse to RICcallProcessID");
+      // FIXME what to do on this error?
+    }
+    ASN_SEQUENCE_ADD(&pdu->choice.unsuccessfulOutcome->value.choice.RICcontrolFailure.protocolIEs.list, proc_id);
+  }
+
+  // Cause
+  RICcontrolFailure_IEs_t *cause = (RICcontrolFailure_IEs_t *) calloc(1, sizeof(RICcontrolFailure_IEs_t));
+  cause->criticality = Criticality_ignore;
+  cause->id = ProtocolIE_ID_id_Cause;
+  cause->value.present = RICcontrolFailure_IEs__value_PR_Cause;
+  cause->value.choice.Cause = msg->cause;
+  ASN_SEQUENCE_ADD(&pdu->choice.unsuccessfulOutcome->value.choice.RICcontrolFailure.protocolIEs.list, cause);
+
+  // RIC Call process ID
+  RICcontrolFailure_IEs_t *outcome = NULL;
+  if (msg->controlOutcome) {
+    outcome = (RICcontrolFailure_IEs_t *) calloc(1, sizeof(RICcontrolFailure_IEs_t));
+    outcome->criticality = Criticality_reject;
+    outcome->id = ProtocolIE_ID_id_RICcontrolOutcome;
+    outcome->value.present = RICcontrolFailure_IEs__value_PR_RICcontrolOutcome;
+    if (OCTET_STRING_fromBuf(&outcome->value.choice.RICcontrolOutcome, (const char *)msg->controlOutcome->buf, msg->controlOutcome->size) == -1) {
+      logger_error("[E2AP] Unable to copy contents from RICControlResponse to RICcontrolOutcome");
+      // FIXME what to do on this error?
+    }
+    ASN_SEQUENCE_ADD(&pdu->choice.unsuccessfulOutcome->value.choice.RICcontrolFailure.protocolIEs.list, outcome);
+  }
+
+  // Criticality Diagnostics not used for now
+
+  char error_buf[300] = {0, };
+  size_t errlen = 300;
+
+  int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, pdu, error_buf, &errlen);
+  if (ret != 0) {
+    logger_error("E2AP_PDU check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+  }
+
+  logger_debug("E2AP Control Failure PDU generated");
+
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    asn_fprint(stderr, &asn_DEF_E2AP_PDU, pdu);
+  }
+
+  LOGGER_TRACE_FUNCTION_OUT
+
+  return pdu;
+}
+
 void encoding::generate_e2ap_removal_request(E2AP_PDU_t *e2ap_pdu) {
   logger_trace("in function %s", __func__);
 

@@ -17,7 +17,6 @@
 ******************************************************************************/
 
 #include "action_definition.hpp"
-#include "logger.h"
 
 int ActionDefinition::getFormat() {
     return format;
@@ -50,4 +49,8 @@ bool ActionDefinition::startAction(ric_subscription_info_t info, std::any svc_st
 
 bool ActionDefinition::stopAction(ric_subscription_info_t info, std::any svc_style_data) {
     return startStopHandler(ACTION_STOP, info, svc_style_data);
+}
+
+e2sim::messages::RICControlResponse * ActionDefinition::runControlAction(e2sim::messages::RICControlRequest *request) {
+    return controlHandler(request);
 }

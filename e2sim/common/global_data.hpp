@@ -94,7 +94,6 @@ public:
 
     GlobalE2node_ID_t *getGlobalE2NodeId();
     PLMN_Identity_t *getGlobalE2NodePlmnId();
-    // OCTET_STRING_t *getGlobalE2NodePlmnIdEncoded();  // FIXME remove
     BIT_STRING_t *getGlobalE2Node_gNBId();
 
     TxReferenceLevel txLevel;

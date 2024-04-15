@@ -126,18 +126,6 @@ PLMN_Identity_t *GlobalE2NodeData::getGlobalE2NodePlmnId() {
     return plmnid;
 }
 
-// /*
-//   Return the encoded PLMN Identity.
-//   It is the caller responsibility to free the returned pointer.
-// */
-// OCTET_STRING_t *GlobalE2NodeData::getGlobalE2NodePlmnIdEncoded() {   // FIXME remove as PLMN_Identity_t actually is OCTET_STRING_t
-//     PLMN_Identity_t *plmnid = getGlobalE2NodePlmnId();
-//     OCTET_STRING_t *data = common::utils::asn1_check_and_encode(&asn_DEF_PLMN_Identity, plmnid);
-//     ASN_STRUCT_FREE(asn_DEF_PLMN_Identity, plmnid);
-
-//     return data;
-// }
-
 /*
   Return a copy of the Global E2 Node gNodeB Id encoded in bit string.
   It is the caller responsibility to free the returned pointer.

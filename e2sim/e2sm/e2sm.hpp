@@ -57,14 +57,6 @@ public:
     bool addProcedure(ProcedureCode_t code, std::shared_ptr<FunctionalProcedure> procedure);
     bool addService(ran_service_e type, std::shared_ptr<E2SMService> service);
 
-    std::shared_ptr<TriggerDefinition> const getTrigger(int ric_style_type) const;
-    bool addTrigger(std::shared_ptr<TriggerDefinition> &trigger);
-    std::vector<std::shared_ptr<TriggerDefinition>> const getTriggers() const;
-
-    std::shared_ptr<ActionDefinition> const getAction(int format) const;
-    bool addAction(std::shared_ptr<ActionDefinition> action);
-    std::vector<std::shared_ptr<ActionDefinition>> const getActions() const;
-
     E2APMessageSender &getE2APMessageSender();
 
     EnvironmentManager *getEnvironmentManager();
@@ -78,8 +70,6 @@ private:
     ran_function_name_t ranFunctionName;
     std::unordered_map<ProcedureCode_t, std::shared_ptr<FunctionalProcedure>> procedures;
     std::unordered_map<ran_service_e, std::shared_ptr<E2SMService>> services;
-    std::unordered_map<int, std::shared_ptr<TriggerDefinition>> triggers;
-    std::unordered_map<int, std::shared_ptr<ActionDefinition>> actions;
 
     EnvironmentManager *envmanager; // manages all observers of Environment Manager
     std::shared_ptr<SubscriptionManager> subManager;

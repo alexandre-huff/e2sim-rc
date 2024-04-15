@@ -27,7 +27,7 @@
 
 class ServiceStyle {
 public:
-    ServiceStyle(int ric_style_type, std::string ric_style_name, std::shared_ptr<TriggerDefinition> &trigger, std::shared_ptr<ActionDefinition> &action) :
+    ServiceStyle(int ric_style_type, std::string ric_style_name, std::shared_ptr<TriggerDefinition> trigger, std::shared_ptr<ActionDefinition> action) :
             ricStyleType(ric_style_type), ricStyleName(ric_style_name), triggerDefinition(trigger), actionDefinition(action) { };
 
     int getRicStyleType();

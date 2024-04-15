@@ -27,14 +27,15 @@
 
 #include "ran_parameter.hpp"
 #include "ric_subscription.hpp"
+#include "ric_control.hpp"
 
 typedef enum {
     ACTION_START,
     ACTION_STOP
 } action_handler_operation_e;
 
-// typedef std::function<bool(action_handler_operation_e op, ric_subscription_info_t info, void *data)> ActionDefinitionStartStopHandler; // FIXME remove
 using ActionStartStopHandler = std::function<bool(action_handler_operation_e op, ric_subscription_info_t info, std::any svc_style_data)>;
+using ControlActionHandler = std::function<e2sim::messages::RICControlResponse *(e2sim::messages::RICControlRequest *request)>;
 
 // see https://cplusplus.com/forum/general/213180/
 // also https://cplusplus.com/doc/oldtutorial/templates/
@@ -42,6 +43,7 @@ using ActionStartStopHandler = std::function<bool(action_handler_operation_e op,
 class ActionDefinition {
 public:
     ActionDefinition(int format, ActionStartStopHandler handler) : format(format), startStopHandler(handler) {} ;
+    ActionDefinition(int format, ControlActionHandler handler) : format(format), controlHandler(handler) {} ;
 
     int getFormat();
 
@@ -51,12 +53,14 @@ public:
 
     bool startAction(ric_subscription_info_t info, std::any svc_style_data);
     bool stopAction(ric_subscription_info_t info, std::any svc_style_data);
+    e2sim::messages::RICControlResponse *runControlAction(e2sim::messages::RICControlRequest *request);
 
 private:
     int format;
     std::unordered_map<int, std::shared_ptr<RANParameter>> parameters;
 
-    ActionStartStopHandler startStopHandler;
+    ActionStartStopHandler startStopHandler;    // Subscription-based
+    ControlActionHandler controlHandler;        // Control-based
 
 };
 

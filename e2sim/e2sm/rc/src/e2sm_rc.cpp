@@ -19,9 +19,11 @@
 #include "e2sm_rc.hpp"
 #include "logger.h"
 #include "report_service.hpp"
+#include "control_service.hpp"
 #include "ric_subscription.hpp"
 #include "ric_subscription_delete.hpp"
 #include "ric_indication.hpp"
+#include "ric_control.hpp"
 #include "functional.hpp"
 #include "e2sm_rc_builder.hpp"
 #include "encode_rc.hpp"
@@ -29,6 +31,7 @@
 #include "encode_e2ap.hpp"
 #include "report_style4.hpp"
 #include "types_rc.hpp"
+#include "control_style3.hpp"
 
 extern "C" {
     #include "ProcedureCode.h"
@@ -45,6 +48,8 @@ extern "C" {
     #include "E2SM-RC-ActionDefinition-Format1-Item.h"
     #include "RANParameter-ID.h"
     #include "CauseRICrequest.h"
+    #include "E2SM-RC-ControlHeader-Format1.h"
+    #include "E2SM-RC-ControlMessage-Format1-Item.h"
 }
 
 E2SM_RC::E2SM_RC(std::string shortName, std::string oid, std::string description, EnvironmentManager *env_manager,
@@ -76,10 +81,19 @@ void E2SM_RC::init() {
         logger_error("Unable to add RIC Subscription Delete procedure in %s", this->getRanFunctionName().shortName.c_str());
     }
 
+    // RIC Indication
     std::shared_ptr<RICIndicationProcedure> indproc = std::make_shared<RICIndicationProcedure>(getE2APMessageSender());
 
     if (!this->addProcedure(ProcedureCode_id_RICindication, indproc)) {
         logger_error("Unable to add RIC Indication procedure in %s", this->getRanFunctionName().shortName.c_str());
+    }
+
+    // RIC Control
+    ControlHandler control_handler = std::bind(&E2SM_RC::handle_ric_control_request, this, _1);
+    std::shared_ptr<RICControlProcedure> ctrl_proc = std::make_shared<RICControlProcedure>(control_handler);
+
+    if (!this->addProcedure(ProcedureCode_id_RICcontrol, ctrl_proc)) {
+        logger_error("Unable to add RIC Control procedure in %s", this->getRanFunctionName().shortName.c_str());
     }
 
     /* ############# RAN Function services ############# */
@@ -90,23 +104,24 @@ void E2SM_RC::init() {
         logger_error("Unable to add REPORT service in %s", this->getRanFunctionName().shortName.c_str());
     }
 
-    /* ############# RAN Function triggers ############# */
-    std::shared_ptr<TriggerDefinition> trigger_style4 = std::make_shared<TriggerDefinition>(4, "UE Information Change");
-    if (!addTrigger(trigger_style4)) {
-        logger_error("Unable to add TriggerDefinition Style 4 to %s", getRanFunctionName().shortName.c_str());
-    }
-
-    /* ############# RAN Function actions ############# */
-    ActionStartStopHandler handler = std::bind(&E2SM_RC::startStopReportStyle4, this, _1, _2, _3);
-    std::shared_ptr<ActionDefinition> action_fmt1 = common::rc::build_action_definition_format1(handler);
-    if (!(action_fmt1 && addAction(action_fmt1))) {
-        logger_error("Unable to add Action Definition Format 1 to %d", getRanFunctionName().shortName.c_str());
-    }
-
     // REPORT Service Style 4
-    std::shared_ptr<ServiceStyle> style4 = common::rc::build_report_style4(trigger_style4, action_fmt1);
+    std::shared_ptr<ServiceStyle> style4 = common::rc::build_report_style4(*this);
     if (!report->addServiceStyle(4, style4)) {
         logger_error("Unable to add Service Style 4 to REPORT Service");
+    }
+
+    /* ############# RAN Function services ############# */
+    // CONTROL service
+    EncodeFunctionDefinitionHandler control_encode_function_handler = std::bind(&common::rc::encode_control_function_definition, _1, _2);
+    std::shared_ptr<ControlService> control = std::make_shared<ControlService>(std::move(control_encode_function_handler));
+    if (!this->addService(CONTROL_SERVICE, control)) {
+        logger_error("Unable to add CONTROL service in %s", this->getRanFunctionName().shortName.c_str());
+    }
+
+    // CONTROL Service Style 3
+    std::shared_ptr<ServiceStyle> style3 = common::rc::build_control_style3(*this);
+    if (!control->addServiceStyle(3, style3)) {
+        logger_error("Unable to add Service Style 3 to CONTROL Service");
     }
 
     LOGGER_TRACE_FUNCTION_OUT
@@ -223,10 +238,24 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
                         return response;
                     }
 
-                    // validating if we support the requested action definition
-                    const auto &action_def = getAction(e2sm_action->ric_actionDefinition_formats.present);
-                    if (!action_def) {
-                        logger_error("E2SM RC Action Definition Definition Format %d not supported", e2sm_action->ric_actionDefinition_formats.present);
+                    const auto svc_style = service->getServiceStyle(e2sm_action->ric_Style_Type);
+                    if (!svc_style) {
+                        logger_error("REPORT Service Style %ld not supported", e2sm_action->ric_Style_Type);
+                        RICaction_NotAdmitted_Item item;
+                        item.ricActionID = action.ricActionId;
+                        Cause_t cause;
+                        cause.present = Cause_PR_ricRequest;
+                        cause.choice.ricRequest = CauseRICrequest_unspecified;
+                        item.cause = cause;
+
+                        response->notAdmittedList.emplace_back(item);
+                        break;
+                    }
+
+                    // validating if we support the configuration of the requested action definition
+                    const auto &action_def = svc_style->getActionDefinition();
+                    if (action_def->getFormat() != e2sm_action->ric_actionDefinition_formats.present) {
+                        logger_error("E2SM RC Action Definition Format %d not supported for REPORT Service", e2sm_action->ric_actionDefinition_formats.present);
                         RICaction_NotAdmitted_Item item;
                         item.ricActionID = action.ricActionId;
                         Cause_t cause;
@@ -238,66 +267,44 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
                         break;
                     }
 
-
                     common::rc::action_definition_fmt1_data action_fmt1_data;
                     bool is_action_admitted;
                     switch (e2sm_action->ric_actionDefinition_formats.present) {
                         case E2SM_RC_ActionDefinition__ric_actionDefinition_formats_PR_actionDefinition_Format1:
-                        {
                             is_action_admitted = process_action_definition_format1(e2sm_action->ric_actionDefinition_formats.choice.actionDefinition_Format1, action_fmt1_data);
-
                             break;
-                        }
 
                         default:
-                            logger_error("E2SM RC Action Definition Format %d not implemented", e2sm_action->ric_actionDefinition_formats.present);
+                            logger_error("E2SM RC Action Definition Format %d not implemented for REPORT Service", e2sm_action->ric_actionDefinition_formats.present);
                             is_action_admitted = false;
-
                     }
 
-                    const auto svc_style = service->getServiceStyle(e2sm_action->ric_Style_Type);
-                    if (!svc_style || svc_style->getRicStyleType() != 4) {    // we only support Style 4 for now
-                        logger_error("REPORT Service Style %ld not supported", e2sm_action->ric_Style_Type);
-                        RICaction_NotAdmitted_Item item;
+                    if (is_action_admitted) {
+                        RICaction_Admitted_Item_t item;
                         item.ricActionID = action.ricActionId;
-                        Cause_t cause;
-                        cause.present = Cause_PR_ricRequest;
-                        cause.choice.ricRequest = CauseRICrequest_unspecified;
-                        item.cause = cause;
+                        response->admittedList.emplace_back(item);
 
-                        response->notAdmittedList.emplace_back(item);
-
-                    } else {
+                        ric_subscription_info_t info;
+                        info.ricRequestId = request->ricRequestId;
+                        info.ricActionId = action.ricActionId;
+                        info.ranFunctionId = request->ranFunctionId;
 
                         common::rc::report_style4_data report_style4_data;
                         report_style4_data.trigger_data = trigger_fmt4_data;
                         report_style4_data.action_data = action_fmt1_data;
 
-                        if (is_action_admitted) {
-                            RICaction_Admitted_Item_t item;
-                            item.ricActionID = action.ricActionId;
-                            response->admittedList.emplace_back(item);
+                        action_def->startAction(info, report_style4_data);
 
-                            ric_subscription_info_t info;
-                            info.ricRequestId = request->ricRequestId;
-                            info.ricActionId = action.ricActionId;
-                            info.ranFunctionId = request->ranFunctionId;
+                    } else {
+                        RICaction_NotAdmitted_Item item;
+                        item.ricActionID = action.ricActionId;
+                        Cause_t cause;
+                        cause.present = Cause_PR_ricRequest;
+                        cause.choice.ricRequest = CauseRICrequest_action_not_supported;
+                        item.cause = cause;
 
-                            action_def->startAction(info, report_style4_data);
-
-                        } else {
-                            RICaction_NotAdmitted_Item item;
-                            item.ricActionID = action.ricActionId;
-                            Cause_t cause;
-                            cause.present = Cause_PR_ricRequest;
-                            cause.choice.ricRequest = CauseRICrequest_action_not_supported;
-                            item.cause = cause;
-
-                            response->notAdmittedList.emplace_back(item);
-                        }
-
+                        response->notAdmittedList.emplace_back(item);
                     }
-
 
                 } else {
                     logger_error("RIC Action Definition is required");
@@ -310,8 +317,6 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
 
                     response->notAdmittedList.emplace_back(item);
                 }
-
-
 
             }
             break;
@@ -575,6 +580,110 @@ e2sim::messages::RICSubscriptionDeleteResponse *E2SM_RC::handle_ric_subscription
     return response;
 }
 
+e2sim::messages::RICControlResponse *E2SM_RC::handle_ric_control_request(e2sim::messages::RICControlRequest *request) {
+    LOGGER_TRACE_FUNCTION_IN
+
+    E2SM_RC_ControlHeader_t *header = NULL;
+    E2SM_RC_ControlMessage_t *message = NULL;
+
+    e2sim::messages::RICControlResponse *response = new e2sim::messages::RICControlResponse();
+    response->ricRequestId = request->ricRequestId;
+    response->ranFunctionId = request->ranFunctionId;
+    response->callProcessId = request->callProcessId;
+
+    // validating if we support the control service
+    const std::shared_ptr<E2SMService> &service = getService(CONTROL_SERVICE);
+    if (!service) {
+        logger_warn("CONTROL Service not supported");
+        response->succeeded = false;
+        response->cause.present = Cause_PR_ricRequest;
+        response->cause.choice.ricRequest = CauseRICrequest_action_not_supported;
+
+        return response;
+    }
+
+    bool hdr_success = common::utils::asn1_decode_and_check(&asn_DEF_E2SM_RC_ControlHeader, (void **)&header, request->header.buf, request->header.size);
+    bool msg_success = common::utils::asn1_decode_and_check(&asn_DEF_E2SM_RC_ControlMessage, (void **)&message, request->message.buf, request->message.size);
+
+    if (hdr_success && msg_success) {
+        switch (header->ric_controlHeader_formats.present) {
+            case E2SM_RC_ControlHeader__ric_controlHeader_formats_PR_controlHeader_Format1:
+            {
+                E2SM_RC_ControlHeader_Format1_t *hdr_fmt1 = header->ric_controlHeader_formats.choice.controlHeader_Format1;
+
+                const auto svc_style = service->getServiceStyle(hdr_fmt1->ric_Style_Type);
+                if (!svc_style) {
+                    logger_error("CONTROL Service Style %ld not supported", hdr_fmt1->ric_Style_Type);
+                    response->succeeded = false;
+                    response->cause.present = Cause_PR_ricRequest;
+                    response->cause.choice.ricRequest = CauseRICrequest_unspecified;
+                    break;
+                }
+
+                if (hdr_fmt1->ric_Style_Type == 3) {
+                    E2SM_RC_ControlMessage_Format1_t *msg_fmt1  = message->ric_controlMessage_formats.choice.controlMessage_Format1;
+
+                    const auto &action = svc_style->getActionDefinition();
+                    if (!action) {
+                        logger_error("CONTROL Action ID %ld not supported", hdr_fmt1->ric_Style_Type);
+                        response->succeeded = false;
+                        response->cause.present = Cause_PR_ricRequest;
+                        response->cause.choice.ricRequest = CauseRICrequest_action_not_supported;
+                        break;
+                    }
+
+                    common::rc::control_header_fmt1_data header_data;
+                    if (!process_control_header_format1(hdr_fmt1, header_data)) {
+                        response->succeeded = false;
+                        response->cause.present = Cause_PR_ricRequest;
+                        response->cause.choice.ricRequest = CauseRICrequest_invalid_information_request;
+                    }
+
+                    common::rc::control_message_fmt1_data msg_data;
+                    if (!process_control_message_format1(msg_fmt1, msg_data, action)) {
+                        response->succeeded = false;
+                        response->cause.present = Cause_PR_ricRequest;
+                        response->cause.choice.ricRequest = CauseRICrequest_control_message_invalid;
+                        break;
+                    }
+
+                    HandoverControl handover(request, header_data, msg_data);
+                    handover.runHandoverControl(response);
+
+                } else {
+                    logger_error("Style %d not implemented for E2SM RC Control Header Action Format 1", hdr_fmt1->ric_Style_Type);
+                    response->succeeded = false;
+                    response->cause.present = Cause_PR_ricRequest;
+                    response->cause.choice.ricRequest = CauseRICrequest_control_failed_to_execute;
+                }
+
+                break;
+            }
+            default:
+                logger_error("E2SM RC Control Header Action Format %d not implemented", header->ric_controlHeader_formats.present);
+                response->succeeded = false;
+                response->cause.present = Cause_PR_ricRequest;
+                response->cause.choice.ricRequest = CauseRICrequest_control_failed_to_execute;
+        }
+
+    } else {    // on hdr or msg decoding error
+        response->succeeded = false;
+        response->cause.present = Cause_PR_ricRequest;
+        response->cause.choice.ricRequest = CauseRICrequest_control_message_invalid;
+    }
+
+    if (hdr_success) {
+        ASN_STRUCT_FREE(asn_DEF_E2SM_RC_ControlHeader, header);
+    }
+    if (msg_success) {
+        ASN_STRUCT_FREE(asn_DEF_E2SM_RC_ControlMessage, message);
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+
+    return response;
+}
+
 /*
     Starts/Stops the RRC Observer
 */
@@ -698,4 +807,224 @@ bool E2SM_RC::process_action_definition_format1(E2SM_RC_ActionDefinition_Format1
     LOGGER_TRACE_FUNCTION_OUT
 
     return true;
+}
+
+bool E2SM_RC::process_control_header_format1(E2SM_RC_ControlHeader_Format1_t *header, common::rc::control_header_fmt1_data &data) {
+    LOGGER_TRACE_FUNCTION_IN
+
+    bool res = false;
+    long msin_number = 0;
+
+    if (header->ueID.present == UEID_PR_gNB_UEID) {
+        if (!common::utils::decodePlmnId(&header->ueID.choice.gNB_UEID->guami.pLMNIdentity, data.ue_id.mcc, data.ue_id.mnc)) {
+            logger_error("Unable to decode PLMN ID from gnb_UEID for Handover Control");
+        }
+
+        if (asn_INTEGER2long(&header->ueID.choice.gNB_UEID->amf_UE_NGAP_ID, &msin_number) != 0) {
+            logger_error("Unable to decode MSIN number from amf_UE_NGAP_ID");
+        }
+        data.ue_id.msin = std::to_string(msin_number);
+
+        // we need to pad extra characters between mnc and msin to have a total of 15 digits in the final imsi
+        int padding = 15 - 3 - data.ue_id.mnc.length() - data.ue_id.msin.length(); // MCC always has 3 digits
+        data.ue_id.msin = data.ue_id.msin.insert(0, padding, '0');  // we pad msin with zeroes to reach 15 digits in the final imsi
+
+        std::string imsi = data.ue_id.mcc + data.ue_id.mnc + data.ue_id.msin;
+
+        if (imsi.length() == 15) {  // paranoid check
+            data.ric_Style_Type = header->ric_Style_Type;
+            data.ric_ControlAction_ID = header->ric_ControlAction_ID;
+            if (header->ric_ControlDecision) {  // OPTIONAL as per E2SM-RC-R003-v03.00
+                if (*header->ric_ControlDecision == 0) {    // ENUMERATED(accept, reject, ...) as per E2SM-RC-R003-v03.00
+                    data.control_decision = common::rc::control_decision_e::ACCEPT;
+                } else {
+                    data.control_decision = common::rc::control_decision_e::REJECT;
+                }
+
+            } else {
+                data.control_decision = common::rc::control_decision_e::NONE;
+            }
+
+            res = true;
+        } else {
+            logger_error("IMSI must have 15 digits, but has %lu. mcc=%s, mnc=%s, msin=%s",
+                imsi.length(), data.ue_id.mcc.c_str(), data.ue_id.mnc.c_str(), data.ue_id.msin.c_str());
+        }
+
+    } else {
+        logger_error("UE ID %d not implemented for Control Header Format 1");
+
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+
+    return res;
+}
+
+bool E2SM_RC::process_control_message_format1(E2SM_RC_ControlMessage_Format1_t *fmt1,
+        common::rc::control_message_fmt1_data &data, const std::shared_ptr<ActionDefinition> &action) {
+    LOGGER_TRACE_FUNCTION_IN
+
+    if (fmt1->ranP_List.list.count == 0) {
+        logger_error("At least 1 RAN Parameter is required for Control Message Format 1");
+        return false;
+    }
+
+    E2SM_RC_ControlMessage_Format1_Item_t **items = fmt1->ranP_List.list.array;
+    for (int i = 0; i < fmt1->ranP_List.list.count; i++) {
+        E2SM_RC_ControlMessage_Format1_Item_t *item = items[i];
+
+        switch (item->ranParameter_ID) {    // E2SM-RC-R003-v03.00 only supports params 1, 7, 13, and 19 at the first level in the param tree
+            case 1:
+                if (item->ranParameter_valueType.present == RANParameter_ValueType_PR_ranP_Choice_Structure) {
+
+                    RANParameter_STRUCTURE_Item_t *p2 = get_ran_parameter_structure_item(
+                        item->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure,
+                        (RANParameter_ID_t) 2, RANParameter_ValueType_PR_ranP_Choice_Structure);
+                    if (p2) {
+                        RANParameter_STRUCTURE_Item_t *p3 = get_ran_parameter_structure_item(
+                            p2->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure,
+                            (RANParameter_ID_t) 3, RANParameter_ValueType_PR_ranP_Choice_Structure);
+                        if (p3) {
+                            RANParameter_STRUCTURE_Item_t *p4 = get_ran_parameter_structure_item(
+                                p3->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure,
+                                (RANParameter_ID_t) 4, RANParameter_ValueType_PR_ranP_Choice_ElementFalse);
+                            if (p4) {
+                                if (action->getRanParameter((int)p4->ranParameter_ID)) {
+                                    data.ran_parameters.emplace_back(p4->ranParameter_ID,
+                                        p4->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value);
+                                } else {
+                                    logger_warn("RAN Parameter ID %lu not supported for Control Message Format 1", item->ranParameter_ID);
+                                }
+
+                            } else {
+                                logger_error("Unable to get NR CGI parameter from NR Cell in Control Message Format 1");
+                                return false;
+                            }
+
+                        } else {
+                            logger_error("Unable to get NR Cell parameter from Target Cell in Control Message Format 1");
+                            return false;
+                        }
+
+
+                    } else {
+                        logger_error("Unable to get Target Cell parameter from Target Primary Cell ID in Control Message Format 1");
+                        return false;
+                    }
+
+                } else {
+                    logger_error("RAN parameter type %s is required", RANParameter_ValueType_PR_ranP_Choice_Structure);
+                    return false;
+                }
+
+                break;
+
+            case 7:
+            case 13:
+            case 19:
+                logger_warn("RAN Parameter ID %lu not implemented yet for Control Message Format 1", item->ranParameter_ID);
+                break;
+
+            default:
+                logger_error("RAN Parameter ID %lu is not encoded correctly in the param tree for Control Message Format 1. Did you mean %s?",
+                    item->ranParameter_ID, asn_DEF_RANParameter_STRUCTURE_Item.name);
+        }
+    }
+
+    if (data.ran_parameters.size() == 0) {
+        logger_error("No required RAN Parameter ID is supported yet for Control Message Format 1");
+        return false;
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+
+    return true;
+}
+
+/// @brief Retrieves a given RAN Parameter within a sequence of RAN parameteres within a RAN Parameter Structure
+/// @param ranp_s The RAN Parameter Structure which we will iterate to retrieve the RAN Parameter Structure Item
+/// @param ranp_id The RAN Parameter ID we want to retrieve
+/// @param ranp_type The RAN Parameter Type of the @p ranp_id
+/// @return A pointer to the address of @p ranp_id structure item in @p ranp_s , or @p nullptr on error:
+///         - item with a mismatching value type
+///         - item not found
+RANParameter_STRUCTURE_Item_t *E2SM_RC::get_ran_parameter_structure_item(RANParameter_STRUCTURE_t *ranp_s, RANParameter_ID_t ranp_id, RANParameter_ValueType_PR ranp_type) {
+    if (!ranp_s) {
+        logger_error("Unable to retrieve RAN Parameter ID %ld. Does RAN Parameter Structure is nil?", ranp_id);
+        return nullptr;
+    }
+
+    RANParameter_STRUCTURE_Item_t *param = nullptr;
+
+    int count = ranp_s->sequence_of_ranParameters->list.count;
+    RANParameter_STRUCTURE_Item_t **params = ranp_s->sequence_of_ranParameters->list.array;
+    for (int i = 0; i < count; i++) {
+        if (params[i]->ranParameter_ID == ranp_id) {
+            if (params[i]->ranParameter_valueType->present == ranp_type) {
+                param = params[i];
+            } else {
+                logger_error("RAN Parameter ID %ld is not of type %d", ranp_id, ranp_type);
+            }
+            break;
+        }
+    }
+
+    if (LOGGER_LEVEL >= LOGGER_INFO) {
+        if (!param) {
+            logger_info("RAN Parameter ID %ld not found in RAN Parameter Structure", ranp_id);
+        }
+    }
+
+    return param;
+}
+
+
+/// @brief Retrieves the data of a given RAN Parameter Value
+/// @tparam T Return type of the data
+/// @param v The ASN1 RAN Parameter Value
+/// @param vtype The type that the ASN1 RAN Parameter Value must match
+/// @return A pointer to the address of @p T in @p v , or @p nullptr on error:
+///         - RAN Parameter Value type mismatching @p vtype
+///         - Invalid @p vtype enum value
+template<e2sm::rc::RANParameterValueType T>
+inline T *E2SM_RC::get_ran_parameter_value_data(RANParameter_Value_t *v, RANParameter_Value_PR vtype) {
+    T *value;
+
+    if (!v) {
+        logger_error("RAN Parameter Value is required. nil?");
+        return nullptr;
+    }
+
+    if (v->present != vtype) {
+        logger_error("RAN Parameter Value Type does not match with type %d", vtype);
+        return nullptr;
+    }
+
+    switch (v->present) {
+        case RANParameter_Value_PR_valueBoolean:
+            value = (T *)&v->choice.valueBoolean;
+            break;
+        case RANParameter_Value_PR_valueInt:
+            value = (T *)&v->choice.valueInt;
+            break;
+        case RANParameter_Value_PR_valueReal:
+            value = (T *)&v->choice.valueReal;
+            break;
+        case RANParameter_Value_PR_valueBitS:
+            value = (T *)&v->choice.valueBitS;
+            break;
+        case RANParameter_Value_PR_valueOctS:
+            value = (T *)&v->choice.valueOctS;
+            break;
+        case RANParameter_Value_PR_valuePrintableString:
+            value = (T *)&v->choice.valuePrintableString;
+            break;
+        case RANParameter_Value_PR_NOTHING:
+        default:
+            logger_error("Invalid RANParameter value PR %d in %s", v->present, asn_DEF_RANParameter_Value.name);
+            value = nullptr;
+    }
+
+    return value;
 }

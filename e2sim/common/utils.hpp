@@ -19,6 +19,8 @@
 #ifndef COMMON_UTILS_HPP
 #define COMMON_UTILS_HPP
 
+#include <string>
+
 extern "C" {
     #include "OCTET_STRING.h"
     #include "PLMN-Identity.h"
@@ -30,6 +32,7 @@ namespace utils {
     bool asn1_decode_and_check(const asn_TYPE_descriptor_s *type_to_decode, void **structure_to_decode, const uint8_t *buffer, size_t bufsize);
 
     PLMN_Identity_t *encodePlmnId(const char *mcc, const char *mnc);
+    bool decodePlmnId(PLMN_Identity_t *plmnid, std::string &mcc, std::string &mnc);
 }
 }
 

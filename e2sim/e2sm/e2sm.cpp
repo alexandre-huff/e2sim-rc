@@ -24,7 +24,7 @@ E2SM::E2SM(std::string shortName, std::string oid, std::string description, Envi
     subManager = std::make_shared<SubscriptionManager>();
 }
 
-E2SM::~E2SM() {};   // FIXME consider removing this function from here
+E2SM::~E2SM() {};
 
 ran_function_name_t const &E2SM::getRanFunctionName() const {
     return ranFunctionName;
@@ -77,48 +77,6 @@ bool E2SM::addProcedure(ProcedureCode_t code, std::shared_ptr<FunctionalProcedur
 bool E2SM::addService(ran_service_e type, std::shared_ptr<E2SMService> service) {
     auto ret = services.insert({type, service});
     return ret.second;
-}
-
-std::shared_ptr<TriggerDefinition> const E2SM::getTrigger(int ric_style_type) const {
-    const auto &trigger = triggers.find(ric_style_type);
-    if (trigger == triggers.end()) {
-        return std::shared_ptr<TriggerDefinition>();
-    }
-    return trigger->second;
-}
-
-bool E2SM::addTrigger(std::shared_ptr<TriggerDefinition> &trigger) {
-    auto ret = triggers.insert({trigger->getStyleType(), trigger});
-    return ret.second;
-}
-
-std::vector<std::shared_ptr<TriggerDefinition>> const E2SM::getTriggers() const {
-    std::vector<std::shared_ptr<TriggerDefinition>> list;
-    for (auto &trigger : triggers) {
-        list.emplace_back(trigger.second);
-    }
-    return std::move(list);
-}
-
-std::shared_ptr<ActionDefinition> const E2SM::getAction(int format) const {
-    const auto &action = actions.find(format);
-    if (action == actions.end()) {
-        return std::shared_ptr<ActionDefinition>();
-    }
-    return action->second;
-}
-
-bool E2SM::addAction(std::shared_ptr<ActionDefinition> action) {
-    auto ret = actions.insert({action->getFormat(), action});
-    return ret.second;
-}
-
-std::vector<std::shared_ptr<ActionDefinition>> const E2SM::getActions() const {
-    std::vector<std::shared_ptr<ActionDefinition>> list;
-    for (auto &action : actions) {
-        list.emplace_back(action.second);
-    }
-    return std::move(list);
 }
 
 E2APMessageSender &E2SM::getE2APMessageSender() {

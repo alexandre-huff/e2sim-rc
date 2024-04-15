@@ -19,6 +19,8 @@
 #include "utils.hpp"
 #include "logger.h"
 
+#include <string>
+
 /*
     This function checks and encodes a given asn1 type descriptor.
     Returns NULL in case of error.
@@ -101,50 +103,13 @@ bool common::utils::asn1_decode_and_check(const asn_TYPE_descriptor_s *type_to_d
     return true;
 }
 
-// FIXME: remove this in incorrect
-// PLMN_Identity_t *common::utils::encodePlmnId_old(const char *mcc, const char *mnc) {
-//     LOGGER_TRACE_FUNCTION_IN
+/*
+    Encodes MCC and MNC to PLMN ID
 
-//     PLMN_Identity_t *plmn = (PLMN_Identity_t *)calloc(1, sizeof(PLMN_Identity_t));
-//     plmn->size = 3;  // the size according to E2AP specification
-//     plmn->buf = (uint8_t *)calloc(3, sizeof(uint8_t));
-
-//     char buf = mcc[1];
-//     plmn->buf[0] |= (atoi(&buf)) << 4;
-//     buf = mcc[0];
-//     plmn->buf[0] |= (atoi(&buf));
-
-//     if (strlen((char *)mnc) == 3) {
-//         buf = mnc[0];
-//         plmn->buf[1] |= (atoi(&buf)) << 4;
-//         buf = mcc[2];
-//         plmn->buf[1] |= (atoi(&buf));
-//         buf = mnc[2];
-//         plmn->buf[2] |= (atoi(&buf)) << 4;
-//         buf = mnc[1];
-//         plmn->buf[2] |= (atoi(&buf));
-
-//     } else {
-//         plmn->buf[1] |= 0x0F << 4;
-//         buf = mcc[2];
-//         plmn->buf[1] |= (atoi(&buf));
-//         buf = mnc[1];
-//         plmn->buf[2] |= (atoi(&buf)) << 4;
-//         buf = mnc[0];
-//         plmn->buf[2] |= (atoi(&buf));
-//     }
-
-//     logger_debug("PLMN Identity encoded for mcc=%s mnc=%s", mcc, mnc);
-
-//     if (LOGGER_LEVEL >= LOGGER_DEBUG) {
-//         xer_fprint(stderr, &asn_DEF_PLMN_Identity, plmn);
-//     }
-
-//     LOGGER_TRACE_FUNCTION_OUT
-
-//     return plmn;
-// }
-
+    410 32 becomes 14 F0 23
+    or
+    410 532 becomes 14 50 23
+*/
 PLMN_Identity_t *common::utils::encodePlmnId(const char *mcc, const char *mnc) {
     LOGGER_TRACE_FUNCTION_IN
 
@@ -177,4 +142,34 @@ PLMN_Identity_t *common::utils::encodePlmnId(const char *mcc, const char *mnc) {
     LOGGER_TRACE_FUNCTION_OUT
 
     return plmn;
+}
+
+/*
+    Decodes PLMN ID to MCC and MNC
+
+    14 F0 23 becomes 410 32
+    or
+    14 50 23 becomes 410 532
+*/
+bool common::utils::decodePlmnId(PLMN_Identity_t *plmnid, std::string &mcc, std::string &mnc) {
+    mcc.clear();
+    mnc.clear();
+
+    if (!plmnid || plmnid->size != 3) {
+        return false;
+    }
+    mcc = std::to_string((int)((plmnid->buf[0] & 0x0F)));
+    mcc += std::to_string((int)((plmnid->buf[0] >> 4) & 0x0F));
+    mcc += std::to_string((int)(plmnid->buf[1] & 0x0F));
+
+    if (((plmnid->buf[1] >> 4) & 0x0F) == 15) { // means F
+        mnc = std::to_string((int)(plmnid->buf[2] & 0x0F));
+        mnc += std::to_string((int)((plmnid->buf[2] >> 4) & 0x0F));
+    } else {
+        mnc = std::to_string((int)((plmnid->buf[1] >> 4) & 0x0F));
+        mnc += std::to_string((int)(plmnid->buf[2] & 0x0F));
+        mnc += std::to_string((int)((plmnid->buf[2] >> 4) & 0x0F));
+    }
+
+    return true;
 }

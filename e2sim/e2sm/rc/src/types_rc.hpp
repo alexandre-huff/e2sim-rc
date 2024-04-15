@@ -19,12 +19,16 @@
 #ifndef E2SM_RC_TYPES_HPP
 #define E2SM_RC_TYPES_HPP
 
+#include <string>
 #include <vector>
 
 extern "C" {
     #include "RIC-EventTriggerCondition-ID.h"
     #include "TriggerType-Choice-RRCstate-Item.h"
     #include "RANParameter-ID.h"
+    #include "RANParameter-Value.h"
+    #include "RIC-Style-Type.h"
+    #include "RIC-ControlAction-ID.h"
 }
 
 namespace common {
@@ -55,6 +59,27 @@ struct action_definition_fmt1_data {
 struct report_style4_data {
     event_trigger_fmt4_data trigger_data;
     action_definition_fmt1_data action_data;
+};
+
+enum control_decision_e {
+    NONE,   // control action without insert indication
+    ACCEPT, // response from an insert indication
+    REJECT  // response from an insert indication
+};
+
+struct control_header_fmt1_data {
+    struct ue_id {
+        std::string mcc;    // 3 digits
+        std::string mnc;    // 2 or 3 digits
+        std::string msin;   // 9 or 10 digits, depends on mnc length
+    } ue_id;
+    RIC_Style_Type_t	 ric_Style_Type;
+	RIC_ControlAction_ID_t	 ric_ControlAction_ID;
+    control_decision_e control_decision;
+};
+
+struct control_message_fmt1_data {
+    std::vector<std::pair<RANParameter_ID_t, RANParameter_Value_t *>> ran_parameters;
 };
 
 }

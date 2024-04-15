@@ -76,6 +76,10 @@ namespace encoding {
 
   E2AP_PDU_t *generate_e2ap_indication_pdu(e2sim::messages::RICIndication &msg);
 
+  E2AP_PDU_t *generate_e2ap_control_acknowledge(e2sim::messages::RICControlResponse *msg);
+
+  E2AP_PDU_t *generate_e2ap_control_failure(e2sim::messages::RICControlResponse *msg);
+
   void generate_e2ap_service_update(E2AP_PDU_t *e2ap_pdu, std::vector<ran_func_info> all_funcs);
 
   void generate_e2ap_config_update(E2AP_PDU_t *e2ap_edu);

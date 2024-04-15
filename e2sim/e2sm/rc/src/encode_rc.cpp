@@ -32,6 +32,8 @@ extern "C" {
     #include "E2SM-RC-IndicationHeader-Format1.h"
     #include "E2SM-RC-IndicationMessage-Format2.h"
     #include "E2SM-RC-IndicationMessage-Format2-Item.h"
+    #include "ControlOutcome-RANParameter-Item.h"
+    #include "ControlAction-RANParameter-Item.h"
 }
 
 using namespace std;
@@ -40,10 +42,10 @@ using namespace std;
 /**
  * Encodes the RANFunctionDefinition_Report of E2SM_RC_RANFunctionDefinition_t
 */
-void common::rc::encode_report_function_definition(void *report_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles) {
+void common::rc::encode_report_function_definition(void *e2sm_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles) {
     LOGGER_TRACE_FUNCTION_IN
 
-    E2SM_RC_RANFunctionDefinition_t *ranfunc_def = (E2SM_RC_RANFunctionDefinition_t *) report_func_def;
+    E2SM_RC_RANFunctionDefinition_t *ranfunc_def = (E2SM_RC_RANFunctionDefinition_t *) e2sm_func_def;
     ranfunc_def->ranFunctionDefinition_Report = (RANFunctionDefinition_Report_t *) calloc(1, sizeof(RANFunctionDefinition_Report_t));
 
     for (auto &style : styles) {
@@ -63,6 +65,50 @@ void common::rc::encode_report_function_definition(void *report_func_def, std::v
         }
 
         ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Report->ric_ReportStyle_List.list, report_item);
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+}
+
+void common::rc::encode_control_function_definition(void *e2sm_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles) {
+    LOGGER_TRACE_FUNCTION_IN
+
+    E2SM_RC_RANFunctionDefinition_t *ranfunc_def = (E2SM_RC_RANFunctionDefinition_t *) e2sm_func_def;
+    ranfunc_def->ranFunctionDefinition_Control = (RANFunctionDefinition_Control_t *) calloc(1, sizeof(RANFunctionDefinition_Control_t));
+
+    for (auto &style : styles) {
+        RANFunctionDefinition_Control_Item_t *control_item = (RANFunctionDefinition_Control_Item_t *) calloc(1, sizeof(RANFunctionDefinition_Control_Item_t));
+        control_item->ric_ControlStyle_Type = style->getRicStyleType();
+        OCTET_STRING_fromBuf(&control_item->ric_ControlStyle_Name, style->getRicStyleName().c_str(), style->getRicStyleName().length());
+        control_item->ric_ControlHeaderFormat_Type = style->getRicHeaderFormatType();
+        control_item->ric_ControlMessageFormat_Type = style->getRicMessageFormatType();
+
+        if (style->getRicStyleType() == 3) {    // TODO Outcome Param hardcoded for now as we are only implementing Control Style 3
+            control_item->ric_ControlOutcomeFormat_Type = 1;
+            ControlOutcome_RANParameter_Item_t *param = (ControlOutcome_RANParameter_Item_t *) calloc(1, sizeof(ControlOutcome_RANParameter_Item_t));
+            param->ranParameter_ID = 1;
+            std::string pname = "ReceivedTimestamp";
+            OCTET_STRING_fromBuf(&param->ranParameter_name, pname.c_str(), pname.length());
+
+            ASN_SEQUENCE_ADD(&control_item->ran_ControlOutcomeParameters_List->list, param);
+        }
+
+        RANFunctionDefinition_Control_Action_Item_t *act_item = // TODO for now we support only one Control Action ID
+                (RANFunctionDefinition_Control_Action_Item_t *) calloc(1, sizeof(RANFunctionDefinition_Control_Action_Item_t));
+        act_item->ric_ControlAction_ID = style->getActionDefinition()->getFormat();
+        std::string act_name = "Handover Control";
+        OCTET_STRING_fromBuf(&act_item->ric_ControlAction_Name, act_name.c_str(), act_name.length());
+
+        ASN_SEQUENCE_ADD(&control_item->ric_ControlAction_List->list, act_item);
+
+        for (auto &param : style->getActionDefinition()->getRanParameters()) {
+            ControlAction_RANParameter_Item_t *pitem = (ControlAction_RANParameter_Item_t *) calloc(1, sizeof(ControlAction_RANParameter_Item_t));
+            pitem->ranParameter_ID = param->getParamId();
+            OCTET_STRING_fromBuf(&pitem->ranParameter_name, param->getParamName().c_str(), param->getParamName().length());
+            ASN_SEQUENCE_ADD(&act_item->ran_ControlActionParameters_List->list, pitem);
+        }
+
+        ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Control->ric_ControlStyle_List.list, control_item);
     }
 
     LOGGER_TRACE_FUNCTION_OUT
@@ -99,8 +145,7 @@ RICindicationHeader_t *common::rc::encode_indication_header_format1(RIC_EventTri
     Returns a pointer with the encoded data, or NULL on error.
 */
 RICindicationMessage_t *common::rc::encode_indication_message_format2(const std::vector<indication_msg_format2_ueid_t> &ue_ids) {
-    E2SM_RC_IndicationMessage_t *msg =
-            (E2SM_RC_IndicationMessage_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_t));
+    E2SM_RC_IndicationMessage_t *msg = (E2SM_RC_IndicationMessage_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_t));
     msg->ric_indicationMessage_formats.present = E2SM_RC_IndicationMessage__ric_indicationMessage_formats_PR_indicationMessage_Format2;
     msg->ric_indicationMessage_formats.choice.indicationMessage_Format2 =
             (E2SM_RC_IndicationMessage_Format2_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_t));
@@ -125,6 +170,10 @@ RICindicationMessage_t *common::rc::encode_indication_message_format2(const std:
 
     return ric_msg;
 }
+
+// ########################################################################
+// ################## No longer used from here ############################
+// ########################################################################
 
 void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t *ranfunc_def) {
     int ret;    // Temporary return value
