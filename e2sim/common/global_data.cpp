@@ -32,7 +32,7 @@ extern "C" {
 /**
  * Throws std::invalid_argument
 */
-GlobalE2NodeData::GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id) : gnbid(gnb_id) {
+GlobalE2NodeData::GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id, std::string ue_mgr_addr) : gnbid(gnb_id), ueMgrAddr(ue_mgr_addr) {
     if (mcc.length() != 3) {
         throw std::invalid_argument("MCC requires 3 digits");
     }
@@ -138,4 +138,37 @@ BIT_STRING_t *GlobalE2NodeData::getGlobalE2Node_gNBId() {
     gnbid->bits_unused = globalE2NodeId->choice.gNB->global_gNB_ID.gnb_id.choice.gnb_ID.bits_unused;
 
     return gnbid;
+}
+
+void UEList::addUE(e2sim::ue::UEInfo &ue) {
+    std::lock_guard<std::mutex> guard(ue_lock);
+    ue_map.emplace(ue.imsi, ue.endpoint);
+}
+
+void UEList::removeUE(std::string imsi) {
+    std::lock_guard<std::mutex> guard(ue_lock);
+    ue_map.erase(imsi);
+}
+
+std::unique_ptr<e2sim::ue::UEInfo> UEList::getUEInfo(std::string imsi) {
+    std::lock_guard<std::mutex> guard(ue_lock);
+
+    auto it = ue_map.find(imsi);
+    if (it == ue_map.end()) {
+        return std::unique_ptr<e2sim::ue::UEInfo>();
+    }
+
+    std::unique_ptr<e2sim::ue::UEInfo> ue = std::make_unique<e2sim::ue::UEInfo>();
+    ue->imsi = it->second.imsi;
+    ue->endpoint = it->second.endpoint;
+
+    return ue;
+}
+
+std::vector<e2sim::ue::UEInfo> UEList::getUEs() {
+    std::vector<e2sim::ue::UEInfo> ues;
+
+
+
+    return ues;
 }

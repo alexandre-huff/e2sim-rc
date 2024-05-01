@@ -81,6 +81,11 @@ bool RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue, con
 
     logger_info("Association request from UE %s", ue->imsi.c_str());
 
+    e2sim::ue::UEInfo info;
+    info.endpoint = ue->endpoint;
+    info.imsi = ue->imsi;
+    globalE2NodeData->ue_list.addUE(info);    // we have to store the UE endpoint to use in Control Requests
+
     // Sequence of UE Identifiers as per 9.2.1.4.2 in E2SM-RC-R003-v03.00
     // We have only a single UE in this association request
     /* ################ UE ID ################ */
@@ -145,6 +150,8 @@ void RRCStateObserver::disassociationRequest(const std::shared_ptr<ue_data> ue) 
     }
 
     logger_info("Disassociation request from %s", ue->imsi.c_str());
+
+    globalE2NodeData->ue_list.removeUE(ue->imsi);
 
     // Sequence of UE Identifiers as per 9.2.1.4.2 in E2SM-RC-R003-v03.00
     // We have only a single UE in this association request

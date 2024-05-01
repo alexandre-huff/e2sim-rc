@@ -36,6 +36,18 @@ extern "C" {
     #include "NR-CGI.h"
 }
 
+HandoverControl::HandoverControl(e2sim::messages::RICControlRequest *request,
+                                common::rc::control_header_fmt1_data &hdr_data,
+                                common::rc::control_message_fmt1_data &msg_data,
+                                std::string open_api_base_url)  :
+                                request(request), headerData(hdr_data), msgData(msg_data) {
+
+    api_conf = std::make_shared<org::openapitools::client::api::ApiConfiguration>();
+    api_conf->setBaseUrl(open_api_base_url + "/v1");
+    api_client = std::make_shared<org::openapitools::client::api::ApiClient>(api_conf);
+    open_api = std::make_shared<org::openapitools::client::api::DefaultApi>(api_client);
+}
+
 void HandoverControl::runHandoverControl(e2sim::messages::RICControlResponse *response) {
     LOGGER_TRACE_FUNCTION_IN
 
@@ -88,7 +100,28 @@ void HandoverControl::runHandoverControl(e2sim::messages::RICControlResponse *re
                         // TODO check https://nrcalculator.firebaseapp.com/nrgnbidcalc.html
                         // TODO check https://www.telecomhall.net/t/what-is-the-formula-for-cell-id-nci-in-5g-nr-networks/12623/2
 
-                        logger_warn("Handover of UE ID %s to mcc=%s mnc=%s gnbid=%lu", imsi.c_str(), mcc.c_str(), mnc.c_str(), gnb_id);
+                        std::shared_ptr<std::remove_cv<org::openapitools::client::model::_UE__iMSI__handover_put_request>::type> uEIMSIHandoverPutRequest =
+                            std::make_shared<std::remove_cv<org::openapitools::client::model::_UE__iMSI__handover_put_request>::type>();
+                        std::shared_ptr<org::openapitools::client::model::Cell_descriptor> cell =
+                            std::make_shared<org::openapitools::client::model::Cell_descriptor>();
+                        cell->setMcc(mcc);
+                        cell->setMnc(mnc);
+                        cell->setNodebId(gnb_id);
+
+                        uEIMSIHandoverPutRequest->setTargetCell(cell);
+
+                        logger_info("Handing over UE ID %s to mcc=%s mnc=%s gnbid=%lu", imsi.c_str(), mcc.c_str(), mnc.c_str(), gnb_id);
+
+                        try {
+                            auto ret = open_api->uEIMSIHandoverPut(imsi, uEIMSIHandoverPutRequest);
+                            auto status = ret.wait();
+
+                        } catch (org::openapitools::client::api::ApiException &ex) {
+                            logger_error("Unable to run Handover Control in UE Manager. Reason = %s", ex.what());
+                            response->succeeded = false;
+                            response->cause.present = Cause_PR_ricRequest;
+                            response->cause.choice.ricRequest = CauseRICrequest_control_failed_to_execute;
+                        }
 
                     } else {
                         logger_error("NR CGI is not encoded as %s for Handover Control", asn_DEF_OCTET_STRING.name);

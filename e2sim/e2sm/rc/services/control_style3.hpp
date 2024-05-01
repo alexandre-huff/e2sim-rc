@@ -21,6 +21,9 @@
 
 #include "messages.hpp"
 #include "types_rc.hpp"
+#include "global_data.hpp"
+
+#include <ue_client/api/DefaultApi.h>
 
 extern "C" {
     #include "E2SM-RC-ControlHeader-Format1.h"
@@ -33,7 +36,7 @@ extern "C" {
 class HandoverControl {
 public:
     HandoverControl(e2sim::messages::RICControlRequest *request, common::rc::control_header_fmt1_data &hdr_data,
-        common::rc::control_message_fmt1_data &msg_data) : request(request), headerData(hdr_data), msgData(msg_data) { };
+        common::rc::control_message_fmt1_data &msg_data, std::string open_api_base_url);
 
     void runHandoverControl(e2sim::messages::RICControlResponse *response);
 
@@ -41,6 +44,9 @@ private:
     common::rc::control_header_fmt1_data &headerData;
     common::rc::control_message_fmt1_data &msgData;
     e2sim::messages::RICControlRequest *request;
+    std::shared_ptr<org::openapitools::client::api::ApiConfiguration> api_conf;
+    std::shared_ptr<org::openapitools::client::api::ApiClient> api_client;
+    std::shared_ptr<org::openapitools::client::api::DefaultApi> open_api;
 };
 
 

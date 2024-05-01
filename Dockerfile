@@ -84,6 +84,9 @@ RUN git submodule update --init --recursive --recommend-shallow
 RUN mkdir 3rdparty/manager_api/api_v1/nodeb_server/build && cd 3rdparty/manager_api/api_v1/nodeb_server/build \
 	&& cmake .. && make -j4 && make install && ldconfig
 
+RUN	mkdir 3rdparty/manager_api/api_v1/ue_client/build && cd 3rdparty/manager_api/api_v1/ue_client/build \
+	&& cmake .. && make -j4 && make install && ldconfig
+
 # build and install submodule dependencies
 RUN cd 3rdparty/prometheus-cpp/ && mkdir build && cd build \
     && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig

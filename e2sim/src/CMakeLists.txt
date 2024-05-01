@@ -36,6 +36,7 @@ target_link_libraries( e2sim PRIVATE
     common_objects
     o1_objects
     envman
+    ue_client
 	pistache
     )
 

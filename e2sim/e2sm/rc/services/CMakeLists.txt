@@ -28,6 +28,7 @@ target_link_libraries( rc_service_objects PRIVATE logger_objects
     ranfunction_objects
     e2model_objects
     common_objects
+    ue_client
     )
 
 target_include_directories ( rc_service_objects PUBLIC

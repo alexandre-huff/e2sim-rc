@@ -21,6 +21,9 @@
 
 #include <string>
 #include <mutex>
+#include <unordered_map>
+#include <vector>
+#include <memory>
 
 extern "C" {
     #include "GlobalE2node-ID.h"
@@ -36,12 +39,13 @@ extern "C" {
 */
 class TxReferenceLevel {
 public:
-    TxReferenceLevel(double tx_gain=0.0) : gain(tx_gain) {};
+    TxReferenceLevel(double tx_gain=1.0) : gain(tx_gain) {};
 
     void setGain(double tx_gain) {
         std::lock_guard<std::mutex> guard(gain_lock);
         gain = tx_gain;
     }
+
     double getGain() {
         std::lock_guard<std::mutex> guard(gain_lock);
         return gain;
@@ -87,9 +91,31 @@ private:
     std::mutex gain_lock;   // prevents the multithreaded O1 interface to run into race conditions
 };
 
+namespace e2sim {
+namespace ue {
+    struct UEInfo {
+        std::string imsi;
+        std::string endpoint;
+    };
+}
+}
+
+class UEList {
+public:
+    void addUE(e2sim::ue::UEInfo &ue);
+    void removeUE(std::string imsi);
+    std::unique_ptr<e2sim::ue::UEInfo> getUEInfo(std::string imsi);
+    std::vector<e2sim::ue::UEInfo> getUEs();
+
+private:
+    std::unordered_map<std::string, e2sim::ue::UEInfo> ue_map;  // IMSI, UE data
+
+    std::mutex ue_lock; // prevents the multithreaded E2 and O1 interface to run into race conditions
+};
+
 class GlobalE2NodeData {
 public:
-    GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id);
+    GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id, std::string ue_mgr_addr);
     ~GlobalE2NodeData();
 
     GlobalE2node_ID_t *getGlobalE2NodeId();
@@ -98,7 +124,10 @@ public:
 
     TxReferenceLevel txLevel;
 
+    UEList ue_list;
+
     const uint32_t gnbid;
+    const std::string ueMgrAddr;
 
 private:
     GlobalE2node_ID_t *globalE2NodeId;

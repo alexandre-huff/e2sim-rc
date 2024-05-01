@@ -50,6 +50,7 @@ extern "C" {
     #include "CauseRICrequest.h"
     #include "E2SM-RC-ControlHeader-Format1.h"
     #include "E2SM-RC-ControlMessage-Format1-Item.h"
+    #include "CauseRICrequest.h"
 }
 
 E2SM_RC::E2SM_RC(std::string shortName, std::string oid, std::string description, EnvironmentManager *env_manager,
@@ -647,7 +648,7 @@ e2sim::messages::RICControlResponse *E2SM_RC::handle_ric_control_request(e2sim::
                         break;
                     }
 
-                    HandoverControl handover(request, header_data, msg_data);
+                    HandoverControl handover(request, header_data, msg_data, getGlobalE2NodeData()->ueMgrAddr);
                     handover.runHandoverControl(response);
 
                 } else {

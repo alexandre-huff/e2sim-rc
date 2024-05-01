@@ -26,6 +26,7 @@ typedef struct {
     uint32_t gnb_id;                // gNodeB Identity
     std::string mcc;                // gNodeB Mobile Country Code
     std::string mnc;                // gNodeB Mobile Network Code
+    std::string ue_mgr_addr;        // UE Manager address
 } args_t;
 
 

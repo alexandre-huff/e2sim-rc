@@ -18,6 +18,9 @@
 
 #include "smo_du.hpp"
 #include "logger.h"
+#include "utils.hpp"
+
+#include <ue_client/api/DefaultApi.h>   // FIXME check if need to implement our own changes for this example API
 
 void handle_error(pplx::task<void>& t, const utility::string_t msg) {
     try {
@@ -40,13 +43,46 @@ void O1Handler::post_tx_gain(web::http::http_request request) {
     auto *tx_level = &globalE2NodeData->txLevel;
     request
         .extract_json()
-        .then([&answer, request, tx_level](pplx::task<web::json::value> task) {
+        .then([&answer, request, tx_level, this](pplx::task<web::json::value> task) {
             try {
                 answer = task.get();
                 logger_info("RESTCONF: Received POST request %s", answer.serialize().c_str());
 
-                // do something useful here
                 auto gain = answer.at(U("gain")).as_double();
+
+                std::shared_ptr<org::openapitools::client::api::ApiConfiguration> api_conf =
+                    std::make_shared<org::openapitools::client::api::ApiConfiguration>();
+                api_conf->setBaseUrl(globalE2NodeData->ueMgrAddr + "/v1");
+                std::shared_ptr<org::openapitools::client::api::ApiClient> client =
+                    std::make_shared<org::openapitools::client::api::ApiClient>(api_conf);
+
+                org::openapitools::client::api::DefaultApi api(client);
+                std::shared_ptr<org::openapitools::client::model::_cell__gnb_id__power_put_request> cellGnbIdPowerPutRequest =
+                    std::make_shared<org::openapitools::client::model::_cell__gnb_id__power_put_request>();
+                cellGnbIdPowerPutRequest->setTargetPower(gain);
+
+                PLMN_Identity_t *plmn = globalE2NodeData->getGlobalE2NodePlmnId();
+                std::string mcc;
+                std::string mnc;
+                common::utils::decodePlmnId(plmn, mcc, mnc);
+                ASN_STRUCT_FREE(asn_DEF_PLMN_Identity, plmn);
+
+                std::shared_ptr<org::openapitools::client::model::Cell_descriptor> cellDescriptor =
+                    std::make_shared<org::openapitools::client::model::Cell_descriptor>();
+                cellDescriptor->setMcc(mcc);
+                cellDescriptor->setMnc(mnc);
+                cellDescriptor->setNodebId(globalE2NodeData->gnbid);
+                cellGnbIdPowerPutRequest->setTargetCell(cellDescriptor);
+
+                try {
+                    auto ret = api.cellGnbIdPowerPut(globalE2NodeData->gnbid, cellGnbIdPowerPutRequest);
+                    auto status = ret.wait();
+
+                } catch (org::openapitools::client::api::ApiException &ex) {
+                    logger_error("unable to set TX Power in UE Manager. Reason = %s", ex.what());
+                    throw;
+                }
+
                 tx_level->setGain(gain);
                 logger_info("RESTCONF: Transmission gain set to %.4lf", gain);
 

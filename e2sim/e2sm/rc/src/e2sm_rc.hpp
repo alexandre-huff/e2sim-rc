@@ -91,13 +91,6 @@ private:
     template<e2sm::rc::RANParameterValueType T>
     T *get_ran_parameter_value_data(RANParameter_Value_t *v, RANParameter_Value_PR vtype);
 
-
-
-    RANParameter_STRUCTURE_Item_t *process_ran_parameter_list(RANParameter_STRUCTURE_Item_t *ranp, RANParameter_ID_t ranp_id, std::vector<RANParameter_ID_t> sub_params);
-    template<e2sm::rc::RANParameterValueType T>
-    T *process_ran_parameter_element(RANParameter_STRUCTURE_Item_t *ranp, RANParameter_ID_t ranp_id);
-
-
 };
 
 
