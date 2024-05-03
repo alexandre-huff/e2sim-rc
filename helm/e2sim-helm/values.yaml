@@ -2,11 +2,12 @@ affinity: {}
 fullnameOverride: ''
 image:
   args:
-    e2term: 10.233.90.63
+    e2term: 10.43.0.225
     mcc: 724
     mnc: 11
-    nodebid: 3
-    port: 36422
+    nodebid: 2
+    port: 30001
+    ue_mgr: http://envman-service.ricplt.svc.cluster.local:8080
   command: e2sim
   pullPolicy: Always
   repository: zanattabruno/e2sim-rc
@@ -19,7 +20,8 @@ podSecurityContext: {}
 replicaCount: 1
 resources: {}
 service:
-  port: 8081
+  portSimulator: 8081
+  portO1: 8090
   tls: []
   type: ClusterIP
   typehandover: NodePort
