@@ -27,7 +27,6 @@
 
 #include "ran_parameter.hpp"
 #include "ric_subscription.hpp"
-#include "ric_control.hpp"
 
 typedef enum {
     ACTION_START,

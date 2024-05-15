@@ -25,7 +25,9 @@ file(GLOB HEADERS "*.h")
 
 add_library( e2ap_asn1_objects STATIC ${SOURCES} )
 
-target_include_directories (e2ap_asn1_objects PUBLIC
+target_compile_definitions( e2ap_asn1_objects PUBLIC ASN_DISABLE_OER_SUPPORT )
+
+target_include_directories ( e2ap_asn1_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
   # PRIVATE src

@@ -23,7 +23,6 @@
 // #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#include "logger.h"
 
 #define VERSION             "1.2.0"      //May 2019
 #define DEFAULT_SCTP_IP     "127.0.0.1"

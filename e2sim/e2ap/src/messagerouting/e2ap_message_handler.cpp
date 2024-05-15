@@ -28,12 +28,13 @@
 #include "messages.hpp"
 #include "ric_subscription.hpp"
 #include "ric_subscription_delete.hpp"
+#include "ric_control.hpp"
 
 #include <unistd.h>
 
 extern "C" {
 	#include "ProtocolIE-Field.h"
-
+  #include "e2ap_asn1c_codec.h"
   // #include "E2SM-RC-EventTrigger.h"
 }
 

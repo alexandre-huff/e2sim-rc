@@ -27,7 +27,6 @@
 
 extern "C" {
   #include "e2sim_defs.h"
-  #include "e2ap_asn1c_codec.h"
 }
 
 void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, struct timespec *ts);

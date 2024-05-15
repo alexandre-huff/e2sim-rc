@@ -15,20 +15,16 @@
 #==================================================================================
 #
 
-add_library( rc_service_objects STATIC report_style4.cpp control_style3.cpp )
+add_library( rc_service_objects OBJECT report_style4.cpp control_style3.cpp )
 
-target_link_libraries( rc_service_objects PRIVATE logger_objects
+target_link_libraries( rc_service_objects PUBLIC logger_objects
     procedure_objects
-    def_objects
-    e2ap_asn1_objects
     e2sm_objects
-    rc_objects
+    rc_headers
     e2sm_rc_asn1_objects
+    encode_rc_objects
     encoding_objects
-    ranfunction_objects
-    e2model_objects
-    common_objects
-    ue_client
+    rc_helpers
     )
 
 target_include_directories ( rc_service_objects PUBLIC

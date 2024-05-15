@@ -1,5 +1,5 @@
 #==================================================================================
-#	Copyright 2023 Alexandre Huff
+#	Copyright 2024 Alexandre Huff
 #
 #   Licensed under the Apache License, Version 2.0 (the "License"),
 #   you may not use this file except in compliance with the License.
@@ -15,9 +15,17 @@
 #==================================================================================
 #
 
-# each binary is built from a subset
-add_subdirectory( ASN1c )
-add_subdirectory( helpers )
-add_subdirectory( include )
-add_subdirectory( services )
-add_subdirectory( src )
+add_library( common_headers INTERFACE )
+
+target_include_directories ( common_headers INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+    )
+
+if( DEV_PKG )
+    install( FILES
+        global_data.hpp
+        utils.hpp
+        DESTINATION ${install_inc}
+    )
+endif()

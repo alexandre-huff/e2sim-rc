@@ -28,10 +28,10 @@
 #include "e2sm_rc_builder.hpp"
 #include "encode_rc.hpp"
 #include "utils.hpp"
-#include "encode_e2ap.hpp"
 #include "report_style4.hpp"
 #include "types_rc.hpp"
 #include "control_style3.hpp"
+#include "rc_param_codec.hpp"
 
 extern "C" {
     #include "ProcedureCode.h"
@@ -879,15 +879,15 @@ bool E2SM_RC::process_control_message_format1(E2SM_RC_ControlMessage_Format1_t *
             case 1:
                 if (item->ranParameter_valueType.present == RANParameter_ValueType_PR_ranP_Choice_Structure) {
 
-                    RANParameter_STRUCTURE_Item_t *p2 = get_ran_parameter_structure_item(
+                    RANParameter_STRUCTURE_Item_t *p2 = common::rc::get_ran_parameter_structure_item(
                         item->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure,
                         (RANParameter_ID_t) 2, RANParameter_ValueType_PR_ranP_Choice_Structure);
                     if (p2) {
-                        RANParameter_STRUCTURE_Item_t *p3 = get_ran_parameter_structure_item(
+                        RANParameter_STRUCTURE_Item_t *p3 = common::rc::get_ran_parameter_structure_item(
                             p2->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure,
                             (RANParameter_ID_t) 3, RANParameter_ValueType_PR_ranP_Choice_Structure);
                         if (p3) {
-                            RANParameter_STRUCTURE_Item_t *p4 = get_ran_parameter_structure_item(
+                            RANParameter_STRUCTURE_Item_t *p4 = common::rc::get_ran_parameter_structure_item(
                                 p3->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure,
                                 (RANParameter_ID_t) 4, RANParameter_ValueType_PR_ranP_Choice_ElementFalse);
                             if (p4) {
@@ -941,91 +941,4 @@ bool E2SM_RC::process_control_message_format1(E2SM_RC_ControlMessage_Format1_t *
     LOGGER_TRACE_FUNCTION_OUT
 
     return true;
-}
-
-/// @brief Retrieves a given RAN Parameter within a sequence of RAN parameteres within a RAN Parameter Structure
-/// @param ranp_s The RAN Parameter Structure which we will iterate to retrieve the RAN Parameter Structure Item
-/// @param ranp_id The RAN Parameter ID we want to retrieve
-/// @param ranp_type The RAN Parameter Type of the @p ranp_id
-/// @return A pointer to the address of @p ranp_id structure item in @p ranp_s , or @p nullptr on error:
-///         - item with a mismatching value type
-///         - item not found
-RANParameter_STRUCTURE_Item_t *E2SM_RC::get_ran_parameter_structure_item(RANParameter_STRUCTURE_t *ranp_s, RANParameter_ID_t ranp_id, RANParameter_ValueType_PR ranp_type) {
-    if (!ranp_s) {
-        logger_error("Unable to retrieve RAN Parameter ID %ld. Does RAN Parameter Structure is nil?", ranp_id);
-        return nullptr;
-    }
-
-    RANParameter_STRUCTURE_Item_t *param = nullptr;
-
-    int count = ranp_s->sequence_of_ranParameters->list.count;
-    RANParameter_STRUCTURE_Item_t **params = ranp_s->sequence_of_ranParameters->list.array;
-    for (int i = 0; i < count; i++) {
-        if (params[i]->ranParameter_ID == ranp_id) {
-            if (params[i]->ranParameter_valueType->present == ranp_type) {
-                param = params[i];
-            } else {
-                logger_error("RAN Parameter ID %ld is not of type %d", ranp_id, ranp_type);
-            }
-            break;
-        }
-    }
-
-    if (LOGGER_LEVEL >= LOGGER_INFO) {
-        if (!param) {
-            logger_info("RAN Parameter ID %ld not found in RAN Parameter Structure", ranp_id);
-        }
-    }
-
-    return param;
-}
-
-
-/// @brief Retrieves the data of a given RAN Parameter Value
-/// @tparam T Return type of the data
-/// @param v The ASN1 RAN Parameter Value
-/// @param vtype The type that the ASN1 RAN Parameter Value must match
-/// @return A pointer to the address of @p T in @p v , or @p nullptr on error:
-///         - RAN Parameter Value type mismatching @p vtype
-///         - Invalid @p vtype enum value
-template<e2sm::rc::RANParameterValueType T>
-inline T *E2SM_RC::get_ran_parameter_value_data(RANParameter_Value_t *v, RANParameter_Value_PR vtype) {
-    T *value;
-
-    if (!v) {
-        logger_error("RAN Parameter Value is required. nil?");
-        return nullptr;
-    }
-
-    if (v->present != vtype) {
-        logger_error("RAN Parameter Value Type does not match with type %d", vtype);
-        return nullptr;
-    }
-
-    switch (v->present) {
-        case RANParameter_Value_PR_valueBoolean:
-            value = (T *)&v->choice.valueBoolean;
-            break;
-        case RANParameter_Value_PR_valueInt:
-            value = (T *)&v->choice.valueInt;
-            break;
-        case RANParameter_Value_PR_valueReal:
-            value = (T *)&v->choice.valueReal;
-            break;
-        case RANParameter_Value_PR_valueBitS:
-            value = (T *)&v->choice.valueBitS;
-            break;
-        case RANParameter_Value_PR_valueOctS:
-            value = (T *)&v->choice.valueOctS;
-            break;
-        case RANParameter_Value_PR_valuePrintableString:
-            value = (T *)&v->choice.valuePrintableString;
-            break;
-        case RANParameter_Value_PR_NOTHING:
-        default:
-            logger_error("Invalid RANParameter value PR %d in %s", v->present, asn_DEF_RANParameter_Value.name);
-            value = nullptr;
-    }
-
-    return value;
 }

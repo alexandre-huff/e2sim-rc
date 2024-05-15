@@ -21,17 +21,11 @@
 
 add_library( base_objects OBJECT e2sim.cpp )
 
-target_link_libraries( base_objects PRIVATE logger_objects
+target_link_libraries( base_objects PUBLIC logger_objects
   ranfunction_objects
-  e2sm_objects
-  procedure_objects
-  def_objects
-  e2ap_asn1_objects
-  e2model_objects
   sctp_objects
+  def_objects
   messagerouting_objects
-  encoding_objects
-  common_objects
 	)
 
 target_include_directories (base_objects PUBLIC

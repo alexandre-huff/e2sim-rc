@@ -15,22 +15,30 @@
 #==================================================================================
 #
 
-add_library( rc_objects STATIC e2sm_rc.cpp e2sm_rc_builder.cpp encode_rc.cpp )
+add_library( rc_objects STATIC e2sm_rc.cpp e2sm_rc_builder.cpp )
 
-target_link_libraries( rc_objects PRIVATE logger_objects
+add_library( encode_rc_objects OBJECT encode_rc.cpp )
+
+target_link_libraries( rc_objects PUBLIC logger_objects
     e2sm_objects
-    procedure_objects
-    def_objects
-    e2ap_asn1_objects
+    rc_headers
+    e2sm_rc_asn1_objects
+    rc_service_objects
+    )
+
+target_link_libraries( encode_rc_objects PUBLIC logger_objects
     e2model_objects
     e2sm_rc_asn1_objects
-    encoding_objects
-    ranfunction_objects
-    rc_service_objects
     common_objects
     )
 
 target_include_directories (rc_objects PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+    # PRIVATE ../../../src/
+    )
+
+target_include_directories (encode_rc_objects PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
     # PRIVATE ../../../src/

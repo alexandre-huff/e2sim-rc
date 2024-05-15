@@ -22,6 +22,8 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include "logger.h"
+
 char* time_stamp(void)
 {
   timeval curTime;

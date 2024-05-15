@@ -21,15 +21,9 @@
 #
 add_library( encoding_objects OBJECT encode_e2ap.cpp)
 
-target_link_libraries(encoding_objects PRIVATE
+target_link_libraries(encoding_objects PUBLIC
 	logger_objects
 	ranfunction_objects
-	e2sm_objects
-	procedure_objects
-	def_objects
-	e2ap_asn1_objects
-	e2model_objects
-	common_objects
 	)
 
 target_include_directories (encoding_objects PUBLIC

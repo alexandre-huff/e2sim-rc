@@ -21,10 +21,8 @@ add_subdirectory( rc )
 
 add_library( e2sm_objects OBJECT e2sm.cpp submgr.cpp )
 
-target_link_libraries( e2sm_objects PRIVATE logger_objects
+target_link_libraries( e2sm_objects PUBLIC logger_objects
     procedure_objects
-    def_objects
-    e2ap_asn1_objects
     e2model_objects
     common_objects
     )

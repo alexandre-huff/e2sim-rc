@@ -23,6 +23,7 @@
 #include "logger.h"
 #include "encode_e2ap.hpp"
 #include "utils.hpp"
+#include "rc_param_codec.hpp"
 
 extern "C" {
     #include "RANParameter-ValueType-Choice-ElementFalse.h"
@@ -44,21 +45,12 @@ void RRCStateObserver::flowUpdate(const std::string iMSI, const flow_entry &entr
 bool RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue, const int32_t &cell) {
     LOGGER_TRACE_FUNCTION_IN
 
+    int32_t nodeb = -1;
     int rsrp;
     int rsrq;
     int sinr;
 
-    const auto &data = ue->anr.find(cell);
-    if (data != ue->anr.end()) {
-        rsrp = (int) data->second->rsrp;
-        rsrq = (int) data->second->rsrq;
-        sinr = (int) data->second->sinr;
-    } else {
-        rsrp = 0;
-        rsrq = 0;
-        sinr = 0;
-        logger_warn("Unable to fetch anr information from bbu1 %s, using default values rsrp=0 rsrq=0 sinr=0", ue->imsi.c_str());
-    }
+    logger_info("Association request from UE %s", ue->imsi.c_str());
 
     // Checking for subscribed event triggers
     bool match = false;
@@ -79,32 +71,46 @@ bool RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue, con
         return true;
     }
 
-    logger_info("Association request from UE %s", ue->imsi.c_str());
-
     e2sim::ue::UEInfo info;
     info.endpoint = ue->endpoint;
     info.imsi = ue->imsi;
     globalE2NodeData->ue_list.addUE(info);    // we have to store the UE endpoint to use in Control Requests
 
-    // Sequence of UE Identifiers as per 9.2.1.4.2 in E2SM-RC-R003-v03.00
-    // We have only a single UE in this association request
-    /* ################ UE ID ################ */
     UEID_t ueid;
     memset(&ueid, 0, sizeof(UEID_t));
-    if (generate_ueid_report_info(ueid, ue->imsi)) {
 
-        /* ################ Sequence of RAN Parameters ################ */
-        std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> params;
+    // iterate over all nodeb to report the correspondig ue metrics per nodeb
+    for (auto &it : ue->anr) {
+        std::shared_ptr<anr_entry> &entry = it.second;
+        nodeb = entry->bbu_name;
 
-        if (generate_ran_params_report_info(RRC_State_rrc_connected, rsrp, rsrq, sinr, params)) {
-            std::vector<common::rc::indication_msg_format2_ueid_t> ue_ids;
-            ue_ids.emplace_back(ueid, params);
+        if (nodeb == cell) {
+            rsrp = (int) entry->rsrp;
+            rsrq = (int) entry->rsrq;
+            sinr = (int) entry->sinr;
 
-            encode_and_send_report_msg(ue_ids);
+            // FIXME implement E2SM-RC 8.1.1.17 UE Context Information to send metric indications to xApp
+
+            // Sequence of UE Identifiers as per 9.2.1.4.2 in E2SM-RC-R003-v03.00
+            // We have only a single UE in this association request
+            // Each UE can see several E2 Nodes
+            /* ################ UE ID ################ */
+            if (generate_ueid_report_info(ueid, ue->imsi)) {
+
+                /* ################ Sequence of RAN Parameters ################ */
+                std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> params;
+
+                if (generate_ran_params_report_info(RRC_State_rrc_connected, rsrp, rsrq, sinr, params)) {
+                    std::vector<common::rc::indication_msg_format2_ueid_t> ue_ids;
+                    ue_ids.emplace_back(ueid, params);
+
+                    encode_and_send_report_msg(ue_ids);
+                }
+            }
         }
-    }
 
-    ASN_STRUCT_RESET(asn_DEF_UEID, &ueid);
+        ASN_STRUCT_RESET(asn_DEF_UEID, &ueid);
+    }
 
     LOGGER_TRACE_FUNCTION_OUT
 
@@ -276,7 +282,7 @@ bool RRCStateObserver::generate_ueid_report_info(UEID_t &ueid, const std::string
     return true;
 }
 
-bool RRCStateObserver::generate_ran_params_report_info(const e_RRC_State changed_to, const int rsrp, const int rsrq, const int sinr,
+bool RRCStateObserver::generate_ran_params_report_info(const e_RRC_State changed_to, const long rsrp, const long rsrq, const long sinr,
     std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> &params) {
 
     for (RANParameter_ID_t ranp : style4Data.action_data.ran_parameters) {
@@ -284,16 +290,14 @@ bool RRCStateObserver::generate_ran_params_report_info(const e_RRC_State changed
         switch (ranp) {
             case 202:   // "RRC State Changed To" as per 8.2.4 in E2SM-RC-R003-v03.00
             {
+                long status = changed_to;
                 E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *ranp_202 =
                         (E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t));
-                ranp_202->ranParameter_ID = 202;
-                ranp_202->ranParameter_valueType.present = RANParameter_ValueType_PR_ranP_Choice_ElementFalse;
-                ranp_202->ranParameter_valueType.choice.ranP_Choice_ElementFalse =
-                        (RANParameter_ValueType_Choice_ElementFalse_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_ElementFalse_t));
-                ranp_202->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value =
-                    (RANParameter_Value_t *) calloc(1, sizeof(RANParameter_Value_t));
-                ranp_202->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->present = RANParameter_Value_PR_valueInt;
-                ranp_202->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueInt = changed_to;
+                RANParameter_STRUCTURE_Item_t *temp_param = common::rc::build_ran_parameter_structure_elem_item<long>(
+                        202, common::rc::RANParameterElement_e::RAN_PARAMETER_ELEM_FALSE, &status);
+                ranp_202->ranParameter_ID = temp_param->ranParameter_ID;
+                ranp_202->ranParameter_valueType = *temp_param->ranParameter_valueType;
+                if (temp_param) free(temp_param);
 
                 params.emplace_back(ranp_202);
                 break;
@@ -303,14 +307,11 @@ bool RRCStateObserver::generate_ran_params_report_info(const e_RRC_State changed
             {
                 E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *ranp_12501 =
                         (E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t));
-                ranp_12501->ranParameter_ID = 12501;
-                ranp_12501->ranParameter_valueType.present = RANParameter_ValueType_PR_ranP_Choice_ElementFalse;
-                ranp_12501->ranParameter_valueType.choice.ranP_Choice_ElementFalse =
-                        (RANParameter_ValueType_Choice_ElementFalse_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_ElementFalse_t));
-                ranp_12501->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value =
-                    (RANParameter_Value_t *) calloc(1, sizeof(RANParameter_Value_t));
-                ranp_12501->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->present = RANParameter_Value_PR_valueInt;
-                ranp_12501->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueInt = rsrp;
+                RANParameter_STRUCTURE_Item_t *temp_param = common::rc::build_ran_parameter_structure_elem_item<long>(
+                        12501, common::rc::RANParameterElement_e::RAN_PARAMETER_ELEM_FALSE, &rsrp);
+                ranp_12501->ranParameter_ID = temp_param->ranParameter_ID;
+                ranp_12501->ranParameter_valueType = *temp_param->ranParameter_valueType;
+                if (temp_param) free(temp_param);
 
                 params.emplace_back(ranp_12501);
                 break;
@@ -320,14 +321,11 @@ bool RRCStateObserver::generate_ran_params_report_info(const e_RRC_State changed
             {
                 E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *ranp_12502 =
                         (E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t));
-                ranp_12502->ranParameter_ID = 12502;
-                ranp_12502->ranParameter_valueType.present = RANParameter_ValueType_PR_ranP_Choice_ElementFalse;
-                ranp_12502->ranParameter_valueType.choice.ranP_Choice_ElementFalse =
-                        (RANParameter_ValueType_Choice_ElementFalse_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_ElementFalse_t));
-                ranp_12502->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value =
-                    (RANParameter_Value_t *) calloc(1, sizeof(RANParameter_Value_t));
-                ranp_12502->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->present = RANParameter_Value_PR_valueInt;
-                ranp_12502->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueInt = rsrq;
+                RANParameter_STRUCTURE_Item_t *temp_param = common::rc::build_ran_parameter_structure_elem_item<long>(
+                        12502, common::rc::RANParameterElement_e::RAN_PARAMETER_ELEM_FALSE, &rsrq);
+                ranp_12502->ranParameter_ID = temp_param->ranParameter_ID;
+                ranp_12502->ranParameter_valueType = *temp_param->ranParameter_valueType;
+                if (temp_param) free(temp_param);
 
                 params.emplace_back(ranp_12502);
                 break;
@@ -337,14 +335,11 @@ bool RRCStateObserver::generate_ran_params_report_info(const e_RRC_State changed
             {
                 E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *ranp_12503 =
                         (E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t));
-                ranp_12503->ranParameter_ID = 12503;
-                ranp_12503->ranParameter_valueType.present = RANParameter_ValueType_PR_ranP_Choice_ElementFalse;
-                ranp_12503->ranParameter_valueType.choice.ranP_Choice_ElementFalse =
-                        (RANParameter_ValueType_Choice_ElementFalse_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_ElementFalse_t));
-                ranp_12503->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value =
-                    (RANParameter_Value_t *) calloc(1, sizeof(RANParameter_Value_t));
-                ranp_12503->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->present = RANParameter_Value_PR_valueInt;
-                ranp_12503->ranParameter_valueType.choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueInt = sinr;
+                RANParameter_STRUCTURE_Item_t *temp_param = common::rc::build_ran_parameter_structure_elem_item<long>(
+                        12503, common::rc::RANParameterElement_e::RAN_PARAMETER_ELEM_FALSE, &sinr);
+                ranp_12503->ranParameter_ID = temp_param->ranParameter_ID;
+                ranp_12503->ranParameter_valueType = *temp_param->ranParameter_valueType;
+                if (temp_param) free(temp_param);
 
                 params.emplace_back(ranp_12503);
                 break;
@@ -355,78 +350,37 @@ bool RRCStateObserver::generate_ran_params_report_info(const e_RRC_State changed
                 // Global gNB ID
                 E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *p17011 = // we have to traverse all the structures as per Section 8.0 in E2SM-RC-R003-v03.00
                         (E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t));
-                p17011->ranParameter_ID = 17011;
-                p17011->ranParameter_valueType.present = RANParameter_ValueType_PR_ranP_Choice_Structure;
-                p17011->ranParameter_valueType.choice.ranP_Choice_Structure =
-                        (RANParameter_ValueType_Choice_Structure_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_Structure_t));
-                p17011->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure =
-                        (RANParameter_STRUCTURE_t *) calloc(1, sizeof(RANParameter_STRUCTURE_t));
-
-                p17011->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters =
-                        (RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters *)
-                        calloc(1, sizeof(RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters));
+                RANParameter_STRUCTURE_Item_t *temp_param = common::rc::build_ran_parameter_structure_item(
+                        17011, common::rc::RANParameterContainer_e::RAN_PARAMETER_STRUCT);
+                p17011->ranParameter_ID = temp_param->ranParameter_ID;
+                p17011->ranParameter_valueType = *temp_param->ranParameter_valueType;
+                if (temp_param) free(temp_param);
 
                 // PLMN Identity
-                RANParameter_STRUCTURE_Item_t *p17012 = (RANParameter_STRUCTURE_Item_t *) calloc(1, sizeof(RANParameter_STRUCTURE_Item_t));
+                PLMNIdentity_t *plmnid = globalE2NodeData->getGlobalE2NodePlmnId();
+                common::rc::OctetStringWrapper plmnid_ow;
+                plmnid_ow.data = plmnid;
+                RANParameter_STRUCTURE_Item_t *p17012 = common::rc::build_ran_parameter_structure_elem_item<common::rc::OctetStringWrapper>(
+                        17012, common::rc::RANParameterElement_e::RAN_PARAMETER_ELEM_FALSE, &plmnid_ow);
+                ASN_STRUCT_FREE(asn_DEF_PLMNIdentity, plmnid);
                 ASN_SEQUENCE_ADD(&p17011->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list, p17012);
 
-                p17012->ranParameter_ID = 17012;
-                p17012->ranParameter_valueType = (RANParameter_ValueType_t *) calloc(1, sizeof(RANParameter_ValueType_t));
-                p17012->ranParameter_valueType->present = RANParameter_ValueType_PR_ranP_Choice_ElementFalse;
-                p17012->ranParameter_valueType->choice.ranP_Choice_ElementFalse =
-                        (RANParameter_ValueType_Choice_ElementFalse_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_ElementFalse_t));
-                p17012->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value =
-                        (RANParameter_Value_t *) calloc(1, sizeof(RANParameter_Value_t));
-                p17012->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value->present = RANParameter_Value_PR_valueOctS;
-                PLMNIdentity_t *plmnid = globalE2NodeData->getGlobalE2NodePlmnId();
-                p17012->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueOctS = *plmnid; // THE value
-                if (plmnid) free(plmnid);
-
                 // CHOICE gNB ID
-                RANParameter_STRUCTURE_Item_t *p17013 = (RANParameter_STRUCTURE_Item_t *) calloc(1, sizeof(RANParameter_STRUCTURE_Item_t));
+                RANParameter_STRUCTURE_Item_t *p17013 = common::rc::build_ran_parameter_structure_item(
+                        17013, common::rc::RANParameterContainer_e::RAN_PARAMETER_STRUCT);
                 ASN_SEQUENCE_ADD(&p17011->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list, p17013);
-                p17013->ranParameter_ID = 17013;
-                p17013->ranParameter_valueType = (RANParameter_ValueType_t *) calloc(1, sizeof(RANParameter_ValueType_t));
-                p17013->ranParameter_valueType->present = RANParameter_ValueType_PR_ranP_Choice_Structure;
-                p17013->ranParameter_valueType->choice.ranP_Choice_Structure =
-                        (RANParameter_ValueType_Choice_Structure_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_Structure_t));
-                p17013->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure =
-                        (RANParameter_STRUCTURE_t *) calloc(1, sizeof(RANParameter_STRUCTURE_t));
-                p17013->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters =
-                        (RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters *)
-                        calloc(1, sizeof(RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters));
 
                 // gNB ID Structure
-                RANParameter_STRUCTURE_Item_t *p17014 = (RANParameter_STRUCTURE_Item_t *) calloc(1, sizeof(RANParameter_STRUCTURE_Item_t));
+                RANParameter_STRUCTURE_Item_t *p17014 = common::rc::build_ran_parameter_structure_item(
+                        17014, common::rc::RANParameterContainer_e::RAN_PARAMETER_STRUCT);
                 ASN_SEQUENCE_ADD(&p17013->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list, p17014);
 
-                p17014->ranParameter_ID = 17014;
-                p17014->ranParameter_valueType = (RANParameter_ValueType_t *) calloc(1, sizeof(RANParameter_ValueType_t));
-                p17014->ranParameter_valueType->present = RANParameter_ValueType_PR_ranP_Choice_Structure;
-                p17014->ranParameter_valueType->choice.ranP_Choice_Structure =
-                        (RANParameter_ValueType_Choice_Structure_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_Structure_t));
-                p17014->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure =
-                        (RANParameter_STRUCTURE_t *) calloc(1, sizeof(RANParameter_STRUCTURE_t));
-                p17014->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters =
-                        (RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters *)
-                        calloc(1, sizeof(RANParameter_STRUCTURE::RANParameter_STRUCTURE__sequence_of_ranParameters));
-
                 // gNB ID Element
-                RANParameter_STRUCTURE_Item_t *p17015 = (RANParameter_STRUCTURE_Item_t *) calloc(1, sizeof(RANParameter_STRUCTURE_Item_t));
-                ASN_SEQUENCE_ADD(&p17014->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list, p17015);
-
-                p17015->ranParameter_ID = 17015;
-                p17015->ranParameter_valueType = (RANParameter_ValueType_t *) calloc(1, sizeof(RANParameter_ValueType_t));
-                p17015->ranParameter_valueType->present = RANParameter_ValueType_PR_ranP_Choice_ElementFalse;
-                p17015->ranParameter_valueType->choice.ranP_Choice_ElementFalse =
-                        (RANParameter_ValueType_Choice_ElementFalse_t *) calloc(1, sizeof(RANParameter_ValueType_Choice_ElementFalse_t));
-                p17015->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value =
-                        (RANParameter_Value_t *) calloc(1, sizeof(RANParameter_Value_t));
-                p17015->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value->present = RANParameter_Value_PR_valueBitS;
-
                 BIT_STRING_t *gnbid = globalE2NodeData->getGlobalE2Node_gNBId();
-                p17015->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value->choice.valueBitS = *gnbid; // THE value
-                if (gnbid) free(gnbid);
+                RANParameter_STRUCTURE_Item_t *p17015 = common::rc::build_ran_parameter_structure_elem_item<BIT_STRING_t>(
+                        17015, common::rc::RANParameterElement_e::RAN_PARAMETER_ELEM_FALSE, gnbid);
+                ASN_STRUCT_FREE(asn_DEF_BIT_STRING, gnbid);
+                ASN_SEQUENCE_ADD(&p17014->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list, p17015);
 
                 if (LOGGER_LEVEL >= LOGGER_DEBUG) {
                     asn_fprint(stdout, &asn_DEF_E2SM_RC_IndicationMessage_Format2_RANParameter_Item, p17011);

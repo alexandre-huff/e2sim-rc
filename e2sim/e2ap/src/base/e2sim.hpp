@@ -30,11 +30,6 @@
 
 extern "C" {
   #include "E2AP-PDU.h"
-  #include "OCTET_STRING.h"
-  #include "PrintableString.h"
-  #include "RICindicationType.h"
-  #include "BIT_STRING.h"
-  #include "PLMN-Identity.h"
 }
 
 // typedef struct { // FIXME remove all unused code comments

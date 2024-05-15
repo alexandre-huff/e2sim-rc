@@ -68,7 +68,6 @@ add_definitions(
 	-DDEBUG=${debugging}
 )
 
-add_definitions( -DASN_DISABLE_OER_SUPPORT )
 add_definitions( -DLOGGER_LEVEL=LOGGER_DEBUG ) # NONE, FATAL, ERROR, WARN, INFO, DEBUG, TRACE
 
 # Compiler flags

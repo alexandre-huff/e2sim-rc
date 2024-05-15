@@ -15,10 +15,13 @@
 #==================================================================================
 #
 
+add_subdirectory( include )
+
 add_library( common_objects OBJECT global_data.cpp utils.cpp )
 
-target_link_libraries( common_objects PRIVATE logger_objects
+target_link_libraries( common_objects PUBLIC
     e2ap_asn1_objects
+    logger_objects
     )
 
 target_include_directories (common_objects PUBLIC

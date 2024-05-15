@@ -37,8 +37,9 @@
 #include <string.h>
 
 #include "e2sim.hpp"
-#include "e2sim_defs.h"
+#include "logger.h"
 #include "e2sim_sctp.hpp"
+#include "e2ap_asn1c_codec.h"
 #include "e2ap_message_handler.hpp"
 #include "encode_e2ap.hpp"
 

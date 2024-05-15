@@ -22,8 +22,6 @@
 #include <memory>
 #include <unordered_map>
 
-#include <envman/environment_manager.h>
-
 #include "subaction.hpp"
 
 class SubscriptionManager {

@@ -89,7 +89,7 @@ public:
 
     bool generate_ueid_report_info(UEID_t &ueid, const std::string &imsi);
 
-    bool generate_ran_params_report_info(const e_RRC_State changed_to, const int rsrp, const int rsrq, const int sinr,
+    bool generate_ran_params_report_info(const e_RRC_State changed_to, const long rsrp, const long rsrq, const long sinr,
             std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> &params);
 
     void encode_and_send_report_msg(std::vector<common::rc::indication_msg_format2_ueid_t> &ue_ids);

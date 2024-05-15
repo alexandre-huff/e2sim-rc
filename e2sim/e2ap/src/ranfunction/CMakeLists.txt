@@ -17,13 +17,8 @@
 
 add_library( ranfunction_objects OBJECT ran_function.cpp )
 
-target_link_libraries( ranfunction_objects PRIVATE logger_objects
+target_link_libraries( ranfunction_objects PUBLIC
     e2sm_objects
-    procedure_objects
-    def_objects
-    e2ap_asn1_objects
-    e2model_objects
-    common_objects
     )
 
 target_include_directories (ranfunction_objects PUBLIC

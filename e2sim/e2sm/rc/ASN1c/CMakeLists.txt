@@ -21,12 +21,21 @@
 file(GLOB SOURCES "*.c")
 file(GLOB HEADERS "*.h")
 
-add_library( e2sm_rc_asn1_objects STATIC ${SOURCES} ${HEADERS} )
+add_library( e2sm_rc_asn1_objects STATIC ${SOURCES} )
 
-target_include_directories (e2sm_rc_asn1_objects PUBLIC
+target_compile_definitions( e2sm_rc_asn1_objects PUBLIC ASN_DISABLE_OER_SUPPORT )
+
+target_include_directories ( e2sm_rc_asn1_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
   # PRIVATE src
   )
 
+  if( DEV_PKG )
+  install( FILES
+    ${HEADERS}
+    DESTINATION ${install_inc}
+    )
+endif()
+# ---------------------------------------------------------------------------
 

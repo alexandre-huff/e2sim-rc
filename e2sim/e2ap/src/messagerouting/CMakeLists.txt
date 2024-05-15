@@ -24,17 +24,11 @@ add_library( messagerouting_objects OBJECT
         e2ap_asn1c_codec.c
   )
 
-target_link_libraries( messagerouting_objects PRIVATE
+target_link_libraries( messagerouting_objects PUBLIC
         logger_objects
         ranfunction_objects
-        e2sm_objects
-        procedure_objects
         def_objects
-        e2ap_asn1_objects
-        e2model_objects
         encoding_objects
-        common_objects
-        # e2sm_rc_asn1_objects # FIXME remove if not required
         )
 
 target_include_directories (messagerouting_objects PUBLIC

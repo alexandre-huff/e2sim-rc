@@ -1,5 +1,5 @@
 #==================================================================================
-#	Copyright 2023 Alexandre Huff
+#	Copyright 2024 Alexandre Huff
 #
 #   Licensed under the Apache License, Version 2.0 (the "License"),
 #   you may not use this file except in compliance with the License.
@@ -15,9 +15,21 @@
 #==================================================================================
 #
 
-# each binary is built from a subset
-add_subdirectory( ASN1c )
-add_subdirectory( helpers )
-add_subdirectory( include )
-add_subdirectory( services )
-add_subdirectory( src )
+add_library( rc_helpers OBJECT rc_param_codec.cpp )
+
+target_link_libraries( rc_helpers PUBLIC
+    e2sm_rc_asn1_objects
+    logger_objects
+    )
+
+target_include_directories ( rc_helpers PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+    )
+
+if( DEV_PKG )
+    install( FILES
+        rc_param_codec.hpp
+        DESTINATION ${install_inc}
+    )
+endif()

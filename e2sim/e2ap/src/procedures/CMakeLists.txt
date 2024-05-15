@@ -20,9 +20,9 @@ file( GLOB HEADERS "*.hpp")
 
 add_library( procedure_objects OBJECT ${SOURCES} )
 
-target_link_libraries( procedure_objects PRIVATE logger_objects
+target_link_libraries( procedure_objects PUBLIC
+    common_headers
     e2ap_asn1_objects
-    def_objects
     )
 
 target_include_directories ( procedure_objects PUBLIC

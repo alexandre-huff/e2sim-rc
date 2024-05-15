@@ -21,23 +21,21 @@ find_package(cpprestsdk REQUIRED)
 add_executable( e2sim e2node.cpp )
 
 target_link_libraries( e2sim PRIVATE
-    base_objects
-    ranfunction_objects
-    e2sm_objects
-    procedure_objects
-    def_objects
-    e2ap_asn1_objects
-    e2model_objects
-    logger_objects
-    rc_objects
-    e2sm_rc_asn1_objects
-    sctp_objects
-    messagerouting_objects
-    common_objects
+    rc_helpers
     o1_objects
+    base_objects
+    rc_objects
     envman
+    pistache
     ue_client
-	pistache
+    common_objects
+    ranfunction_objects
+    messagerouting_objects
+    sctp_objects
+    encoding_objects
+    encode_rc_objects
+    e2model_objects
+    procedure_objects
     )
 
 target_link_libraries( e2sim PRIVATE cpprestsdk::cpprest OpenSSL::Crypto )
