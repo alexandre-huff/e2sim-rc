@@ -57,6 +57,9 @@ void common::rc::encode_report_function_definition(void *e2sm_func_def, std::vec
         report_item->ric_SupportedEventTriggerStyle_Type = style->getTriggerDefinition()->getStyleType();
         report_item->ric_ReportActionFormat_Type = style->getActionDefinition()->getFormat();
 
+        report_item->ran_ReportParameters_List = (RANFunctionDefinition_Report_Item_t::RANFunctionDefinition_Report_Item__ran_ReportParameters_List *)
+                calloc(1, sizeof(RANFunctionDefinition_Report_Item_t::RANFunctionDefinition_Report_Item__ran_ReportParameters_List));
+
         for (auto &param : style->getActionDefinition()->getRanParameters()) {
             Report_RANParameter_Item_t *item = (Report_RANParameter_Item_t *) calloc(1, sizeof(Report_RANParameter_Item_t));
             item->ranParameter_ID = param->getParamId();
@@ -83,6 +86,13 @@ void common::rc::encode_control_function_definition(void *e2sm_func_def, std::ve
         control_item->ric_ControlHeaderFormat_Type = style->getRicHeaderFormatType();
         control_item->ric_ControlMessageFormat_Type = style->getRicMessageFormatType();
 
+        control_item->ric_ControlAction_List = (RANFunctionDefinition_Control_Item_t::RANFunctionDefinition_Control_Item__ric_ControlAction_List *)
+                calloc(1, sizeof(RANFunctionDefinition_Control_Item_t::RANFunctionDefinition_Control_Item__ric_ControlAction_List));
+
+        control_item->ran_ControlOutcomeParameters_List =
+                (RANFunctionDefinition_Control_Item_t::RANFunctionDefinition_Control_Item__ran_ControlOutcomeParameters_List *)
+                calloc(1, sizeof(RANFunctionDefinition_Control_Item_t::RANFunctionDefinition_Control_Item__ran_ControlOutcomeParameters_List));
+
         if (style->getRicStyleType() == 3) {    // TODO Outcome Param hardcoded for now as we are only implementing Control Style 3
             control_item->ric_ControlOutcomeFormat_Type = 1;
             ControlOutcome_RANParameter_Item_t *param = (ControlOutcome_RANParameter_Item_t *) calloc(1, sizeof(ControlOutcome_RANParameter_Item_t));
@@ -100,6 +110,9 @@ void common::rc::encode_control_function_definition(void *e2sm_func_def, std::ve
         OCTET_STRING_fromBuf(&act_item->ric_ControlAction_Name, act_name.c_str(), act_name.length());
 
         ASN_SEQUENCE_ADD(&control_item->ric_ControlAction_List->list, act_item);
+
+        act_item->ran_ControlActionParameters_List = (RANFunctionDefinition_Control_Action_Item_t::RANFunctionDefinition_Control_Action_Item__ran_ControlActionParameters_List *)
+                calloc(1, sizeof(RANFunctionDefinition_Control_Action_Item_t::RANFunctionDefinition_Control_Action_Item__ran_ControlActionParameters_List));
 
         for (auto &param : style->getActionDefinition()->getRanParameters()) {
             ControlAction_RANParameter_Item_t *pitem = (ControlAction_RANParameter_Item_t *) calloc(1, sizeof(ControlAction_RANParameter_Item_t));
