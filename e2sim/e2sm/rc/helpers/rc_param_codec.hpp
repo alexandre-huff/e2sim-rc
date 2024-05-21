@@ -21,6 +21,7 @@
 
 #include <type_traits>
 #include <typeinfo>
+#include <vector>
 
 #include "logger.h"
 
@@ -32,10 +33,16 @@ extern "C" {
     #include "RANParameter-ValueType.h"
     #include "RANParameter-ValueType-Choice-ElementFalse.h"
     #include "RANParameter-ValueType-Choice-ElementTrue.h"
+    #include "RANParameter-LIST.h"
 }
 
 namespace common{
     namespace rc {
+
+        typedef enum {
+            RAN_PARAMETER_ELEM_TRUE = RANParameter_ValueType_PR_ranP_Choice_ElementTrue,
+            RAN_PARAMETER_ELEM_FALSE = RANParameter_ValueType_PR_ranP_Choice_ElementFalse
+        } RANParameterElement_e;
 
         /**
          * Wrapper for OCTET_STRING_t data required to avoid conflicts on function overload
@@ -55,26 +62,32 @@ namespace common{
 
         /**
          * Implements the concept of all possible types accepted for RANParameter_Value_u union, as per defined in RANParameter-Value.h
+         * It requires two wrappers to differentiate PrintableString_t from OCTET_STRING_t
+         * This concept is used to restrict the typeid of parameters values that can be built
         */
         template<typename T>
-        concept RANParameterValueType = std::is_same_v<T, BOOLEAN_t>
+        concept RANParameterValueTypeBuilder = std::is_same_v<T, BOOLEAN_t>
                                     || std::is_same_v<T, long>
                                     || std::is_same_v<T, double>
                                     || std::is_same_v<T, BIT_STRING_t>
                                     || std::is_same_v<T, OctetStringWrapper>   // Wrapper prevents to pass an OCTET_STRING_t alias (e.g. PrintableString_t) unintentionally
                                     || std::is_same_v<T, PrintableStringWrapper>; // Wrapper required to differentiate PrintableString_t from OCTET_STRING_t
 
-        typedef enum {
-            RAN_PARAMETER_STRUCT = RANParameter_ValueType_PR_ranP_Choice_Structure,
-            RAN_PARAMETER_LIST = RANParameter_ValueType_PR_ranP_Choice_List
-        } RANParameterContainer_e;
+        /**
+         * Implements the concept of all possible types accepted for RANParameter_Value_u union, as per defined in RANParameter-Value.h
+         * This concept is used to differenriate from the "builder" concept, as here we need to reference to the real values (not the wrappers)
+        */
+        template<typename T>
+        concept RANParameterValueType = std::is_same_v<T, BOOLEAN_t>
+                                    || std::is_same_v<T, long>
+                                    || std::is_same_v<T, double>
+                                    || std::is_same_v<T, BIT_STRING_t>
+                                    || std::is_same_v<T, OCTET_STRING_t>
+                                    || std::is_same_v<T, PrintableString_t>;
 
-        typedef enum {
-            RAN_PARAMETER_ELEM_TRUE = RANParameter_ValueType_PR_ranP_Choice_ElementTrue,
-            RAN_PARAMETER_ELEM_FALSE = RANParameter_ValueType_PR_ranP_Choice_ElementFalse
-        } RANParameterElement_e;
-
-        RANParameter_STRUCTURE_Item_t *build_ran_parameter_structure_item(const RANParameter_ID_t id, RANParameterContainer_e type);
+        RANParameter_STRUCTURE_t *build_ran_parameter_list_item();
+        RANParameter_STRUCTURE_Item_t *build_ran_parameter_structure_item(const RANParameter_ID_t id);
+        RANParameter_STRUCTURE_Item_t *build_ran_parameter_list(const RANParameter_ID_t id);
 
 
         RANParameter_Value_t *build_ran_parameter_value(const BOOLEAN_t *value);
@@ -90,7 +103,7 @@ namespace common{
         /// @param type The type of the RAN Parameter Structure we are building
         /// @param value The data that is copied to the new ASN.1 RAN Parameter Item. The pointer of @p value is not touched by this function
         /// @return A pointer to the newly and populated RAN Parameter Structure Item, or @p nullptr on error.
-        template<common::rc::RANParameterValueType T>
+        template<common::rc::RANParameterValueTypeBuilder T>
         RANParameter_STRUCTURE_Item_t *build_ran_parameter_structure_elem_item(const RANParameter_ID_t id, RANParameterElement_e type, const T *value) {
             /*
                 Please check why this implementation is required to be in the header file
@@ -146,65 +159,66 @@ namespace common{
 
         RANParameter_STRUCTURE_Item_t *get_ran_parameter_structure_item(const RANParameter_STRUCTURE_t *ranp_s, RANParameter_ID_t ranp_id, RANParameter_ValueType_PR ranp_type);
 
-        // FIXME still need to fix return types of RANParameterValueType that require wrappers (function overloading?)
-        // /// @brief Retrieves the data of a given RAN Parameter Value
-        // /// @tparam T Return type of the data
-        // /// @param v The ASN1 RAN Parameter Value
-        // /// @param vtype The type that the ASN1 RAN Parameter Value must match
-        // /// @return A pointer to the address of @p T in @p v , or @p nullptr on error:
-        // ///         - RAN Parameter Value type mismatching @p vtype
-        // ///         - Invalid @p vtype enum value
-        // template<common::rc::RANParameterValueType T>
-        // T *get_ran_parameter_value_data(const RANParameter_Value_t *v, RANParameter_Value_PR vtype) {
-        //     /*
-        //         Please check why this implementation is required to be in the header file
-        //         Source:
-        //         https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
-        //         https://stackoverflow.com/questions/495021/why-can-templates-only-be-implemented-in-the-header-file/495056#495056
-        //     */
-        //     LOGGER_TRACE_FUNCTION_IN
+        std::vector<RANParameter_STRUCTURE_t *> get_ran_parameter_list_items(const RANParameter_LIST_t *ranp_list);
 
-        //     T *value;
+        /// @brief Retrieves the data of a given RAN Parameter Value
+        /// @tparam T Return type of the data
+        /// @param v The ASN1 RAN Parameter Value
+        /// @param vtype The type that the ASN1 RAN Parameter Value must match
+        /// @return A pointer to the address of @p T in @p v , or @p nullptr on error:
+        ///         - RAN Parameter Value type mismatching @p vtype
+        ///         - Invalid @p vtype enum value
+        template<common::rc::RANParameterValueType T>
+        T *get_ran_parameter_value_data(const RANParameter_Value_t *v, RANParameter_Value_PR vtype) {
+            /*
+                Please check why this implementation is required to be in the header file
+                Source:
+                https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
+                https://stackoverflow.com/questions/495021/why-can-templates-only-be-implemented-in-the-header-file/495056#495056
+            */
+            LOGGER_TRACE_FUNCTION_IN
 
-        //     if (!v) {
-        //         logger_error("RAN Parameter Value is required. nil?");
-        //         return nullptr;
-        //     }
+            T *value;
 
-        //     if (v->present != vtype) {
-        //         logger_error("RAN Parameter Value Type does not match with type %d", vtype);
-        //         return nullptr;
-        //     }
+            if (!v) {
+                logger_error("RAN Parameter Value is required. nil?");
+                return nullptr;
+            }
 
-        //     switch (v->present) {
-        //         case RANParameter_Value_PR_valueBoolean:
-        //             value = (T *)&v->choice.valueBoolean;
-        //             break;
-        //         case RANParameter_Value_PR_valueInt:
-        //             value = (T *)&v->choice.valueInt;
-        //             break;
-        //         case RANParameter_Value_PR_valueReal:
-        //             value = (T *)&v->choice.valueReal;
-        //             break;
-        //         case RANParameter_Value_PR_valueBitS:
-        //             value = (T *)&v->choice.valueBitS;
-        //             break;
-        //         case RANParameter_Value_PR_valueOctS:
-        //             value = (T *)&v->choice.valueOctS;
-        //             break;
-        //         case RANParameter_Value_PR_valuePrintableString:
-        //             value = (T *)&v->choice.valuePrintableString;
-        //             break;
-        //         case RANParameter_Value_PR_NOTHING:
-        //         default:
-        //             logger_error("Invalid RANParameter value PR %d in %s", v->present, asn_DEF_RANParameter_Value.name);
-        //             value = nullptr;
-        //     }
+            if (v->present != vtype) {
+                logger_error("RAN Parameter Value Type does not match with type %d", vtype);
+                return nullptr;
+            }
 
-        //     LOGGER_TRACE_FUNCTION_OUT
+            switch (v->present) {
+                case RANParameter_Value_PR_valueBoolean:
+                    value = (T *)&v->choice.valueBoolean;
+                    break;
+                case RANParameter_Value_PR_valueInt:
+                    value = (T *)&v->choice.valueInt;
+                    break;
+                case RANParameter_Value_PR_valueReal:
+                    value = (T *)&v->choice.valueReal;
+                    break;
+                case RANParameter_Value_PR_valueBitS:
+                    value = (T *)&v->choice.valueBitS;
+                    break;
+                case RANParameter_Value_PR_valueOctS:
+                    value = (T *)&v->choice.valueOctS;
+                    break;
+                case RANParameter_Value_PR_valuePrintableString:
+                    value = (T *)&v->choice.valuePrintableString;
+                    break;
+                case RANParameter_Value_PR_NOTHING:
+                default:
+                    logger_error("Invalid RANParameter value PR %d in %s", v->present, asn_DEF_RANParameter_Value.name);
+                    value = nullptr;
+            }
 
-        //     return value;
-        // }
+            LOGGER_TRACE_FUNCTION_OUT
+
+            return value;
+        }
 
     }
 }

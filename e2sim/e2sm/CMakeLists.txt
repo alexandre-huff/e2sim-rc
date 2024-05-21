@@ -19,12 +19,13 @@
 add_subdirectory( e2model )
 add_subdirectory( rc )
 
-add_library( e2sm_objects OBJECT e2sm.cpp submgr.cpp )
+add_library( e2sm_objects OBJECT e2sm.cpp submgr.cpp e2sm_utils.cpp )
 
 target_link_libraries( e2sm_objects PUBLIC logger_objects
     procedure_objects
     e2model_objects
     common_objects
+    e2sm_rc_asn1_objects
     )
 
 target_include_directories (e2sm_objects PUBLIC
@@ -38,6 +39,7 @@ if( DEV_PKG )
         e2sm.hpp
         subaction.hpp
         submgr.hpp
+        e2sm_utils.hpp
         DESTINATION ${install_inc}
     )
 endif()

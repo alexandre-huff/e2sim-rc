@@ -34,6 +34,11 @@ extern "C" {
     #include "E2SM-RC-IndicationMessage-Format2-Item.h"
     #include "ControlOutcome-RANParameter-Item.h"
     #include "ControlAction-RANParameter-Item.h"
+    #include "RANParameter-Definition-Choice.h"
+    #include "RANParameter-Definition-Choice-STRUCTURE.h"
+    #include "RANParameter-Definition-Choice-STRUCTURE-Item.h"
+    #include "RANParameter-Definition-Choice-LIST.h"
+    #include "RANParameter-Definition-Choice-LIST-Item.h"
 }
 
 using namespace std;
@@ -61,10 +66,31 @@ void common::rc::encode_report_function_definition(void *e2sm_func_def, std::vec
                 calloc(1, sizeof(RANFunctionDefinition_Report_Item_t::RANFunctionDefinition_Report_Item__ran_ReportParameters_List));
 
         for (auto &param : style->getActionDefinition()->getRanParameters()) {
-            Report_RANParameter_Item_t *item = (Report_RANParameter_Item_t *) calloc(1, sizeof(Report_RANParameter_Item_t));
-            item->ranParameter_ID = param->getParamId();
-            OCTET_STRING_fromBuf(&item->ranParameter_name, param->getParamName().c_str(), param->getParamName().length());
-            ASN_SEQUENCE_ADD(&report_item->ran_ReportParameters_List->list, item);
+            Report_RANParameter_Item_t *pitem = (Report_RANParameter_Item_t *) calloc(1, sizeof(Report_RANParameter_Item_t));
+            pitem->ranParameter_ID = param->getParamId();
+            OCTET_STRING_fromBuf(&pitem->ranParameter_name, param->getParamName().c_str(), param->getParamName().length());
+            ASN_SEQUENCE_ADD(&report_item->ran_ReportParameters_List->list, pitem);
+
+            auto ptype = param->getParamType();
+            if (ptype != ran_parameter_type_e::ELEMENT) {   // ELEMENT parameter does not have Parameter Definition
+                auto subparams = param->getSubParameters();
+
+                if (!subparams.empty()) {
+                    switch (ptype) {
+                        case ran_parameter_type_e::STRUCTURE:
+                            pitem->ranParameter_Definition = encode_ran_parameter_definition_structure(subparams);
+                            break;
+
+                        case ran_parameter_type_e::LIST:
+                            pitem->ranParameter_Definition = encode_ran_parameter_definition_list(subparams);
+                            break;
+
+                        default:
+                            logger_warn("RAN Parameter Definition Type %d not implemented for RAN Parameter ID %d (%s). Ignoring...",
+                                ptype, param->getParamId(), param->getParamName().c_str());
+                    }
+                }
+            }
         }
 
         ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Report->ric_ReportStyle_List.list, report_item);
@@ -119,12 +145,116 @@ void common::rc::encode_control_function_definition(void *e2sm_func_def, std::ve
             pitem->ranParameter_ID = param->getParamId();
             OCTET_STRING_fromBuf(&pitem->ranParameter_name, param->getParamName().c_str(), param->getParamName().length());
             ASN_SEQUENCE_ADD(&act_item->ran_ControlActionParameters_List->list, pitem);
+
+            auto ptype = param->getParamType();
+            if (ptype != ran_parameter_type_e::ELEMENT) {   // ELEMENT parameter does not have Parameter Definition
+                auto subparams = param->getSubParameters();
+
+                if (!subparams.empty()) {
+                    switch (ptype) {
+                        case ran_parameter_type_e::STRUCTURE:
+                            pitem->ranParameter_Definition = encode_ran_parameter_definition_structure(subparams);
+                            break;
+
+                        case ran_parameter_type_e::LIST:
+                            pitem->ranParameter_Definition = encode_ran_parameter_definition_list(subparams);
+                            break;
+
+                        default:
+                            logger_warn("RAN Parameter Definition Type %d not implemented for RAN Parameter ID %d (%s). Ignoring...",
+                                ptype, param->getParamId(), param->getParamName().c_str());
+                    }
+                }
+            }
         }
 
         ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Control->ric_ControlStyle_List.list, control_item);
     }
 
     LOGGER_TRACE_FUNCTION_OUT
+}
+
+RANParameter_Definition_t *common::rc::encode_ran_parameter_definition_list(std::vector<std::shared_ptr<RANParameter>> &subparams) {
+    LOGGER_TRACE_FUNCTION_IN
+
+    RANParameter_Definition_t *def = (RANParameter_Definition_t *) calloc(1, sizeof(RANParameter_Definition_t));
+    def->ranParameter_Definition_Choice = (RANParameter_Definition_Choice_t *) calloc(1, sizeof(RANParameter_Definition_Choice_t));
+
+    def->ranParameter_Definition_Choice->present = RANParameter_Definition_Choice_PR_choiceLIST;
+    def->ranParameter_Definition_Choice->choice.choiceLIST =
+            (RANParameter_Definition_Choice_LIST_t *) calloc(1, sizeof(RANParameter_Definition_Choice_LIST_t));
+
+    for (auto &param : subparams) {
+        if (param->getParamType() != ran_parameter_type_e::STRUCTURE) {
+            logger_warn("RAN Parameter Definition LIST only accepts STRUCTURE parameters. RAN Parameter ID %d (%s) is not a STRUCTURE! Ignoring...",
+                param->getParamId(), param->getParamName().c_str());
+            continue;
+        }
+
+        RANParameter_Definition_Choice_LIST_Item_t *list_item =
+            (RANParameter_Definition_Choice_LIST_Item_t *) calloc(1, sizeof(RANParameter_Definition_Choice_LIST_Item_t));
+
+        ASN_SEQUENCE_ADD(&def->ranParameter_Definition_Choice->choice.choiceLIST->ranParameter_List.list, list_item);
+
+        list_item->ranParameter_ID = param->getParamId();
+        OCTET_STRING_fromBuf(&list_item->ranParameter_name, param->getParamName().c_str(), param->getParamName().length());
+
+        auto param_subparams = param->getSubParameters();
+        if (!param_subparams.empty()) {
+            list_item->ranParameter_Definition = encode_ran_parameter_definition_structure(param_subparams);
+        }
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+
+    return def;
+}
+
+RANParameter_Definition_t *common::rc::encode_ran_parameter_definition_structure(std::vector<std::shared_ptr<RANParameter>> &subparams) {
+    LOGGER_TRACE_FUNCTION_IN
+
+    RANParameter_Definition_t *def = (RANParameter_Definition_t *) calloc(1, sizeof(RANParameter_Definition_t));
+    def->ranParameter_Definition_Choice = (RANParameter_Definition_Choice_t *) calloc(1, sizeof(RANParameter_Definition_Choice_t));
+
+    def->ranParameter_Definition_Choice->present = RANParameter_Definition_Choice_PR_choiceSTRUCTURE;
+    def->ranParameter_Definition_Choice->choice.choiceSTRUCTURE =
+            (RANParameter_Definition_Choice_STRUCTURE_t *) calloc(1, sizeof(RANParameter_Definition_Choice_STRUCTURE_t));
+
+    for (auto &param : subparams) {
+        RANParameter_Definition_Choice_STRUCTURE_Item_t *choice_item =
+                (RANParameter_Definition_Choice_STRUCTURE_Item_t *) calloc(1, sizeof(RANParameter_Definition_Choice_STRUCTURE_Item_t));
+
+        ASN_SEQUENCE_ADD(&def->ranParameter_Definition_Choice->choice.choiceSTRUCTURE->ranParameter_STRUCTURE.list, choice_item);
+
+        choice_item->ranParameter_ID = param->getParamId();
+        OCTET_STRING_fromBuf(&choice_item->ranParameter_name, param->getParamName().c_str(), param->getParamName().length());
+
+        ran_parameter_type_e ptype = param->getParamType();
+        if (ptype != ran_parameter_type_e::ELEMENT) {  // ELEMENT parameter does not have Parameter Definition
+            auto param_subparams = param->getSubParameters();
+
+            if (!param_subparams.empty()) {
+                switch (ptype) {
+                    case ran_parameter_type_e::STRUCTURE:
+                        choice_item->ranParameter_Definition = encode_ran_parameter_definition_structure(param_subparams);
+                        break;
+
+                    case ran_parameter_type_e::LIST:
+                        choice_item->ranParameter_Definition = encode_ran_parameter_definition_list(param_subparams);
+                        break;
+
+                    default:
+                        logger_warn("RAN Parameter Definition Type %d not implemented for RAN Parameter ID %d (%s). Ignoring...",
+                            ptype, param->getParamId(), param->getParamName().c_str());
+
+                }
+            }
+        }
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+
+    return def;
 }
 
 /*

@@ -21,7 +21,7 @@
 
 /*
     This class must be extended by any entity that wants to
-    implement any polymorphic subsctiption action.
+    implement any polymorphic subscription action.
     The derived class must be self contained and provide all
     attributes required to start/stop and manage the corresponding
     subscription action.

@@ -113,6 +113,19 @@ bool common::utils::asn1_decode_and_check(const asn_TYPE_descriptor_s *type_to_d
 PLMN_Identity_t *common::utils::encodePlmnId(const char *mcc, const char *mnc) {
     LOGGER_TRACE_FUNCTION_IN
 
+    if (mcc && strlen(mcc) != 3) {
+        logger_error("MCC must have 3 digits");
+        return nullptr;
+    }
+
+    if (mnc) {
+        size_t len = strlen(mnc);
+        if (len != 2 && len != 3) {
+            logger_error("MNC must have 2 or 3 digits");
+            return nullptr;
+        }
+    }
+
     PLMN_Identity_t *plmn = (PLMN_Identity_t *)calloc(1, sizeof(PLMN_Identity_t));
     plmn->size = 3;  // the size according to E2AP specification
     plmn->buf = (uint8_t *)calloc(3, sizeof(uint8_t));

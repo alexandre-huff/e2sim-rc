@@ -21,6 +21,8 @@
 
 #include <string>
 #include <any>
+#include <vector>
+#include <memory>
 
 #include <envman/environment_manager.h>
 
@@ -30,10 +32,12 @@
 #include "ric_subscription.hpp"
 #include "encode_rc.hpp"
 #include "global_data.hpp"
+#include "subscription_param_tree.hpp"
 
 extern "C" {
     #include "UEID.h"
     #include "E2SM-RC-IndicationMessage-Format2-RANParameter-Item.h"
+    #include "RANParameter-ID.h"
 }
 
 /**
@@ -89,8 +93,10 @@ public:
 
     bool generate_ueid_report_info(UEID_t &ueid, const std::string &imsi);
 
-    bool generate_ran_params_report_info(const e_RRC_State changed_to, const long rsrp, const long rsrq, const long sinr,
-            std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> &params);
+    bool generate_ran_params_report_info(const std::shared_ptr<ue_data> ue_data, std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> &params);
+
+    RANParameter_STRUCTURE_Item_t *generate_NRCell_report_info(const std::shared_ptr<TreeNode> param2add,
+            const std::string &mcc, const std::string &mnc, const uint32_t gnb_id, const long rsrp, const long rsrq, const long sinr);
 
     void encode_and_send_report_msg(std::vector<common::rc::indication_msg_format2_ueid_t> &ue_ids);
 

@@ -20,7 +20,11 @@
 #include "logger.h"
 #include "utils.hpp"
 
-#include <ue_client/api/DefaultApi.h>   // FIXME check if need to implement our own changes for this example API
+/*
+    This API should be rewriten according to our needs, but for now using it as it is
+    WARNING: can break on submodule updates as it is auto-generates
+*/
+#include <ue_client/api/DefaultApi.h>
 
 void handle_error(pplx::task<void>& t, const utility::string_t msg) {
     try {

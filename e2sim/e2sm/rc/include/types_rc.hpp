@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+#include "subscription_param_tree.hpp"
+
 extern "C" {
     #include "RIC-EventTriggerCondition-ID.h"
     #include "TriggerType-Choice-RRCstate-Item.h"
@@ -50,7 +52,8 @@ struct event_trigger_fmt4_data {
 };
 
 struct action_definition_fmt1_data {
-    std::vector<RANParameter_ID_t> ran_parameters;
+    // Each Action ID's RAN Parameter might have subparameters defined using pointers of ASN.1 RANParameterDefinion
+    std::vector<std::shared_ptr<SubscriptionParametersTree>> ran_parameters;
 };
 
 /*

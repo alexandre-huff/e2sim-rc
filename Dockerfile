@@ -107,7 +107,6 @@ RUN apt-get update \
 	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 	libcurl4-openssl-dev \
 	libcpprest-dev \
-	gdb \
 	&& apt-get clean
 
 COPY --from=e2sim-rc /usr/local/bin /usr/local/bin

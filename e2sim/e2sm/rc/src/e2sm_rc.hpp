@@ -26,6 +26,7 @@
 #include "types_rc.hpp"
 #include "service_style.hpp"
 #include "global_data.hpp"
+#include "subscription_param_tree.hpp"
 
 #include <cstddef>
 #include <concepts>
@@ -41,6 +42,7 @@ extern "C" {
     #include "E2SM-RC-ControlMessage-Format1.h"
     #include "RANParameter-ID.h"
     #include "RANParameter-Value.h"
+    #include "RANParameter-Definition.h"
 }
 
 
@@ -60,10 +62,12 @@ public:
 
 private:
     bool process_event_trigger_definition_format4(E2SM_RC_EventTrigger_Format4_t *fmt4, common::rc::event_trigger_fmt4_data &data);
-    bool process_action_definition_format1(E2SM_RC_ActionDefinition_Format1_t *fmt1, common::rc::action_definition_fmt1_data &data);
+    bool process_action_definition_format1(E2SM_RC_ActionDefinition_Format1_t *fmt1, const std::shared_ptr<ActionDefinition> &action, common::rc::action_definition_fmt1_data &data);
     bool process_control_header_format1(E2SM_RC_ControlHeader_Format1_t *header, common::rc::control_header_fmt1_data &data);
     bool process_control_message_format1(E2SM_RC_ControlMessage_Format1_t *fmt1,
         common::rc::control_message_fmt1_data &data, const std::shared_ptr<ActionDefinition> &action);
+
+    void process_ran_parameter_definition(const RANParameter_Definition_t *def, const std::shared_ptr<RANParameter> &ranp, std::shared_ptr<TreeNode> &node);
 
 };
 

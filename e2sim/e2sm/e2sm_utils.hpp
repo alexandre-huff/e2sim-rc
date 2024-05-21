@@ -1,6 +1,6 @@
 /*****************************************************************************
 #                                                                            *
-# Copyright 2023 Alexandre Huff                                              *
+# Copyright 2024 Alexandre Huff                                              *
 #                                                                            *
 # Licensed under the Apache License, Version 2.0 (the "License");            *
 # you may not use this file except in compliance with the License.           *
@@ -16,36 +16,20 @@
 #                                                                            *
 ******************************************************************************/
 
-#include "ran_parameter.hpp"
+#ifndef E2SM_UTILS_HPP
+#define E2SM_UTILS_HPP
 
-#include <algorithm>
+#include <string>
 
-int RANParameter::getParamId() {
-    return paramId;
+extern "C" {
+    #include "NR-CGI.h"
 }
 
-std::string const &RANParameter::getParamName() const {
-    return paramName;
+namespace e2sm {
+namespace utils {
+    NR_CGI_t *encode_NR_CGI(const std::string &mcc, const std::string &mnc, const uint32_t gnb_id);
+    bool decode_NR_CGI(const NR_CGI_t *nr_cgi, std::string &mcc, std::string &mnc, uint32_t &gnb_id);
+}
 }
 
-ran_parameter_type_e RANParameter::getParamType() {
-    return paramType;
-}
-
-void RANParameter::addSubParameter(std::shared_ptr<RANParameter> sub_parameter) {
-    subParameters.emplace_back(sub_parameter);
-}
-
-std::shared_ptr<RANParameter> const RANParameter::getSubParameter(int subparam_id) const {
-    for (auto &subparam : subParameters) {
-        if (subparam->getParamId() == subparam_id) {
-            return subparam;
-        }
-    }
-
-    return std::shared_ptr<RANParameter>();
-}
-
-std::vector<std::shared_ptr<RANParameter>> const RANParameter::getSubParameters() const {
-    return subParameters;
-}
+#endif

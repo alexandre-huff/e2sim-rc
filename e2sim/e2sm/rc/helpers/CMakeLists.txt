@@ -15,7 +15,7 @@
 #==================================================================================
 #
 
-add_library( rc_helpers OBJECT rc_param_codec.cpp )
+add_library( rc_helpers OBJECT rc_param_codec.cpp subscription_param_tree.cpp )
 
 target_link_libraries( rc_helpers PUBLIC
     e2sm_rc_asn1_objects
@@ -30,6 +30,7 @@ target_include_directories ( rc_helpers PUBLIC
 if( DEV_PKG )
     install( FILES
         rc_param_codec.hpp
+        subscription_param_tree.hpp
         DESTINATION ${install_inc}
     )
 endif()

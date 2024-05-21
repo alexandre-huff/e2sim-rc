@@ -21,23 +21,32 @@
 
 #include <functional>
 #include <string>
+#include <vector>
+#include <memory>
 
-typedef std::function<void(void)> RANParameterHandler; // FIXME still require to fix input and output parameters
+typedef enum {
+    ELEMENT,
+    LIST,
+    STRUCTURE
+} ran_parameter_type_e;
 
 class RANParameter {
 public:
-    RANParameter(int paramId, std::string paramName) : paramId(paramId), paramName(paramName) {};
+    RANParameter(int paramId, std::string paramName, ran_parameter_type_e type) : paramId(paramId), paramName(paramName), paramType(type) {};
 
     int getParamId();
     std::string const &getParamName() const;
-    RANParameterHandler const &getHandler() const;
-    void setHandler(RANParameterHandler handler);
+    ran_parameter_type_e getParamType();
+
+    void addSubParameter(std::shared_ptr<RANParameter> sub_parameter);
+    std::shared_ptr<RANParameter> const getSubParameter(int subparam_id) const;
+    std::vector<std::shared_ptr<RANParameter>> const getSubParameters() const;
 
 private:
     int paramId;
     std::string paramName;
-
-    RANParameterHandler handler = nullptr;
+    ran_parameter_type_e paramType;
+    std::vector<std::shared_ptr<RANParameter>> subParameters;
 };
 
 #endif

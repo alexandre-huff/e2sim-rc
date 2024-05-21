@@ -51,6 +51,11 @@ extern "C" {
     #include "E2SM-RC-ControlHeader-Format1.h"
     #include "E2SM-RC-ControlMessage-Format1-Item.h"
     #include "CauseRICrequest.h"
+    #include "RANParameter-Definition-Choice.h"
+    #include "RANParameter-Definition-Choice-LIST.h"
+    #include "RANParameter-Definition-Choice-LIST-Item.h"
+    #include "RANParameter-Definition-Choice-STRUCTURE.h"
+    #include "RANParameter-Definition-Choice-STRUCTURE-Item.h"
 }
 
 E2SM_RC::E2SM_RC(std::string shortName, std::string oid, std::string description, EnvironmentManager *env_manager,
@@ -272,7 +277,7 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
                     bool is_action_admitted;
                     switch (e2sm_action->ric_actionDefinition_formats.present) {
                         case E2SM_RC_ActionDefinition__ric_actionDefinition_formats_PR_actionDefinition_Format1:
-                            is_action_admitted = process_action_definition_format1(e2sm_action->ric_actionDefinition_formats.choice.actionDefinition_Format1, action_fmt1_data);
+                            is_action_admitted = process_action_definition_format1(e2sm_action->ric_actionDefinition_formats.choice.actionDefinition_Format1, action_def, action_fmt1_data);
                             break;
 
                         default:
@@ -787,7 +792,9 @@ bool E2SM_RC::process_event_trigger_definition_format4(E2SM_RC_EventTrigger_Form
 /*
     Collects all RAN Parameter IDs from the subscription to be used in Action Format 1 implementation
 */
-bool E2SM_RC::process_action_definition_format1(E2SM_RC_ActionDefinition_Format1_t *fmt1, common::rc::action_definition_fmt1_data &data) {
+bool E2SM_RC::process_action_definition_format1(E2SM_RC_ActionDefinition_Format1_t *fmt1,
+                                                const std::shared_ptr<ActionDefinition> &action,
+                                                common::rc::action_definition_fmt1_data &data) {
     LOGGER_TRACE_FUNCTION_IN
 
     if (fmt1->ranP_ToBeReported_List.list.count == 0) {
@@ -798,10 +805,18 @@ bool E2SM_RC::process_action_definition_format1(E2SM_RC_ActionDefinition_Format1
     E2SM_RC_ActionDefinition_Format1_Item_t **items = fmt1->ranP_ToBeReported_List.list.array;
     for (int i = 0; i < fmt1->ranP_ToBeReported_List.list.count; i++) {
         E2SM_RC_ActionDefinition_Format1_Item_t *item = items[i];
-        data.ran_parameters.emplace_back(item->ranParameter_ID);
 
-        if (item->ranParameter_Definition) {
-            logger_warn("RAN Parameter Definition not supported yet for Action Definition Format 1");
+        auto ranp = action->getRanParameter((int)item->ranParameter_ID);
+        if (ranp) {
+            std::shared_ptr<SubscriptionParametersTree> param_tree = std::make_shared<SubscriptionParametersTree>(item->ranParameter_ID);
+            data.ran_parameters.emplace_back(param_tree);
+
+            if (item->ranParameter_Definition) {
+                std::shared_ptr<TreeNode> node = param_tree->getRoot();
+                process_ran_parameter_definition(item->ranParameter_Definition, ranp, node);
+            }
+        } else {
+            logger_warn("RAN Parameter ID %lu not supported by E2SM-RC. Ignoring...", item->ranParameter_ID);
         }
     }
 
@@ -941,4 +956,62 @@ bool E2SM_RC::process_control_message_format1(E2SM_RC_ControlMessage_Format1_t *
     LOGGER_TRACE_FUNCTION_OUT
 
     return true;
+}
+
+void E2SM_RC::process_ran_parameter_definition(const RANParameter_Definition_t *def, const std::shared_ptr<RANParameter> &ranp, std::shared_ptr<TreeNode> &node) {
+    LOGGER_TRACE_FUNCTION_IN
+    if (def && def->ranParameter_Definition_Choice) {
+        if (def->ranParameter_Definition_Choice->present == RANParameter_Definition_Choice_PR_choiceSTRUCTURE) {
+            RANParameter_Definition_Choice_STRUCTURE_Item_t **items = def->ranParameter_Definition_Choice->choice.choiceSTRUCTURE->ranParameter_STRUCTURE.list.array;
+            int count = def->ranParameter_Definition_Choice->choice.choiceSTRUCTURE->ranParameter_STRUCTURE.list.count;
+
+            for (int i = 0; i < count; i++) {
+                RANParameter_Definition_Choice_STRUCTURE_Item_t *item = items[i];
+                const std::shared_ptr<RANParameter> &subparam = ranp->getSubParameter((int)item->ranParameter_ID);
+                if (subparam) {
+                    std::shared_ptr<TreeNode> child_node = std::make_shared<TreeNode>(item->ranParameter_ID);
+                    if (!node->addChild(child_node)) {
+                        logger_warn("Unable to add Child Node Param ID %ld for Tree Node Param ID %ld", node->getData(), item->ranParameter_ID);
+                    }
+
+                    if (item->ranParameter_Definition) {
+                        process_ran_parameter_definition(item->ranParameter_Definition, subparam, child_node);  // go down in the hierarchy
+                    }
+                } else {
+                    logger_warn("RAN Parameter Definition with RAN Parameter ID %lu not supported by E2SM-RC. Ignoring...", item->ranParameter_ID);
+                    break;
+                }
+            }
+
+        } else if (def->ranParameter_Definition_Choice->present == RANParameter_Definition_Choice_PR_choiceLIST) {
+            RANParameter_Definition_Choice_LIST_Item_t **items = def->ranParameter_Definition_Choice->choice.choiceLIST->ranParameter_List.list.array;
+            int count = def->ranParameter_Definition_Choice->choice.choiceLIST->ranParameter_List.list.count;
+
+            for (int i = 0; i < count; i++) {
+                RANParameter_Definition_Choice_LIST_Item_t *item = items[i];
+                const std::shared_ptr<RANParameter> &subparam = ranp->getSubParameter((int)item->ranParameter_ID);
+                if (subparam) {
+                    std::shared_ptr<TreeNode> child_node = std::make_shared<TreeNode>(item->ranParameter_ID);
+                    if (!node->addChild(child_node)) {
+                        logger_warn("Unable to add Child Node Param ID %ld for Tree Node Param ID %ld", node->getData(), item->ranParameter_ID);
+                    }
+
+                    if (item->ranParameter_Definition) {
+                        process_ran_parameter_definition(item->ranParameter_Definition, subparam, child_node);  // go down in the hierarchy
+                    }
+                } else {
+                    logger_warn("RAN Parameter Definition with RAN Parameter ID %lu not supported by E2SM-RC. Ignoring...", item->ranParameter_ID);
+                    break;
+                }
+            }
+
+        } else {
+            logger_error("RANParameter_Definition_Choice_PR %d not implemented", def->ranParameter_Definition_Choice->present);
+        }
+
+    } else {
+        logger_error("RAN_Parameter_Definition and RAN_Parameter_Definition_CHOICE cannot be null");
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
 }

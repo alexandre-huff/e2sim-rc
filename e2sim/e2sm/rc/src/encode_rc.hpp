@@ -23,6 +23,7 @@
 #include <memory>
 
 #include "service_style.hpp"
+#include "ran_parameter.hpp"
 
 extern "C" {
     #include "OCTET_STRING.h"
@@ -58,6 +59,7 @@ extern "C" {
     #include "E2SM-RC-IndicationMessage-Format2-RANParameter-Item.h"
     #include "E2SM-RC-ControlHeader.h"
     #include "E2SM-RC-ControlMessage.h"
+    #include "RANParameter-Definition.h"
 }
 
 namespace common {
@@ -69,6 +71,9 @@ namespace rc {
 
     void encode_report_function_definition(void *e2sm_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles);
     void encode_control_function_definition(void *e2sm_func_def, std::vector<std::shared_ptr<ServiceStyle>> styles);
+
+    RANParameter_Definition_t *encode_ran_parameter_definition_list(std::vector<std::shared_ptr<RANParameter>> &subparams);
+    RANParameter_Definition_t *encode_ran_parameter_definition_structure(std::vector<std::shared_ptr<RANParameter>> &subparams);
 
     RICindicationHeader_t *encode_indication_header_format1(RIC_EventTriggerCondition_ID_t *condition);
     RICindicationMessage_t *encode_indication_message_format2(const std::vector<indication_msg_format2_ueid_t> &ue_ids);
