@@ -67,25 +67,11 @@ RUN apt-get update \
 # Stage to build E2SM-RC
 FROM e2sim-base AS e2sim-rc
 
-RUN git clone --depth 1 https://github.com/pistacheio/pistache.git /pistache && cd /pistache \
-	&& meson setup build --prefix=/usr/local --libdir=lib -Ddebug=true && meson install -C build \
-	&& ldconfig && cd / && rm -fr /pistache
-
-RUN git clone --depth 1 https://github.com/nlohmann/json.git /json && mkdir -p /json/build \
-	&& cd /json/build && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DJSON_BuildTests=OFF \
-	&& make && make install && ldconfig && cd / && rm -fr /json
-
 COPY . /playpen/
 
 WORKDIR /playpen/e2sim
 
 RUN git submodule update --init --recursive --recommend-shallow
-
-RUN mkdir 3rdparty/manager_api/api_v1/nodeb_server/build && cd 3rdparty/manager_api/api_v1/nodeb_server/build \
-	&& cmake .. && make -j4 && make install && ldconfig
-
-RUN	mkdir 3rdparty/manager_api/api_v1/ue_client/build && cd 3rdparty/manager_api/api_v1/ue_client/build \
-	&& cmake .. && make -j4 && make install && ldconfig
 
 # build and install submodule dependencies
 RUN cd 3rdparty/prometheus-cpp/ && mkdir build && cd build \
@@ -115,4 +101,4 @@ COPY --from=e2sim-rc /usr/local/lib /usr/local/lib
 RUN ldconfig
 
 # CMD e2sim-rc 10.110.102.29 -p 36422
-CMD while true; do sleep 3600; done
+CMD ["tail", "-f", "/dev/null"]
