@@ -19,6 +19,8 @@ add_library( o1_objects OBJECT smo_du.cpp )
 
 target_link_libraries( o1_objects PUBLIC logger_objects
     common_objects
+    common_headers
+    ofh_objects
     )
 
 target_include_directories (o1_objects PUBLIC

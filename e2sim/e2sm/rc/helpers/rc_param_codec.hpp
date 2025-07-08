@@ -159,6 +159,8 @@ namespace common{
 
         RANParameter_STRUCTURE_Item_t *get_ran_parameter_structure_item(const RANParameter_STRUCTURE_t *ranp_s, RANParameter_ID_t ranp_id, RANParameter_ValueType_PR ranp_type);
 
+        std::vector<RANParameter_STRUCTURE_Item_t *> get_ran_parameter_structure_items(const RANParameter_STRUCTURE_t *ranp_struct);
+
         std::vector<RANParameter_STRUCTURE_t *> get_ran_parameter_list_items(const RANParameter_LIST_t *ranp_list);
 
         /// @brief Retrieves the data of a given RAN Parameter Value

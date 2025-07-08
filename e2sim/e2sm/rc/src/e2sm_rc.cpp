@@ -56,10 +56,12 @@ extern "C" {
     #include "RANParameter-Definition-Choice-LIST-Item.h"
     #include "RANParameter-Definition-Choice-STRUCTURE.h"
     #include "RANParameter-Definition-Choice-STRUCTURE-Item.h"
+    #include "RANParameter-ValueType.h"
+    #include "RANParameter-ValueType-Choice-List.h"
 }
 
-E2SM_RC::E2SM_RC(std::string shortName, std::string oid, std::string description, EnvironmentManager *env_manager,
-                E2APMessageSender &sender, std::shared_ptr<GlobalE2NodeData> &global_data) : E2SM(shortName, oid, description, env_manager, sender, global_data) {
+E2SM_RC::E2SM_RC(std::string shortName, std::string oid, std::string description, OfhDuServer &ofh_du,
+                E2APMessageSender &sender, std::shared_ptr<GlobalE2NodeData> &global_data) : E2SM(shortName, oid, description, ofh_du, sender, global_data) {
     logger_info("Initializing %s", shortName.c_str());
     init();
     logger_info("%s initialized", shortName.c_str());
@@ -96,7 +98,7 @@ void E2SM_RC::init() {
 
     // RIC Control
     ControlHandler control_handler = std::bind(&E2SM_RC::handle_ric_control_request, this, _1);
-    std::shared_ptr<RICControlProcedure> ctrl_proc = std::make_shared<RICControlProcedure>(control_handler);
+    std::shared_ptr<RICControlProcedure> ctrl_proc = std::make_shared<RICControlProcedure>(control_handler, getE2APMessageSender());
 
     if (!this->addProcedure(ProcedureCode_id_RICcontrol, ctrl_proc)) {
         logger_error("Unable to add RIC Control procedure in %s", this->getRanFunctionName().shortName.c_str());
@@ -126,7 +128,9 @@ void E2SM_RC::init() {
 
     // CONTROL Service Style 3
     std::shared_ptr<ServiceStyle> style3 = common::rc::build_control_style3(*this);
-    if (!control->addServiceStyle(3, style3)) {
+    if (control->addServiceStyle(3, style3)) {
+        controlStyle3 = std::make_shared<ControlStyle3>(ctrl_proc, getGlobalE2NodeData(), getOfhDuServer());
+    } else {
         logger_error("Unable to add Service Style 3 to CONTROL Service");
     }
 
@@ -227,11 +231,16 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
                     cause.choice.ricRequest = CauseRICrequest_action_not_supported;
                     item.cause = cause;
 
+                    response->cause.present = Cause_PR_ricService;
+                    response->cause.choice.ricService = CauseRICservice_ran_function_not_supported;
+
                     response->notAdmittedList.emplace_back(item);
                     break;
                 }
 
-                if (action.ricActionDefinition) { // RIC Action Definition is OPTIONAL as per Section 9.1.1.1 in E2AP-R003-v03.00
+                // RIC Action Definition is OPTIONAL as per Section 9.1.1.1 in E2AP-R003-v03.00
+                // but, E2SM-RC REPORT Service Style 4 *requires* RIC Action Definition parameters
+                if (action.ricActionDefinition) {
                     E2SM_RC_ActionDefinition_t *e2sm_action = NULL;
                     dret = common::utils::asn1_decode_and_check(&asn_DEF_E2SM_RC_ActionDefinition,
                                                         (void **)&e2sm_action,
@@ -254,6 +263,9 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
                         cause.choice.ricRequest = CauseRICrequest_unspecified;
                         item.cause = cause;
 
+                        response->cause.present = Cause_PR_ricRequest;
+                        response->cause.choice.ricService = CauseRICrequest_requested_information_unavailable;
+
                         response->notAdmittedList.emplace_back(item);
                         break;
                     }
@@ -268,6 +280,9 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
                         cause.present = Cause_PR_ricRequest;
                         cause.choice.ricRequest = CauseRICrequest_action_not_supported;
                         item.cause = cause;
+
+                        response->cause.present = Cause_PR_ricRequest;
+                        response->cause.choice.ricService = CauseRICrequest_action_not_supported;
 
                         response->notAdmittedList.emplace_back(item);
                         break;
@@ -309,6 +324,9 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
                         cause.choice.ricRequest = CauseRICrequest_action_not_supported;
                         item.cause = cause;
 
+                        response->cause.present = Cause_PR_ricRequest;
+                        response->cause.choice.ricService = CauseRICrequest_invalid_information_request;
+
                         response->notAdmittedList.emplace_back(item);
                     }
 
@@ -320,6 +338,9 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
                     cause.present = Cause_PR_ricRequest;
                     cause.choice.ricRequest = CauseRICrequest_action_not_supported;
                     item.cause = cause;
+
+                    response->cause.present = Cause_PR_ricRequest;
+                    response->cause.choice.ricService = CauseRICrequest_invalid_information_request;
 
                     response->notAdmittedList.emplace_back(item);
                 }
@@ -334,7 +355,11 @@ e2sim::messages::RICSubscriptionResponse *E2SM_RC::handle_ric_subscription_reque
 
     }
 
-    response->succeeded = true;
+    if (!response->admittedList.empty()) {
+        response->succeeded = true;
+    } else {
+        response->succeeded = false;
+    }
 
     LOGGER_TRACE_FUNCTION_OUT
 
@@ -631,7 +656,7 @@ e2sim::messages::RICControlResponse *E2SM_RC::handle_ric_control_request(e2sim::
 
                     const auto &action = svc_style->getActionDefinition();
                     if (!action) {
-                        logger_error("CONTROL Action ID %ld not supported", hdr_fmt1->ric_Style_Type);
+                        logger_error("CONTROL Action ID %ld not supported", hdr_fmt1->ric_ControlAction_ID);
                         response->succeeded = false;
                         response->cause.present = Cause_PR_ricRequest;
                         response->cause.choice.ricRequest = CauseRICrequest_action_not_supported;
@@ -653,8 +678,14 @@ e2sim::messages::RICControlResponse *E2SM_RC::handle_ric_control_request(e2sim::
                         break;
                     }
 
-                    HandoverControl handover(request, header_data, msg_data, getGlobalE2NodeData()->ueMgrAddr);
-                    handover.runHandoverControl(response);
+                    std::shared_ptr<FunctionalProcedure> procedure = getProcedure(ProcedureCode_id_RICcontrol);
+                    std::shared_ptr<RICControlProcedure> ctrl_proc = std::dynamic_pointer_cast<RICControlProcedure>(procedure);
+
+                    controlStyle3->runHandoverControl(request, header_data, msg_data, response);
+                    if (response->succeeded) {
+                        delete response;
+                        response = nullptr; // on success the control response is async and is sent as part of OFH procedure
+                    }
 
                 } else {
                     logger_error("Style %d not implemented for E2SM RC Control Header Action Format 1", hdr_fmt1->ric_Style_Type);
@@ -691,7 +722,7 @@ e2sim::messages::RICControlResponse *E2SM_RC::handle_ric_control_request(e2sim::
 }
 
 /*
-    Starts/Stops the RRC Observer
+    Starts/Stops the Report 4 Service Style
 */
 bool E2SM_RC::startStopReportStyle4(action_handler_operation_e op, ric_subscription_info_t info, std::any style4_data) {
     LOGGER_TRACE_FUNCTION_OUT
@@ -707,9 +738,8 @@ bool E2SM_RC::startStopReportStyle4(action_handler_operation_e op, ric_subscript
         }
 
         std::shared_ptr<RICIndicationProcedure> indication = std::static_pointer_cast<RICIndicationProcedure>(procedure);
-        std::shared_ptr<RRCStateObserver> observer = std::make_shared<RRCStateObserver>(info, style4_data, indication, getEnvironmentManager(), getGlobalE2NodeData());
+        std::shared_ptr<ReportStyle4> observer = std::make_shared<ReportStyle4>(info, getOfhDuServer(), style4_data, indication, getGlobalE2NodeData());
 
-        observer->setMySharedPtr(observer);
         if (!observer->start()) {
             logger_error("Unable to start RRCStateObserver");
             return false;
@@ -726,12 +756,12 @@ bool E2SM_RC::startStopReportStyle4(action_handler_operation_e op, ric_subscript
             return false;
         }
         if (!observer->stop()) {
-            logger_error("Unable to stop RRCStateObserver");
+            logger_error("Unable to stop ReportStyle4");
             return false;
         }
 
         if (!submgr->delSubscriptionAction(subid, info.ricActionId)) {
-            logger_warn("Subscription ID %u and Action ID %d already running");
+            logger_warn("Unable to remove Subscription ID %u Action ID %d", subid, info.ricActionId);
             return false;
         }
     }
@@ -799,15 +829,25 @@ bool E2SM_RC::process_action_definition_format1(E2SM_RC_ActionDefinition_Format1
 
     if (fmt1->ranP_ToBeReported_List.list.count == 0) {
         logger_error("At least 1 RAN Parameter is required for Action Definition Format 1");
+        LOGGER_TRACE_FUNCTION_OUT
+        return false;
+    }
+
+    auto &params = action->getRanParameters();
+    int count = fmt1->ranP_ToBeReported_List.list.count;
+
+    if (params.size() != count) {
+        logger_error("Size of ASN.1 Action Definition Format 1 mismatch. Expected=%lu, Found=%d", params.size(), count);
+        LOGGER_TRACE_FUNCTION_OUT
         return false;
     }
 
     E2SM_RC_ActionDefinition_Format1_Item_t **items = fmt1->ranP_ToBeReported_List.list.array;
-    for (int i = 0; i < fmt1->ranP_ToBeReported_List.list.count; i++) {
+    for (int i = 0; i < count; i++) {
         E2SM_RC_ActionDefinition_Format1_Item_t *item = items[i];
+        const std::shared_ptr<RANParameter> &ranp = params[i];
 
-        auto ranp = action->getRanParameter((int)item->ranParameter_ID);
-        if (ranp) {
+        if (ranp->getParamId() == (int)item->ranParameter_ID) {
             std::shared_ptr<SubscriptionParametersTree> param_tree = std::make_shared<SubscriptionParametersTree>(item->ranParameter_ID);
             data.ran_parameters.emplace_back(param_tree);
 
@@ -868,7 +908,7 @@ bool E2SM_RC::process_control_header_format1(E2SM_RC_ControlHeader_Format1_t *he
         }
 
     } else {
-        logger_error("UE ID %d not implemented for Control Header Format 1");
+        logger_error("UE ID %d not implemented for Control Header Format 1", header->ueID.present);
 
     }
 
@@ -883,73 +923,33 @@ bool E2SM_RC::process_control_message_format1(E2SM_RC_ControlMessage_Format1_t *
 
     if (fmt1->ranP_List.list.count == 0) {
         logger_error("At least 1 RAN Parameter is required for Control Message Format 1");
+        LOGGER_TRACE_FUNCTION_OUT
         return false;
     }
 
+    const std::vector<std::shared_ptr<RANParameter>> &params = action->getRanParameters();
+    int count = fmt1->ranP_List.list.count;
+
     E2SM_RC_ControlMessage_Format1_Item_t **items = fmt1->ranP_List.list.array;
-    for (int i = 0; i < fmt1->ranP_List.list.count; i++) {
+    for (int i = 0; i < count; i++) {
         E2SM_RC_ControlMessage_Format1_Item_t *item = items[i];
+        auto &param = params[i];
 
-        switch (item->ranParameter_ID) {    // E2SM-RC-R003-v03.00 only supports params 1, 7, 13, and 19 at the first level in the param tree
-            case 1:
-                if (item->ranParameter_valueType.present == RANParameter_ValueType_PR_ranP_Choice_Structure) {
+        if (param->getParamId() == item->ranParameter_ID) {
+            if (!process_ran_parameter_values(&item->ranParameter_valueType, param, data)) {   // recursive function
+                logger_error("Failed to process RAN Parameters from Control Message Format 1");
+                LOGGER_TRACE_FUNCTION_OUT
+                return false;
+            }
 
-                    RANParameter_STRUCTURE_Item_t *p2 = common::rc::get_ran_parameter_structure_item(
-                        item->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure,
-                        (RANParameter_ID_t) 2, RANParameter_ValueType_PR_ranP_Choice_Structure);
-                    if (p2) {
-                        RANParameter_STRUCTURE_Item_t *p3 = common::rc::get_ran_parameter_structure_item(
-                            p2->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure,
-                            (RANParameter_ID_t) 3, RANParameter_ValueType_PR_ranP_Choice_Structure);
-                        if (p3) {
-                            RANParameter_STRUCTURE_Item_t *p4 = common::rc::get_ran_parameter_structure_item(
-                                p3->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure,
-                                (RANParameter_ID_t) 4, RANParameter_ValueType_PR_ranP_Choice_ElementFalse);
-                            if (p4) {
-                                if (action->getRanParameter((int)p4->ranParameter_ID)) {
-                                    data.ran_parameters.emplace_back(p4->ranParameter_ID,
-                                        p4->ranParameter_valueType->choice.ranP_Choice_ElementFalse->ranParameter_value);
-                                } else {
-                                    logger_warn("RAN Parameter ID %lu not supported for Control Message Format 1", item->ranParameter_ID);
-                                }
-
-                            } else {
-                                logger_error("Unable to get NR CGI parameter from NR Cell in Control Message Format 1");
-                                return false;
-                            }
-
-                        } else {
-                            logger_error("Unable to get NR Cell parameter from Target Cell in Control Message Format 1");
-                            return false;
-                        }
-
-
-                    } else {
-                        logger_error("Unable to get Target Cell parameter from Target Primary Cell ID in Control Message Format 1");
-                        return false;
-                    }
-
-                } else {
-                    logger_error("RAN parameter type %s is required", RANParameter_ValueType_PR_ranP_Choice_Structure);
-                    return false;
-                }
-
-                break;
-
-            case 7:
-            case 13:
-            case 19:
-                logger_warn("RAN Parameter ID %lu not implemented yet for Control Message Format 1", item->ranParameter_ID);
-                break;
-
-            default:
-                logger_error("RAN Parameter ID %lu is not encoded correctly in the param tree for Control Message Format 1. Did you mean %s?",
-                    item->ranParameter_ID, asn_DEF_RANParameter_STRUCTURE_Item.name);
+        } else {
+            logger_warn("RAN Parameter ID %d (%s) not supported for Control Message Format 1 Item", param->getParamId(), param->getParamName().c_str());
         }
     }
 
     if (data.ran_parameters.size() == 0) {
         logger_error("No required RAN Parameter ID is supported yet for Control Message Format 1");
+        LOGGER_TRACE_FUNCTION_OUT
         return false;
     }
 
@@ -961,48 +961,60 @@ bool E2SM_RC::process_control_message_format1(E2SM_RC_ControlMessage_Format1_t *
 void E2SM_RC::process_ran_parameter_definition(const RANParameter_Definition_t *def, const std::shared_ptr<RANParameter> &ranp, std::shared_ptr<TreeNode> &node) {
     LOGGER_TRACE_FUNCTION_IN
     if (def && def->ranParameter_Definition_Choice) {
+        const std::vector<std::shared_ptr<RANParameter>> &subparams = ranp->getSubParameters();
+
         if (def->ranParameter_Definition_Choice->present == RANParameter_Definition_Choice_PR_choiceSTRUCTURE) {
             RANParameter_Definition_Choice_STRUCTURE_Item_t **items = def->ranParameter_Definition_Choice->choice.choiceSTRUCTURE->ranParameter_STRUCTURE.list.array;
             int count = def->ranParameter_Definition_Choice->choice.choiceSTRUCTURE->ranParameter_STRUCTURE.list.count;
 
-            for (int i = 0; i < count; i++) {
-                RANParameter_Definition_Choice_STRUCTURE_Item_t *item = items[i];
-                const std::shared_ptr<RANParameter> &subparam = ranp->getSubParameter((int)item->ranParameter_ID);
-                if (subparam) {
-                    std::shared_ptr<TreeNode> child_node = std::make_shared<TreeNode>(item->ranParameter_ID);
-                    if (!node->addChild(child_node)) {
-                        logger_warn("Unable to add Child Node Param ID %ld for Tree Node Param ID %ld", node->getData(), item->ranParameter_ID);
-                    }
+            if (subparams.size() == count) {
+                for (int i = 0; i < count; i++) {
+                    RANParameter_Definition_Choice_STRUCTURE_Item_t *item = items[i];
+                    auto &subparam = subparams[i];
 
-                    if (item->ranParameter_Definition) {
-                        process_ran_parameter_definition(item->ranParameter_Definition, subparam, child_node);  // go down in the hierarchy
+                    if (subparam->getParamId() == (int)item->ranParameter_ID) {
+                        std::shared_ptr<TreeNode> child_node = std::make_shared<TreeNode>(item->ranParameter_ID);
+                        if (!node->addChild(child_node)) {
+                            logger_warn("Unable to add Child Node Param ID %ld for Tree Node Param ID %ld", node->getData(), item->ranParameter_ID);
+                        }
+
+                        if (item->ranParameter_Definition) {
+                            process_ran_parameter_definition(item->ranParameter_Definition, subparam, child_node);  // go down in the hierarchy
+                        }
+                    } else {
+                        logger_warn("RAN Parameter Definition with RAN Parameter ID %lu not supported by E2SM-RC. Ignoring...", item->ranParameter_ID);
                     }
-                } else {
-                    logger_warn("RAN Parameter Definition with RAN Parameter ID %lu not supported by E2SM-RC. Ignoring...", item->ranParameter_ID);
-                    break;
                 }
+
+            } else {
+                logger_error("Size of ASN.1 RAN Parameter Structure SEQUENCE mismatch. Expected=%lu, Found=%d", subparams.size(), count);
             }
 
         } else if (def->ranParameter_Definition_Choice->present == RANParameter_Definition_Choice_PR_choiceLIST) {
             RANParameter_Definition_Choice_LIST_Item_t **items = def->ranParameter_Definition_Choice->choice.choiceLIST->ranParameter_List.list.array;
             int count = def->ranParameter_Definition_Choice->choice.choiceLIST->ranParameter_List.list.count;
 
-            for (int i = 0; i < count; i++) {
-                RANParameter_Definition_Choice_LIST_Item_t *item = items[i];
-                const std::shared_ptr<RANParameter> &subparam = ranp->getSubParameter((int)item->ranParameter_ID);
-                if (subparam) {
-                    std::shared_ptr<TreeNode> child_node = std::make_shared<TreeNode>(item->ranParameter_ID);
-                    if (!node->addChild(child_node)) {
-                        logger_warn("Unable to add Child Node Param ID %ld for Tree Node Param ID %ld", node->getData(), item->ranParameter_ID);
-                    }
+            if (subparams.size() == count) {
+                for (int i = 0; i < count; i++) {
+                    RANParameter_Definition_Choice_LIST_Item_t *item = items[i];
+                    auto &subparam =  subparams[i];
 
-                    if (item->ranParameter_Definition) {
-                        process_ran_parameter_definition(item->ranParameter_Definition, subparam, child_node);  // go down in the hierarchy
+                    if (subparam->getParamId() == (int)item->ranParameter_ID) {
+                        std::shared_ptr<TreeNode> child_node = std::make_shared<TreeNode>(item->ranParameter_ID);
+                        if (!node->addChild(child_node)) {
+                            logger_warn("Unable to add Child Node Param ID %ld for Tree Node Param ID %ld", node->getData(), item->ranParameter_ID);
+                        }
+
+                        if (item->ranParameter_Definition) {
+                            process_ran_parameter_definition(item->ranParameter_Definition, subparam, child_node);  // go down in the hierarchy
+                        }
+                    } else {
+                        logger_warn("RAN Parameter Definition with RAN Parameter ID %lu not supported by E2SM-RC. Ignoring...", item->ranParameter_ID);
                     }
-                } else {
-                    logger_warn("RAN Parameter Definition with RAN Parameter ID %lu not supported by E2SM-RC. Ignoring...", item->ranParameter_ID);
-                    break;
                 }
+
+            } else {
+                logger_error("Size of ASN.1 RAN Parameter Structure SEQUENCE mismatch. Expected=%lu, Found=%d", subparams.size(), count);
             }
 
         } else {
@@ -1014,4 +1026,88 @@ void E2SM_RC::process_ran_parameter_definition(const RANParameter_Definition_t *
     }
 
     LOGGER_TRACE_FUNCTION_OUT
+}
+
+
+/// @brief Iterates recursively over the list of supported parameters of this service model and adds them to the @p data param.
+/// @param pvalue a type of a given ran paramenter which can be a List, Structure, ElementFalse, or ElementTrue.
+/// @param ranp is the RAN parameter we support in current implementation.
+/// @param data used to store the parameters of type "Element True" or "Element False" that will be processed further by a given service of this Service Model
+/// @return true on success, false otherwise.
+bool E2SM_RC::process_ran_parameter_values(RANParameter_ValueType_t *pvalue, const std::shared_ptr<RANParameter> &ranp, common::rc::control_message_fmt1_data &data) {
+    RANParameter_STRUCTURE_Item_t *item = nullptr;
+    const std::vector<std::shared_ptr<RANParameter>> &subparams = ranp->getSubParameters();
+
+    switch (pvalue->present) {
+        case RANParameter_ValueType_PR_ranP_Choice_Structure:
+        {
+            std::vector<RANParameter_STRUCTURE_Item_t *> items =
+                common::rc::get_ran_parameter_structure_items(pvalue->choice.ranP_Choice_Structure->ranParameter_Structure);
+            if (items.size() == subparams.size()) {
+                for (size_t i = 0; i < items.size(); i++) {
+                    item = items[i];
+                    const std::shared_ptr<RANParameter> &subp = subparams[i];
+                    // Both, the expected (set up in RC builder) sequence, and the RAN Parameter sequence received in ASN.1 message have to match
+                    if (item->ranParameter_ID == (RANParameter_ID_t)subparams[i]->getParamId()) {
+                        if (!process_ran_parameter_values(item->ranParameter_valueType, subp, data)) {
+                            logger_error("Unable to process RAN Parameter Value from RAN Parameter ID %d (%s)", subp->getParamId(), subp->getParamName().c_str());
+                            return false;
+                        }
+                    } else {
+                        logger_error("ASN.1 RAN Parameter ID mismatch. Expected=%d, Found=%lu", subp->getParamId(), item->ranParameter_ID);
+                        return false;
+                    }
+                }
+            } else {
+                logger_error("Size of ASN.1 RAN Parameter STRUCTURE ID %d mismatch. Expected=%lu, Found=%d", ranp->getParamId(), subparams.size(), items.size());
+                return false;
+            }
+
+            break;
+        }
+
+        case RANParameter_ValueType_PR_ranP_Choice_List:
+        {
+            std::vector<RANParameter_STRUCTURE_t *> list = common::rc::get_ran_parameter_list_items(pvalue->choice.ranP_Choice_List->ranParameter_List);
+            for (auto list_item : list) {
+                int count = list_item->sequence_of_ranParameters->list.count;
+                RANParameter_STRUCTURE_Item **array = list_item->sequence_of_ranParameters->list.array;
+
+                if (subparams.size() == count) {
+                    for (int i = 0; i < count; i++) {
+                        RANParameter_STRUCTURE_Item *list_item = array[i];
+                        const std::shared_ptr<RANParameter> &subp = subparams[i];
+                        // Both, the expected (set up in RC builder) sequence, and the RAN Parameter sequence received in ASN.1 message have to match
+                        if (list_item->ranParameter_ID == (RANParameter_ID_t)subp->getParamId()) {
+
+                            if (!process_ran_parameter_values(list_item->ranParameter_valueType, subp, data)) {
+                                logger_error("Unable to process RAN Parameter Value from RAN Parameter ID %d (%s)",
+                                            subp->getParamId(), subp->getParamName().c_str());
+                                return false;
+                            }
+
+                        } else {
+                            logger_error("ASN.1 RAN Parameter ID mismatch. Expected=%d, Found=%lu", subp->getParamId(), list_item->ranParameter_ID);
+                            return false;
+                        }
+                    }
+                } else {
+                    logger_error("Size of ASN.1 RAN Parameter List ID %d mismatch. Expected=%lu, Found=%d", ranp->getParamId(), subparams.size(), count);
+                    return false;
+                }
+            }
+            break;
+        }
+
+        case RANParameter_ValueType_PR_ranP_Choice_ElementTrue:
+        case RANParameter_ValueType_PR_ranP_Choice_ElementFalse:
+            data.ran_parameters.emplace_back((RANParameter_ID_t)ranp->getParamId(), pvalue);
+            break;
+
+        default:
+            logger_error("Unexpected RAN Parameter Value Type %d", pvalue->present);
+            return false;
+    }
+
+    return true;
 }

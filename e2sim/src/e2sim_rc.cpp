@@ -61,10 +61,10 @@ extern "C" {
 args_t cmd_args;        // command line arguments
 metrics_t metrics;
 
-class RRCStateObserver : public EnvironmentManagerObserver {
+class ReportStyle4 : public EnvironmentManagerObserver {
 public:
-    RRCStateObserver() { /* pass */ }
-    ~RRCStateObserver() { /* pass */ }
+    ReportStyle4() { /* pass */ }
+    ~ReportStyle4() { /* pass */ }
 
     /**
      * Notifies the observer about a new ANR update.
@@ -116,7 +116,7 @@ std::thread *envman_thread;
 
 void run_envman(uint16_t port)
 {
-    std::shared_ptr<RRCStateObserver> observer = std::make_shared<RRCStateObserver>();
+    std::shared_ptr<ReportStyle4> observer = std::make_shared<ReportStyle4>();
     envman = new EnvironmentManager(port, 2, observer);
     envman->start();
 }

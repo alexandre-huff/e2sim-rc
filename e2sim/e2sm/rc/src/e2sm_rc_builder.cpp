@@ -61,26 +61,17 @@ std::shared_ptr<ActionDefinition> common::rc::build_report_action_definition_for
 
     // RAN Parameters supported by Action Definition Format1
     std::shared_ptr<RANParameter> changed_to_state = std::make_shared<RANParameter>(202, "RRC State Changed To", ran_parameter_type_e::ELEMENT);
-    if (!action_fmt1->addRanParameter(changed_to_state)) {
-        logger_error("Unable to add RAN Parameter %d - %s to Action Definition format %d",
-                    changed_to_state->getParamId(), changed_to_state->getParamName(), action_fmt1->getFormat());
-        return std::shared_ptr<ActionDefinition>();
-    }
+    action_fmt1->addRanParameter(changed_to_state);
 
     // Master Node
-    std::shared_ptr<RANParameter> p21501 = std::make_shared<RANParameter>(21501, "Master Node", ran_parameter_type_e::STRUCTURE);
-    std::shared_ptr<RANParameter> p17001 = std::make_shared<RANParameter>(17001, "CHOICE E2 Node Component Type", ran_parameter_type_e::STRUCTURE);
-    std::shared_ptr<RANParameter> p17010 = std::make_shared<RANParameter>(17010, "NG-RAN gNB", ran_parameter_type_e::STRUCTURE);
-    std::shared_ptr<RANParameter> p17011 = std::make_shared<RANParameter>(17011, "Global gNB ID", ran_parameter_type_e::STRUCTURE);
-    p21501->addSubParameter(p17001);
-    p17001->addSubParameter(p17010);
-    p17010->addSubParameter(p17011);
-
-    if (!action_fmt1->addRanParameter(p21501)) {
-        logger_error("Unable to add RAN Parameter %d - %s to Action Definition format %d",
-                    p21501->getParamId(), p21501->getParamName(), action_fmt1->getFormat());
-        return std::shared_ptr<ActionDefinition>();
-    }
+    // std::shared_ptr<RANParameter> p21501 = std::make_shared<RANParameter>(21501, "Master Node", ran_parameter_type_e::STRUCTURE);
+    // std::shared_ptr<RANParameter> p17001 = std::make_shared<RANParameter>(17001, "CHOICE E2 Node Component Type", ran_parameter_type_e::STRUCTURE);
+    // std::shared_ptr<RANParameter> p17010 = std::make_shared<RANParameter>(17010, "NG-RAN gNB", ran_parameter_type_e::STRUCTURE);
+    // std::shared_ptr<RANParameter> p17011 = std::make_shared<RANParameter>(17011, "Global gNB ID", ran_parameter_type_e::STRUCTURE);
+    // p21501->addSubParameter(p17001);
+    // p17001->addSubParameter(p17010);
+    // p17010->addSubParameter(p17011);
+    // action_fmt1->addRanParameter(p21501);
 
     // CHOICE Primary Cell of MCG
     std::shared_ptr<RANParameter> p21503 = std::make_shared<RANParameter>(21503, "Primary Cell of MCG", ran_parameter_type_e::STRUCTURE);
@@ -102,11 +93,7 @@ std::shared_ptr<ActionDefinition> common::rc::build_report_action_definition_for
     p10106->addSubParameter(rsrq);
     p10106->addSubParameter(sinr);
 
-    if (!action_fmt1->addRanParameter(p21503)) {
-        logger_error("Unable to add RAN Parameter %d - %s to Action Definition format %d",
-                    p21503->getParamId(), p21503->getParamName(), action_fmt1->getFormat());
-        return std::shared_ptr<ActionDefinition>();
-    }
+    action_fmt1->addRanParameter(p21503);
 
     // List of Neighbor cells
     std::shared_ptr<RANParameter> p21528 = std::make_shared<RANParameter>(21528, "List of Neighbor cells", ran_parameter_type_e::LIST);
@@ -135,11 +122,7 @@ std::shared_ptr<ActionDefinition> common::rc::build_report_action_definition_for
     neighbor10106->addSubParameter(neighbor_rsrq);
     neighbor10106->addSubParameter(neighbor_sinr);
 
-    if (!action_fmt1->addRanParameter(p21528)) {
-        logger_error("Unable to add RAN Parameter %d - %s to Action Definition format %d",
-                    p21528->getParamId(), p21528->getParamName(), action_fmt1->getFormat());
-        return std::shared_ptr<ActionDefinition>();
-    }
+    action_fmt1->addRanParameter(p21528);
 
     return action_fmt1;
 }
@@ -156,11 +139,7 @@ std::shared_ptr<ActionDefinition> common::rc::build_handover_control_action_id1(
     p2->addSubParameter(p3);
     p3->addSubParameter(p4);
 
-    if (!action->addRanParameter(p1)) {
-        logger_error("Unable to add RAN Parameter %d - %s to Control Action ID %d",
-                    p1->getParamId(), p1->getParamName(), action->getFormat());
-        return std::shared_ptr<ActionDefinition>();
-    }
+    action->addRanParameter(p1);
 
     return action;
 }

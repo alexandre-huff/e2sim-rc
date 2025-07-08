@@ -16,7 +16,7 @@
 #                                                                            *
 ******************************************************************************/
 
-#include <stdexcept>
+// #include <stdexcept>
 
 #include "global_data.hpp"
 #include "utils.hpp"
@@ -32,7 +32,7 @@ extern "C" {
 /**
  * Throws std::invalid_argument
 */
-GlobalE2NodeData::GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id, std::string ue_mgr_addr) : gnbid(gnb_id), ueMgrAddr(ue_mgr_addr) {
+GlobalE2NodeData::GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id) : gnbid(gnb_id) {
     if (mcc.length() != 3) {
         throw std::invalid_argument("MCC requires 3 digits");
     }
@@ -42,8 +42,9 @@ GlobalE2NodeData::GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gn
         throw std::invalid_argument("MNC requires 2 or 3 digits");
     }
 
-    if (gnb_id >= 1<<29) {
-        throw std::invalid_argument("maximum gnb_id value is 2^29-1");
+    if (gnb_id >= 1<<GNB_ID_LENGTH) {
+        std::string error = std::string("maximum gnb_id value is 2^") + std::to_string(GNB_ID_LENGTH) + "-1";
+        throw std::invalid_argument(error);
     }
 
     uint32_t gnbid_copy;
@@ -140,9 +141,60 @@ BIT_STRING_t *GlobalE2NodeData::getGlobalE2Node_gNBId() {
     return gnbid;
 }
 
-void UEList::addUE(e2sim::ue::UEInfo &ue) {
+void GlobalE2NodeData::updateCellTxReferenceLevel(uint16_t pci, double gain) {
+    std::lock_guard<std::mutex> guard(cellsLock);
+    auto it = cells.find(pci);
+    if (it != cells.end()) {
+        it->second->setGain(gain);
+    } else {
+        std::shared_ptr<Cell> cell = std::make_shared<Cell>(pci, gain);
+        addCell(cell);
+    }
+}
+
+bool GlobalE2NodeData::addCell(std::shared_ptr<Cell> cell) {
+    std::lock_guard<std::mutex> guard(cellsLock);
+    uint16_t pci = cell->getPci();
+    auto it = cells.find(pci);
+    if (it == cells.end()) {
+        cells[pci] = cell;
+        return true;
+    }
+    return false;
+}
+
+void GlobalE2NodeData::deleteCell(uint16_t pci) {
+    std::lock_guard<std::mutex> guard(cellsLock);
+    cells.erase(pci);
+}
+
+std::shared_ptr<Cell> GlobalE2NodeData::getCell(uint16_t pci) {
+    auto it = cells.find(pci);
+    if (it != cells.end()) {
+        return it->second;
+    }
+    return std::shared_ptr<Cell>();
+}
+
+/*
+    Retrieve a list of all cells and their corresponding data
+*/
+std::vector<std::shared_ptr<Cell>> GlobalE2NodeData::getCells() {
+    std::lock_guard<std::mutex> guard(cellsLock);
+    std::vector<std::shared_ptr<Cell>> list;
+    for (auto cell : cells) {
+        list.emplace_back(cell.second);
+    }
+     return std::move(list);
+}
+
+/*
+     Add a new UEInfo in the list of connected UEs
+     UEInfo is only added if it is not already present in the UEList.
+ */
+void UEList::addUE(std::shared_ptr<e2sim::ue::UEInfo> ue) {
     std::lock_guard<std::mutex> guard(ue_lock);
-    ue_map.emplace(ue.imsi, ue.endpoint);
+    ue_map.emplace(ue->imsi, ue);
 }
 
 void UEList::removeUE(std::string imsi) {
@@ -150,25 +202,21 @@ void UEList::removeUE(std::string imsi) {
     ue_map.erase(imsi);
 }
 
-std::unique_ptr<e2sim::ue::UEInfo> UEList::getUEInfo(std::string imsi) {
+std::shared_ptr<e2sim::ue::UEInfo> UEList::getUEInfo(std::string imsi) {
     std::lock_guard<std::mutex> guard(ue_lock);
 
     auto it = ue_map.find(imsi);
     if (it == ue_map.end()) {
-        return std::unique_ptr<e2sim::ue::UEInfo>();
+        return std::shared_ptr<e2sim::ue::UEInfo>();
     }
 
-    std::unique_ptr<e2sim::ue::UEInfo> ue = std::make_unique<e2sim::ue::UEInfo>();
-    ue->imsi = it->second.imsi;
-    ue->endpoint = it->second.endpoint;
-
-    return ue;
+    return it->second;
 }
 
-std::vector<e2sim::ue::UEInfo> UEList::getUEs() {
-    std::vector<e2sim::ue::UEInfo> ues;
+std::vector<std::shared_ptr<e2sim::ue::UEInfo>> UEList::getUEs() {
+    std::vector<std::shared_ptr<e2sim::ue::UEInfo>> ues;
 
-
+    throw new std::runtime_error("NOT IMPLEMENTED");
 
     return ues;
 }

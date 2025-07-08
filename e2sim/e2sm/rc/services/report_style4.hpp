@@ -24,8 +24,6 @@
 #include <vector>
 #include <memory>
 
-#include <envman/environment_manager.h>
-
 #include "ric_indication.hpp"
 #include "subaction.hpp"
 #include "types_rc.hpp"
@@ -33,6 +31,9 @@
 #include "encode_rc.hpp"
 #include "global_data.hpp"
 #include "subscription_param_tree.hpp"
+#include "observer.hpp"
+#include "ofh_data.hpp"
+#include "ofh_du.hpp"
 
 extern "C" {
     #include "UEID.h"
@@ -43,43 +44,21 @@ extern "C" {
 /**
  * This class implements the E2SM-RC REPORT Service Style 4 feature
 */
-class RRCStateObserver : public EnvironmentManagerObserver, public SubscriptionAction {
+class ReportStyle4 : public Observer<e2sim::ofh::MessageTypes>,
+                     public SubscriptionAction {
 public:
-    RRCStateObserver(ric_subscription_info_t info, std::any style4_data,
-            std::shared_ptr<RICIndicationProcedure> ric_indication, EnvironmentManager *manager, const std::shared_ptr<GlobalE2NodeData> &global_data) :
-            subscriptionInfo(info), style4Data(std::any_cast<common::rc::report_style4_data>(style4_data)),
-            ricIndication(ric_indication), envManager(manager), globalE2NodeData(global_data) { /* pass */ }
-    ~RRCStateObserver() { /* pass */ }
+    ReportStyle4(ric_subscription_info_t info, OfhDuServer &ofh_du, std::any style4_data,
+            std::shared_ptr<RICIndicationProcedure> ric_indication, const std::shared_ptr<GlobalE2NodeData> &global_data) :
+            subscriptionInfo(info), ofhDu(ofh_du), style4Data(std::any_cast<common::rc::report_style4_data>(style4_data)),
+            ricIndication(ric_indication), globalE2NodeData(global_data) { /* pass */ }
+    ~ReportStyle4() { /* pass */ }
 
-    /**
-     * Notifies the observer about a new ANR update.
-     * @iMSI UE unique identifier
-     * @entries ANR entries
-     */
-    virtual void anrUpdate(const std::string iMSI, const std::map<int32_t, std::shared_ptr<anr_entry>> &entries) override;
-
-    /**
-     * Notifies the observer about a new Flow update.
-     * @iMSI UE unique identifier
-     * @entry Flow descriptor
-     */
-    virtual void flowUpdate(const std::string iMSI, const flow_entry &entry) override;
-
-    /**
-     * Notifies the observer about a new UE requessting association.
-     * @ue The UE data
-     */
-    virtual bool associationRequest(const std::shared_ptr<ue_data> ue, const int32_t &cell) override;
-
-    /**
-     * Notifiess the observer about a new UE requesting disassociation.
-     * @ue The UE description
-     */
-    virtual void disassociationRequest(const std::shared_ptr<ue_data> ue) override;
+    bool update(e2sim::ofh::MessageTypes event, const std::any &subject) override;
 
     /**
      * Starts the RRCStateObserver subscription action
      *
+     * FIXME check this documentation
      * IMPORTANT: first set the shared_ptr that owns this object
     */
     virtual bool start() override;
@@ -89,14 +68,14 @@ public:
     */
     virtual bool stop() override;
 
-    void setMySharedPtr(std::shared_ptr<RRCStateObserver> my_shared_ptr); // unfortunately this is required due to current EnvironmentManager design
-
     bool generate_ueid_report_info(UEID_t &ueid, const std::string &imsi);
 
-    bool generate_ran_params_report_info(const std::shared_ptr<ue_data> ue_data, std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> &params);
+    bool generate_ran_params_report_info(const e2sim::ofh::cell_metrics_t &primary_cell,
+                                        const std::vector<e2sim::ofh::cell_metrics_t> &neighbor_cells,
+                                        std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> &params);
 
     RANParameter_STRUCTURE_Item_t *generate_NRCell_report_info(const std::shared_ptr<TreeNode> param2add,
-            const std::string &mcc, const std::string &mnc, const uint32_t gnb_id, const long rsrp, const long rsrq, const long sinr);
+            const std::string &mcc, const std::string &mnc, const uint32_t gnb_id, uint16_t pci, const long rsrp, const long rsrq, const long sinr);
 
     void encode_and_send_report_msg(std::vector<common::rc::indication_msg_format2_ueid_t> &ue_ids);
 
@@ -106,9 +85,12 @@ private:
     ric_subscription_info_t subscriptionInfo;
     common::rc::report_style4_data style4Data;
     std::shared_ptr<RICIndicationProcedure> ricIndication;
-    EnvironmentManager *envManager;
-    std::shared_ptr<RRCStateObserver> mySharedPtr;  // unfortunately this is required due to current EnvironmentManager design
+    OfhDuServer &ofhDu;
     std::shared_ptr<GlobalE2NodeData> globalE2NodeData;
+
+    bool update_registration_request(e2sim::ofh::ue_registration_request_t &subject);
+    bool update_deregistration_request(e2sim::ofh::ue_deregistration_request_t &subject);
+    bool update_metrics_request(e2sim::ofh::ue_metrics_request_t &subject);
 };
 
 #endif

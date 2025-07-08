@@ -244,6 +244,24 @@ RANParameter_STRUCTURE_Item_t *common::rc::get_ran_parameter_structure_item(cons
     return param;
 }
 
+std::vector<RANParameter_STRUCTURE_Item_t *> common::rc::get_ran_parameter_structure_items(const RANParameter_STRUCTURE_t *ranp_struct) {
+	if (!ranp_struct) {
+        logger_error("Unable to retrieve RAN Parameter STRUCTURE items. Does RAN Parameter STRUCTURE is nil?");
+        return std::vector<RANParameter_STRUCTURE_Item_t *>();
+    }
+
+    std::vector<RANParameter_STRUCTURE_Item_t *> items;
+
+    int count = ranp_struct->sequence_of_ranParameters->list.count;
+    RANParameter_STRUCTURE_Item_t **params = ranp_struct->sequence_of_ranParameters->list.array;
+
+    for (int i = 0; i < count; i++) {
+        items.emplace_back(params[i]);
+    }
+
+    return items;
+}
+
 std::vector<RANParameter_STRUCTURE_t *> common::rc::get_ran_parameter_list_items(const RANParameter_LIST_t *ranp_list) {
 	if (!ranp_list) {
         logger_error("Unable to retrieve RAN Parameter LIST items. Does RAN Parameter List is nil?");

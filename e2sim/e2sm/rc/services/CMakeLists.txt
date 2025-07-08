@@ -25,6 +25,7 @@ target_link_libraries( rc_service_objects PUBLIC logger_objects
     encode_rc_objects
     encoding_objects
     rc_helpers
+    ofh_objects
     )
 
 target_include_directories ( rc_service_objects PUBLIC

@@ -36,7 +36,7 @@
 #
 # ARG CONTAINER_PULL_REGISTRY=nexus3.o-ran-sc.org:10002
 # FROM ${CONTAINER_PULL_REGISTRY}/o-ran-sc/bldr-ubuntu20-c-go:1.0.0 as e2sim-base
-FROM ubuntu:22.04 as e2sim-base
+FROM ubuntu:22.04 AS e2sim-base
 
 WORKDIR /playpen
 

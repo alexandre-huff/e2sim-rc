@@ -23,12 +23,11 @@
 #include <unordered_map>
 #include <memory>
 
-#include <envman/environment_manager.h>
-
 #include "functional.hpp"
 #include "e2sm_service.hpp"
 #include "submgr.hpp"
 #include "global_data.hpp"
+#include "ofh_du.hpp"
 
 
 extern "C" {
@@ -44,7 +43,7 @@ typedef struct {
 
 class E2SM {
 public:
-    E2SM(std::string shortName, std::string oid, std::string description, EnvironmentManager *env_manager, E2APMessageSender &sender, std::shared_ptr<GlobalE2NodeData> &global_data);
+    E2SM(std::string shortName, std::string oid, std::string description, OfhDuServer &ofh_du, E2APMessageSender &sender, std::shared_ptr<GlobalE2NodeData> &global_data);
     virtual ~E2SM() = 0;
 
     ran_function_name_t const &getRanFunctionName() const;
@@ -58,9 +57,7 @@ public:
     bool addService(ran_service_e type, std::shared_ptr<E2SMService> service);
 
     E2APMessageSender &getE2APMessageSender();
-
-    EnvironmentManager *getEnvironmentManager();
-
+    OfhDuServer &getOfhDuServer();
     std::shared_ptr<GlobalE2NodeData> const &getGlobalE2NodeData() const;
 
 private:
@@ -71,7 +68,7 @@ private:
     std::unordered_map<ProcedureCode_t, std::shared_ptr<FunctionalProcedure>> procedures;
     std::unordered_map<ran_service_e, std::shared_ptr<E2SMService>> services;
 
-    EnvironmentManager *envmanager; // manages all observers of Environment Manager
+    OfhDuServer &ofhDu;
     std::shared_ptr<SubscriptionManager> subManager;
 
     E2APMessageSender &e2apSender;

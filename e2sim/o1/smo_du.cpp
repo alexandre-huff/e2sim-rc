@@ -24,7 +24,7 @@
     This API should be rewriten according to our needs, but for now using it as it is
     WARNING: can break on submodule updates as it is auto-generates
 */
-#include <ue_client/api/DefaultApi.h>
+// #include <ue_client/api/DefaultApi.h>
 
 void handle_error(pplx::task<void>& t, const utility::string_t msg) {
     try {
@@ -44,50 +44,59 @@ void handle_error(pplx::task<void>& t, const utility::string_t msg) {
 */
 void O1Handler::post_tx_gain(web::http::http_request request) {
     auto answer = web::json::value::object();
-    auto *tx_level = &globalE2NodeData->txLevel;
     request
         .extract_json()
-        .then([&answer, request, tx_level, this](pplx::task<web::json::value> task) {
+        .then([&answer, request, this](pplx::task<web::json::value> task) {
             try {
                 answer = task.get();
                 logger_info("RESTCONF: Received POST request %s", answer.serialize().c_str());
 
+                auto pci = answer.at(U("pci")).as_integer();
                 auto gain = answer.at(U("gain")).as_double();
 
-                std::shared_ptr<org::openapitools::client::api::ApiConfiguration> api_conf =
-                    std::make_shared<org::openapitools::client::api::ApiConfiguration>();
-                api_conf->setBaseUrl(globalE2NodeData->ueMgrAddr + "/v1");
-                std::shared_ptr<org::openapitools::client::api::ApiClient> client =
-                    std::make_shared<org::openapitools::client::api::ApiClient>(api_conf);
+                e2sim::ofh::OfhMessage msg;
+                msg.mutable_tx_reference_level_request()->mutable_cell()->set_gain(gain);
+                msg.mutable_tx_reference_level_request()->mutable_cell()->set_pci(pci);
 
-                org::openapitools::client::api::DefaultApi api(client);
-                std::shared_ptr<org::openapitools::client::model::_cell__gnb_id__power_put_request> cellGnbIdPowerPutRequest =
-                    std::make_shared<org::openapitools::client::model::_cell__gnb_id__power_put_request>();
-                cellGnbIdPowerPutRequest->setTargetPower(gain);
-
-                PLMN_Identity_t *plmn = globalE2NodeData->getGlobalE2NodePlmnId();
-                std::string mcc;
-                std::string mnc;
-                common::utils::decodePlmnId(plmn, mcc, mnc);
-                ASN_STRUCT_FREE(asn_DEF_PLMN_Identity, plmn);
-
-                std::shared_ptr<org::openapitools::client::model::Cell_descriptor> cellDescriptor =
-                    std::make_shared<org::openapitools::client::model::Cell_descriptor>();
-                cellDescriptor->setMcc(mcc);
-                cellDescriptor->setMnc(mnc);
-                cellDescriptor->setNodebId(globalE2NodeData->gnbid);
-                cellGnbIdPowerPutRequest->setTargetCell(cellDescriptor);
-
-                try {
-                    auto ret = api.cellGnbIdPowerPut(globalE2NodeData->gnbid, cellGnbIdPowerPutRequest);
-                    auto status = ret.wait();
-
-                } catch (org::openapitools::client::api::ApiException &ex) {
-                    logger_error("unable to set TX Power in UE Manager. Reason = %s", ex.what());
-                    throw;
+                int socket = globalE2NodeData->getCell(pci)->getSocket();
+                if (socket != -1) {
+                    ofhDu.send_msg(socket, msg);
                 }
 
-                tx_level->setGain(gain);
+                // std::shared_ptr<org::openapitools::client::api::ApiConfiguration> api_conf =
+                //     std::make_shared<org::openapitools::client::api::ApiConfiguration>();
+                // api_conf->setBaseUrl(globalE2NodeData->ueMgrAddr + "/v1");
+                // std::shared_ptr<org::openapitools::client::api::ApiClient> client =
+                //     std::make_shared<org::openapitools::client::api::ApiClient>(api_conf);
+
+                // org::openapitools::client::api::DefaultApi api(client);
+                // std::shared_ptr<org::openapitools::client::model::_cell__gnb_id__power_put_request> cellGnbIdPowerPutRequest =
+                //     std::make_shared<org::openapitools::client::model::_cell__gnb_id__power_put_request>();
+                // cellGnbIdPowerPutRequest->setTargetPower(gain);
+
+                // PLMN_Identity_t *plmn = globalE2NodeData->getGlobalE2NodePlmnId();
+                // std::string mcc;
+                // std::string mnc;
+                // common::utils::decodePlmnId(plmn, mcc, mnc);
+                // ASN_STRUCT_FREE(asn_DEF_PLMN_Identity, plmn);
+
+                // std::shared_ptr<org::openapitools::client::model::Cell_descriptor> cellDescriptor =
+                //     std::make_shared<org::openapitools::client::model::Cell_descriptor>();
+                // cellDescriptor->setMcc(mcc);
+                // cellDescriptor->setMnc(mnc);
+                // cellDescriptor->setNodebId(globalE2NodeData->gnbid);
+                // cellGnbIdPowerPutRequest->setTargetCell(cellDescriptor);
+
+                // try {
+                //     auto ret = api.cellGnbIdPowerPut(globalE2NodeData->gnbid, cellGnbIdPowerPutRequest);
+                //     auto status = ret.wait();
+
+                // } catch (org::openapitools::client::api::ApiException &ex) {
+                //     logger_error("unable to set TX Power in UE Manager. Reason = %s", ex.what());
+                //     throw;
+                // }
+
+                this->globalE2NodeData->updateCellTxReferenceLevel(pci, gain);
                 logger_info("RESTCONF: Transmission gain set to %.4lf", gain);
 
                 request.reply(web::http::status_codes::NoContent)
@@ -118,15 +127,21 @@ void O1Handler::post_tx_gain(web::http::http_request request) {
 */
 void O1Handler::get_tx_gain(web::http::http_request request) {
     logger_info("RESTCONF: Received GET request");
+    int i = 0;
+    web::json::value list = web::json::value::array();
+    for (std::shared_ptr<Cell> &cell : globalE2NodeData->getCells()) {
+        web::json::value elem = web::json::value::object();
+        elem[U("pci")] = web::json::value((uint16_t)cell->getPci());
+        elem[U("gain")] = web::json::value((double)cell->getGain());
+        list[i] = elem;
+        i++;
+    }
 
-    web::json::value response = web::json::value::object();
-    response[U("gain")] = web::json::value((double)globalE2NodeData->txLevel.getGain());
-
-    std::string str = response.serialize();
+    std::string str = list.serialize();
 
     logger_info("RESTCONF: Transmission gain response is %s", str.c_str());
 
-    request.reply(web::http::status_codes::OK, response);
+    request.reply(web::http::status_codes::OK, list);
 }
 
 /*

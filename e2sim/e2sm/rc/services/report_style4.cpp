@@ -37,18 +37,46 @@ extern "C" {
     #include "RANParameter-LIST.h"
 }
 
-void RRCStateObserver::anrUpdate(const std::string iMSI, const std::map<int32_t, std::shared_ptr<anr_entry>> &entries) {
-    logger_debug("ANR update from %s. Nothing to do here.", iMSI.c_str());
+bool ReportStyle4::update(e2sim::ofh::MessageTypes event, const std::any &subject) {
+    LOGGER_TRACE_FUNCTION_IN
+    bool success;
+    switch (event) {
+        case e2sim::ofh::MessageTypes::REG_REQ:
+        {
+            auto reg_request = std::any_cast<e2sim::ofh::ue_registration_request_t>(subject);
+            success = update_registration_request(reg_request);
+            break;
+        }
+
+        case e2sim::ofh::MessageTypes::DEREG_REQ:
+        {
+            auto dereg_request = std::any_cast<e2sim::ofh::ue_deregistration_request_t>(subject);
+            success = update_deregistration_request(dereg_request);
+            break;
+        }
+
+        case e2sim::ofh::MessageTypes::METRICS_REQ:
+        {
+            auto metrics_request = std::any_cast<e2sim::ofh::ue_metrics_request_t>(subject);
+            success = update_metrics_request(metrics_request);
+            break;
+        }
+
+        default:
+            logger_error("Unknown event message type %d to update ReportStyle4 Observer", event);
+            success = false;
+            break;
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+
+    return success;
 }
 
-void RRCStateObserver::flowUpdate(const std::string iMSI, const flow_entry &entry) {
-    logger_debug("Flow update from %s. Nothing to do here.", iMSI.c_str());
-}
-
-bool RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue, const int32_t &cell) {
+bool ReportStyle4::update_registration_request(e2sim::ofh::ue_registration_request_t &subject) {
     LOGGER_TRACE_FUNCTION_IN
 
-    logger_info("Association request from UE %s", ue->imsi.c_str());
+    logger_info("Registration request from UE %s", subject.imsi.c_str());
 
     // Checking for subscribed event triggers
     bool match = false;
@@ -65,15 +93,11 @@ bool RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue, con
     }
 
     if (!match) {
-        logger_debug("Association request did not match expected event triggers for IMSI %s", ue->imsi.c_str());
-        return true;
+        logger_warn("Registration request did not match expected event triggers for IMSI %s", subject.imsi.c_str());
+        return false;
     }
 
-    e2sim::ue::UEInfo info;
-    info.endpoint = ue->endpoint;
-    info.imsi = ue->imsi;
-    globalE2NodeData->ue_list.addUE(info);    // we have to store the UE endpoint to use in Control Requests
-
+    bool success = false;
     UEID_t ueid;
     memset(&ueid, 0, sizeof(UEID_t));
 
@@ -81,15 +105,16 @@ bool RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue, con
     // We have only a single UE in this association request
     // Each UE can see several E2 Nodes
     /* ################ UE ID ################ */
-    if (generate_ueid_report_info(ueid, ue->imsi)) {
+    if (generate_ueid_report_info(ueid, subject.imsi)) {
         /* ################ Sequence of RAN Parameters ################ */
         std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> params;
 
-        if (generate_ran_params_report_info(ue, params)) {
+        if (generate_ran_params_report_info(subject.primary_cell, subject.neighbor_cells, params)) {
             std::vector<common::rc::indication_msg_format2_ueid_t> ue_ids;
             ue_ids.emplace_back(ueid, params);
 
             encode_and_send_report_msg(ue_ids);
+            success = true;
         }
     }
 
@@ -97,13 +122,13 @@ bool RRCStateObserver::associationRequest(const std::shared_ptr<ue_data> ue, con
 
     LOGGER_TRACE_FUNCTION_OUT
 
-    return true;
+    return success;
 }
 
-void RRCStateObserver::disassociationRequest(const std::shared_ptr<ue_data> ue) {
+bool ReportStyle4::update_deregistration_request(e2sim::ofh::ue_deregistration_request_t &subject) {
     LOGGER_TRACE_FUNCTION_IN
 
-    logger_info("Disassociation request from UE %s", ue->imsi.c_str());
+    logger_info("Deregistration request from UE %s", subject.imsi.c_str());
 
     // Checking for subscribed event triggers
     bool match = false;
@@ -120,18 +145,20 @@ void RRCStateObserver::disassociationRequest(const std::shared_ptr<ue_data> ue) 
     }
 
     if (!match) {
-        logger_debug("Disassociation request did not match expected event triggers for IMSI %s", ue->imsi.c_str());
-        return;
+        logger_debug("Deregistration request did not match expected event triggers for IMSI %s", subject.imsi.c_str());
+        return false;
     }
 
-    globalE2NodeData->ue_list.removeUE(ue->imsi);
+    globalE2NodeData->ue_list.removeUE(subject.imsi);
+
+    bool success = false;
 
     // Sequence of UE Identifiers as per 9.2.1.4.2 in E2SM-RC-R003-v03.00
     // We have only a single UE in this association request
     /* ################ UE ID ################ */
     UEID_t ueid;
     memset(&ueid, 0, sizeof(UEID_t));
-    if (generate_ueid_report_info(ueid, ue->imsi)) {
+    if (generate_ueid_report_info(ueid, subject.imsi)) {
 
         /* ################ Sequence of RAN Parameters ################ */
         std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> params;
@@ -160,6 +187,7 @@ void RRCStateObserver::disassociationRequest(const std::shared_ptr<ue_data> ue) 
             ue_ids.emplace_back(ueid, params);
 
             encode_and_send_report_msg(ue_ids);
+            success = true;
 
         } else {
             logger_warn("No subscribed RAN Parameter to report to xApps");
@@ -169,46 +197,93 @@ void RRCStateObserver::disassociationRequest(const std::shared_ptr<ue_data> ue) 
     ASN_STRUCT_RESET(asn_DEF_UEID, &ueid);
 
     LOGGER_TRACE_FUNCTION_OUT
+
+    return success;
 }
 
-bool RRCStateObserver::start() {
-    if (!mySharedPtr) {
-        logger_error("Unable start RRCStateObserver. Please initilize the shared_ptr that owns this object");
+bool ReportStyle4::update_metrics_request(e2sim::ofh::ue_metrics_request_t &subject) {
+    LOGGER_TRACE_FUNCTION_IN
+
+    logger_info("Update metrics request from UE %s", subject.imsi.c_str());
+
+    // Checking for subscribed event triggers
+    bool match = false;
+    for (auto &it : style4Data.trigger_data.rrc_state_items) {
+        for (auto &state : it->rrc_triggers) {
+             if (state->stateChangedTo == RRC_State_rrc_connected || state->stateChangedTo == RRC_State_any) {
+                match = true;
+                break;
+            }
+            // we don't care with LogicalOR here
+        }
+
+        if (match) break;
+    }
+
+    if (!match) {
+        logger_warn("Update metrics request did not match expected event triggers for IMSI %s", subject.imsi.c_str());
         return false;
     }
 
+    bool success = false;
+    UEID_t ueid;
+    memset(&ueid, 0, sizeof(UEID_t));
+
+    // Sequence of UE Identifiers as per 9.2.1.4.2 in E2SM-RC-R003-v03.00
+    // We have only a single UE in this association request
+    // Each UE can see several E2 Nodes
+    /* ################ UE ID ################ */
+    if (generate_ueid_report_info(ueid, subject.imsi)) {
+        /* ################ Sequence of RAN Parameters ################ */
+        std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> params;
+
+        if (generate_ran_params_report_info(subject.primary_cell, subject.neighbor_cells, params)) {
+            std::vector<common::rc::indication_msg_format2_ueid_t> ue_ids;
+            ue_ids.emplace_back(ueid, params);
+
+            encode_and_send_report_msg(ue_ids);
+            success = true;
+        }
+    }
+
+    ASN_STRUCT_RESET(asn_DEF_UEID, &ueid);
+
+    LOGGER_TRACE_FUNCTION_OUT
+
+    return success;
+}
+
+bool ReportStyle4::start() {
     if (isStarted) {
         logger_warn("RRCStateObserver already started");
         return true;
     }
 
-    envManager->add_observer(mySharedPtr, ENVMAN_OBSERVE_ADMISSION); // ENVMAN_OBSERVE_ALL (ENVMAN_OBSERVE_ADMISSION | ENVMAN_OBSERVE_ANR | ENVMAN_OBSERVE_FLOW)
     isStarted = true;
+
+    ofhDu.addObserver(e2sim::ofh::MessageTypes::REG_REQ, *this);
+    ofhDu.addObserver(e2sim::ofh::MessageTypes::DEREG_REQ, *this);
+    ofhDu.addObserver(e2sim::ofh::MessageTypes::METRICS_REQ, *this);
 
     return true;
 }
 
-bool RRCStateObserver::stop() {
-    if (!mySharedPtr) {
-        logger_error("Unable stop RRCStateObserver. Please initilize the shared_ptr that owns this object");
-        return false;
-    }
-
+bool ReportStyle4::stop() {
     if(!isStarted) {
         logger_warn("RRCStateObserver already stopped");
         return true;
     }
 
-    envManager->delete_observer(mySharedPtr);
+    isStarted = false;
+
+    ofhDu.deleteObserver(e2sim::ofh::MessageTypes::REG_REQ, *this);
+    ofhDu.deleteObserver(e2sim::ofh::MessageTypes::DEREG_REQ, *this);
+    ofhDu.deleteObserver(e2sim::ofh::MessageTypes::METRICS_REQ, *this);
 
     return true;
 }
 
-void RRCStateObserver::setMySharedPtr(std::shared_ptr<RRCStateObserver> my_shared_ptr) {
-    mySharedPtr = my_shared_ptr;
-}
-
-bool RRCStateObserver::generate_ueid_report_info(UEID_t &ueid, const std::string &imsi) {
+bool ReportStyle4::generate_ueid_report_info(UEID_t &ueid, const std::string &imsi) {
     if (imsi.length() != 15) {
         logger_error("IMSI must have 15 digits [0-9]");
         return false;
@@ -272,7 +347,8 @@ bool RRCStateObserver::generate_ueid_report_info(UEID_t &ueid, const std::string
 }
 
 // Implements E2SM-RC 8.1.1.17 UE Context Information to send metric indications to xApp
-bool RRCStateObserver::generate_ran_params_report_info(const std::shared_ptr<ue_data> ue_data,
+bool ReportStyle4::generate_ran_params_report_info(const e2sim::ofh::cell_metrics_t &primary_cell,
+                                                    const std::vector<e2sim::ofh::cell_metrics_t> &neighbor_cells,
                                                     std::vector<E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *> &params) {
 
     for (std::shared_ptr<SubscriptionParametersTree> &ranp_tree : style4Data.action_data.ran_parameters) {
@@ -353,52 +429,33 @@ bool RRCStateObserver::generate_ran_params_report_info(const std::shared_ptr<ue_
             common::utils::decodePlmnId(plmnid, mcc, mnc);
             ASN_STRUCT_FREE(asn_DEF_PLMN_Identity, plmnid);
 
-            // get the ANR data from primary cell
-            int32_t nodeb;
-            int rsrp;
-            int rsrq;
-            int sinr;
-            bool found = false;
+            // get data from primary cell
+            int16_t pci = primary_cell.pci;
+            int rsrp = primary_cell.metrics.rsrp;
+            int rsrq = primary_cell.metrics.rsrq;
+            int sinr = primary_cell.metrics.sinr;
 
-            // iterate over all nodeb to report ue metrics for primary cell per nodeb
-            for (auto &it : ue_data->anr) {
-                std::shared_ptr<anr_entry> &entry = it.second;
+            uint32_t gnb_id = this->globalE2NodeData->gnbid;
 
-                if (entry->bbu_name == globalE2NodeData->gnbid) { // primary cell
-                    nodeb = entry->bbu_name;
-                    rsrp = (int) entry->rsrp;
-                    rsrq = (int) entry->rsrq;
-                    sinr = (int) entry->sinr;
-                    found = true;
-                    break;
-                }
-            }
+            E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *p21503 =
+                    (E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t));
+            RANParameter_STRUCTURE_Item_t *temp_param = common::rc::build_ran_parameter_structure_item(21503);
+            p21503->ranParameter_ID = temp_param->ranParameter_ID;
+            p21503->ranParameter_valueType = *temp_param->ranParameter_valueType;
+            if (temp_param) free(temp_param);
 
-            if (found) {
-                E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *p21503 =
-                        (E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t *) calloc(1, sizeof(E2SM_RC_IndicationMessage_Format2_RANParameter_Item_t));
-                RANParameter_STRUCTURE_Item_t *temp_param = common::rc::build_ran_parameter_structure_item(21503);
-                p21503->ranParameter_ID = temp_param->ranParameter_ID;
-                p21503->ranParameter_valueType = *temp_param->ranParameter_valueType;
-                if (temp_param) free(temp_param);
+            // NR Cell
+            RANParameter_STRUCTURE_Item_t *p21504 = generate_NRCell_report_info(node21504, mcc, mnc, gnb_id, pci, rsrp, rsrq, sinr);
+            ASN_SEQUENCE_ADD(&p21503->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list, p21504);
 
-                // NR Cell
-                RANParameter_STRUCTURE_Item_t *p21504 = generate_NRCell_report_info(node21504, mcc, mnc, nodeb, rsrp, rsrq, sinr);
-                ASN_SEQUENCE_ADD(&p21503->ranParameter_valueType.choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list, p21504);
-
-                if (p21504->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list.count > 0) {
-                    if (LOGGER_LEVEL >= LOGGER_DEBUG) {
-                        asn_fprint(stdout, &asn_DEF_E2SM_RC_IndicationMessage_Format2_RANParameter_Item, p21503);
-                    }
-
-                    params.emplace_back(p21503);
-                } else {
-                    ASN_STRUCT_FREE(asn_DEF_E2SM_RC_IndicationMessage_Format2_RANParameter_Item, p21503);
+            if (p21504->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list.count > 0) {
+                if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+                    asn_fprint(stdout, &asn_DEF_E2SM_RC_IndicationMessage_Format2_RANParameter_Item, p21503);
                 }
 
+                params.emplace_back(p21503);
             } else {
-                logger_error("Unable to find ANR entry with Primary Cell measurements");
-                return false;
+                ASN_STRUCT_FREE(asn_DEF_E2SM_RC_IndicationMessage_Format2_RANParameter_Item, p21503);
             }
 
 
@@ -417,23 +474,18 @@ bool RRCStateObserver::generate_ran_params_report_info(const std::shared_ptr<ue_
             p21528->ranParameter_valueType = *temp_param->ranParameter_valueType;
             if (temp_param) free(temp_param);
 
-            // get the ANR data from primary cell
-            int32_t nodeb;
+            int16_t pci;
             int rsrp;
             int rsrq;
             int sinr;
-            // iterate over all nodeb to report ue metrics for neighbor cells
-            for (auto &it : ue_data->anr) {
-                std::shared_ptr<anr_entry> &entry = it.second;
+            uint32_t gnb_id = this->globalE2NodeData->gnbid;
 
-                if (entry->bbu_name == globalE2NodeData->gnbid) { // we do not want primary cell here
-                    continue;
-                }
-
-                nodeb = entry->bbu_name;
-                rsrp = (int) entry->rsrp;
-                rsrq = (int) entry->rsrq;
-                sinr = (int) entry->sinr;
+            // iterate over all cells to report ue metrics for neighbor cells
+            for (auto &cell : neighbor_cells) {
+                pci = cell.pci;
+                rsrp = cell.metrics.rsrp;
+                rsrq = cell.metrics.rsrq;
+                sinr = cell.metrics.sinr;
 
                 // Neighbor Cell Item Structure
                 RANParameter_STRUCTURE_t *p21529_struct = common::rc::build_ran_parameter_list_item();
@@ -448,7 +500,7 @@ bool RRCStateObserver::generate_ran_params_report_info(const std::shared_ptr<ue_
                 ASN_SEQUENCE_ADD(&p21529->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list, p21530);
 
                 // NR Cell
-                RANParameter_STRUCTURE_Item_t *p21531 = generate_NRCell_report_info(node21531, mcc, mnc, nodeb, rsrp, rsrq, sinr);
+                RANParameter_STRUCTURE_Item_t *p21531 = generate_NRCell_report_info(node21531, mcc, mnc, gnb_id, pci, rsrp, rsrq, sinr);
                 ASN_SEQUENCE_ADD(&p21530->ranParameter_valueType->choice.ranP_Choice_Structure->ranParameter_Structure->sequence_of_ranParameters->list, p21531);
             }
 
@@ -469,8 +521,8 @@ bool RRCStateObserver::generate_ran_params_report_info(const std::shared_ptr<ue_
     return true;
 }
 
-RANParameter_STRUCTURE_Item_t *RRCStateObserver::generate_NRCell_report_info(const std::shared_ptr<TreeNode> param2add,
-        const std::string &mcc, const std::string &mnc, const uint32_t gnbid, const long rsrp, const long rsrq, const long sinr) {
+RANParameter_STRUCTURE_Item_t *ReportStyle4::generate_NRCell_report_info(const std::shared_ptr<TreeNode> param2add,
+        const std::string &mcc, const std::string &mnc, const uint32_t gnbid, uint16_t pci, const long rsrp, const long rsrq, const long sinr) {
     LOGGER_TRACE_FUNCTION_IN
 
     RANParameter_STRUCTURE_Item_t *nrcell =
@@ -479,7 +531,7 @@ RANParameter_STRUCTURE_Item_t *RRCStateObserver::generate_NRCell_report_info(con
     // NR CGI as per 8.1.1.1 in E2SM-RC-R003-v03.00
     if (SubscriptionParametersTree::hierarchy_match(param2add, {10001})) {
         // NR CGI
-        NR_CGI_t *nr_cgi = e2sm::utils::encode_NR_CGI(mcc, mnc, gnbid);
+        NR_CGI_t *nr_cgi = e2sm::utils::encode_NR_CGI(mcc, mnc, gnbid, pci);
         OCTET_STRING_t *nr_cgi_data = common::utils::asn1_check_and_encode(&asn_DEF_NR_CGI, nr_cgi);
         if (nr_cgi_data) {
             common::rc::OctetStringWrapper wrapper;
@@ -530,7 +582,7 @@ RANParameter_STRUCTURE_Item_t *RRCStateObserver::generate_NRCell_report_info(con
     return nrcell;
 }
 
-void RRCStateObserver::encode_and_send_report_msg(std::vector<common::rc::indication_msg_format2_ueid_t> &ue_ids) {
+void ReportStyle4::encode_and_send_report_msg(std::vector<common::rc::indication_msg_format2_ueid_t> &ue_ids) {
     RICindicationHeader_t *ric_header = common::rc::encode_indication_header_format1(&style4Data.trigger_data.condition_id);
     RICindicationMessage_t *ric_msg = common::rc::encode_indication_message_format2(ue_ids);
 
@@ -548,6 +600,8 @@ void RRCStateObserver::encode_and_send_report_msg(std::vector<common::rc::indica
     indication_msg.callProcessId = nullptr;
 
     E2AP_PDU_t *pdu = encoding::generate_e2ap_indication_pdu(indication_msg);
+
+    logger_info("Sending RIC Indication report message. Sequence Number %ld", seqid);
 
     ricIndication->sendMessage(pdu, NULL);   // we don't want to track timestamps here
 

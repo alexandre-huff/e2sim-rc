@@ -20,9 +20,6 @@
 #include <csignal>
 #include <stdexcept>
 
-// ################ Needs to be included before asn1c, because of the min definition ################
-#include <envman/environment_manager.h>
-#include "smo_du.hpp"
 // ################ up  to here ################
 
 #include "e2node.hpp"
@@ -31,24 +28,10 @@
 #include "e2sim_defs.h"
 #include "e2sm_rc.hpp"
 #include "functional.hpp"
+#include "smo_du.hpp"
+#include "ofh_du.hpp"
 
 args_t cmd_args;        // command line arguments
-
-EnvironmentManager *envman;
-std::thread *envman_thread;
-
-void run_envman(uint16_t port) {
-    envman = new EnvironmentManager(port, 2);
-    envman->start();
-}
-
-void start_envman(uint16_t port) {
-    envman_thread = new std::thread(run_envman, port);
-}
-
-void stop_envman() {
-    envman->stop();
-}
 
 args_t parse_input_options(int argc, char *argv[]) {
     args_t args;
@@ -57,7 +40,6 @@ args_t parse_input_options(int argc, char *argv[]) {
     args.gnb_id = 1;
     args.mcc = "001";
     args.mnc = "001";
-    args.ue_mgr_addr = "http://localhost";
 
     static struct option long_options[] =
     {
@@ -65,7 +47,6 @@ args_t parse_input_options(int argc, char *argv[]) {
         {"nodebid", required_argument, 0, 'b'},
         {"mcc", required_argument, 0, 'c'},
         {"mnc", required_argument, 0, 'n'},
-        {"ue_mgr", required_argument, 0, 'u'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
     };
@@ -73,7 +54,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     int c;
     while(1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "p:b:c:n:u:h", long_options, &option_index);
+        c = getopt_long(argc, argv, "p:b:c:n:h", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -94,9 +75,6 @@ args_t parse_input_options(int argc, char *argv[]) {
             case 'n':
                 args.mnc = optarg;
                 break;
-            case 'u':
-                args.ue_mgr_addr = optarg;
-                break;
             case 'h':
             case '?':
             default:
@@ -106,9 +84,8 @@ args_t parse_input_options(int argc, char *argv[]) {
                     "  -p  --port         E2Term SCTP port number\n"
                     "  -c  --mcc          gNodeB Mobile Country Code\n"
                     "  -n  --mnc          gNodeB Mobile Network Code\n"
-                    "  -b  --nodebid      gNodeB Identity 0..2^29-1 (e.g. 15 or 0xF)\n"
-                    "  -u  --ue_mgr       UE Manager Address (e.g. http://hostname:port)\n"
-                    "  -h  --help         Display this information and quit\n\n", argv[0]);
+                    "  -b  --nodebid      gNodeB Identity 0..2^%d-1 (e.g. 15 or 0xF)\n"
+                    "  -h  --help         Display this information and quit\n\n", argv[0], GNB_ID_LENGTH);
                 exit(EXIT_FAILURE);
         }
     }
@@ -133,17 +110,17 @@ int main(int argc, char *argv[]) {
 
     logger_force(LOGGER_INFO, "Starting E2 Node Simulator");
 
-    start_envman(8081);
+    std::shared_ptr<GlobalE2NodeData> global_data = std::make_shared<GlobalE2NodeData>(cmd_args.mcc, cmd_args.mnc, cmd_args.gnb_id);
 
-    std::shared_ptr<GlobalE2NodeData> global_data = std::make_shared<GlobalE2NodeData>(cmd_args.mcc, cmd_args.mnc, cmd_args.gnb_id, cmd_args.ue_mgr_addr);
-
-    O1Handler o1(global_data);
+    OfhDuServer ofh(34567, global_data);
+    ofh.start();
+    O1Handler o1(global_data, ofh);
     o1.start_http_listener();
 
     std::shared_ptr<E2Sim> e2sim = std::make_shared<E2Sim>(global_data);
     E2APMessageSender e2ap_sender = std::bind(&E2Sim::encode_and_send_sctp_data, e2sim, _1, _2);
 
-    std::shared_ptr<E2SM_RC> e2sm_rc = std::make_shared<E2SM_RC>("ORAN-E2SM-RC", "1.3.6.1.4.1.53148.1.1.2.3", "RAN Control", envman, e2ap_sender, global_data);
+    std::shared_ptr<E2SM_RC> e2sm_rc = std::make_shared<E2SM_RC>("ORAN-E2SM-RC", "1.3.6.1.4.1.53148.1.1.2.3", "RAN Control", ofh, e2ap_sender, global_data);
     std::shared_ptr<RANFunction> rc_function = std::make_shared<RANFunction>(1, 0, e2sm_rc);
 
     if (!e2sim->addRanFunction(rc_function)) {
@@ -178,9 +155,8 @@ int main(int argc, char *argv[]) {
 
     e2sim->shutdown();
 
-    stop_envman();
-
     o1.shutdown_http_listener();
+    ofh.stop();
 
     logger_force(LOGGER_INFO, "E2 Node Simulator has finished");
 

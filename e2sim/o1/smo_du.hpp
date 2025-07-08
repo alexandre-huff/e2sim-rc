@@ -25,10 +25,11 @@
 #include <cpprest/json.h>
 
 #include "global_data.hpp"
+#include "ofh_du.hpp"
 
 class O1Handler {
 public:
-    O1Handler(std::shared_ptr<GlobalE2NodeData> &global_data) : globalE2NodeData(global_data) {};
+    O1Handler(std::shared_ptr<GlobalE2NodeData> &global_data, OfhDuServer &ofh_du) : globalE2NodeData(global_data), ofhDu(ofh_du) {};
 
     void start_http_listener();
     void shutdown_http_listener();
@@ -37,6 +38,7 @@ public:
     void get_tx_gain(web::http::http_request request);
 
 private:
+    OfhDuServer &ofhDu;
     std::shared_ptr<GlobalE2NodeData> globalE2NodeData;
     std::unique_ptr<web::http::experimental::listener::http_listener> listener;
 

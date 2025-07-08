@@ -26,6 +26,7 @@ target_link_libraries( e2sm_objects PUBLIC logger_objects
     e2model_objects
     common_objects
     e2sm_rc_asn1_objects
+    ofh_objects
     )
 
 target_include_directories (e2sm_objects PUBLIC

@@ -284,7 +284,7 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
     {
       logger_info("[E2AP] Received RIC-CONTROL-REQUEST");
       e2sim::messages::RICControlRequest *req = e2ap_handle_RICControlRequest(pdu);
-      e2sim::messages::RICControlResponse *res = nullptr;
+      e2sim::messages::RICControlResponse *resp = nullptr;
 
       std::shared_ptr<E2SM> e2sm;
 
@@ -294,42 +294,39 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
 
       } else {
         logger_error("Unable to complete RIC Control Request. Reason: RAN Function ID %ld not found", req->ranFunctionId);
-        res = new e2sim::messages::RICControlResponse();
-        res->succeeded = false;
-        res->cause.present = Cause_PR_ricRequest;
-        res->cause.choice.ricRequest = CauseRICrequest_ran_function_id_invalid;
+        resp = new e2sim::messages::RICControlResponse();
+        resp->succeeded = false;
+        resp->cause.present = Cause_PR_ricRequest;
+        resp->cause.choice.ricRequest = CauseRICrequest_ran_function_id_invalid;
       }
 
       std::shared_ptr<FunctionalProcedure> fproc; // if not assigned it points to nullptr
       if (e2sm) {
         fproc = e2sm->getProcedure(ProcedureCode_id_RICcontrol);
         if (fproc) {
-          RICControlProcedure *procedure = static_cast<RICControlProcedure *>(fproc.get());
+          std::shared_ptr<RICControlProcedure> procedure = std::dynamic_pointer_cast<RICControlProcedure>(fproc);
           ControlHandler handler = procedure->getHandler();
 
-          res = handler(req); // Control callback
+          resp = handler(req); // Control callback
 
         } else {
           logger_error("Unable do complete RIC Control Request. Reason: RIC Control Procedure not supported.");
-          res = new e2sim::messages::RICControlResponse();
-          res->succeeded = false;
-          res->cause.present = Cause_PR_ricService;
-          res->cause.choice.ricService = CauseRICservice_ran_function_not_supported;
+          resp = new e2sim::messages::RICControlResponse();
+          resp->succeeded = false;
+          resp->cause.present = Cause_PR_ricService;
+          resp->cause.choice.ricService = CauseRICservice_ran_function_not_supported;
         }
       }
 
-      if (res->succeeded) {
-        if (req->controAckRequest == nullptr || *req->controAckRequest == RICcontrolAckRequest_ack) {
-          E2AP_PDU *pdu = encoding::generate_e2ap_control_acknowledge(res);
-          e2sim->encode_and_send_sctp_data(pdu, NULL); // timestamp for control request is not relevant for now
-        }
-      } else {
-        E2AP_PDU *pdu = encoding::generate_e2ap_control_failure(res);
+      if (resp) {  // means that we have an error for Control Response
+        E2AP_PDU *pdu = encoding::generate_e2ap_control_failure(resp);
         e2sim->encode_and_send_sctp_data(pdu, NULL); // timestamp for control request is not relevant for now
       }
 
       delete req;
-      delete res;
+      if (resp) {
+        delete resp;
+      }
 
       break;
     }
@@ -587,12 +584,6 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
 // }
 
 e2sim::messages::RICSubscriptionRequest *e2ap_handle_RICSubscriptionRequest(E2AP_PDU_t *pdu) {
-	// FIXME fix the description of the following sequence of activies
-	// Record RIC Request ID
-	// Go through RIC action to be Setup List
-	// Find first entry with INSERT action Type
-	// Record ricActionID
-	// Encode subscription response
 
 	logger_trace("Calling %s", __func__);
 
@@ -647,8 +638,6 @@ e2sim::messages::RICSubscriptionRequest *e2ap_handle_RICSubscriptionRequest(E2AP
 			RICactions_ToBeSetup_List_t actionList = subDetails->ricAction_ToBeSetup_List;
 			int actionCount = actionList.list.count;
 			logger_debug("action count %d", actionCount);
-
-			// message->sequenceOfActions.resize(actionCount); // avoid vector reallocs // FIXME remove
 
 			auto **item_array = actionList.list.array;
 
@@ -823,7 +812,7 @@ e2sim::messages::RICControlRequest *e2ap_handle_RICControlRequest(E2AP_PDU_t *pd
         break;
 
       case RICcontrolRequest_IEs__value_PR_RICcallProcessID:
-        message->callProcessId = OCTET_STRING_new_fromBuf(&asn_DEF_RICcallProcessID,  // FIXME shouldn't be asn_DEF_OCTET_STRING
+        message->callProcessId = OCTET_STRING_new_fromBuf(&asn_DEF_RICcallProcessID,
                                                           (const char *)ie->value.choice.RICcallProcessID.buf,
                                                           ie->value.choice.RICcallProcessID.size);
         break;

@@ -47,7 +47,7 @@ public:
     int getFormat();
 
     std::shared_ptr<RANParameter> const getRanParameter(int paramId) const;
-    bool addRanParameter(std::shared_ptr<RANParameter> parameter);
+    void addRanParameter(std::shared_ptr<RANParameter> parameter);
     std::vector<std::shared_ptr<RANParameter>> const getRanParameters() const;
 
     bool startAction(ric_subscription_info_t info, std::any svc_style_data);
@@ -56,7 +56,7 @@ public:
 
 private:
     int format;
-    std::unordered_map<int, std::shared_ptr<RANParameter>> parameters;
+    std::vector<std::shared_ptr<RANParameter>> parameters;
 
     ActionStartStopHandler startStopHandler;    // Subscription-based
     ControlActionHandler controlHandler;        // Control-based

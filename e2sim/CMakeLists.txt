@@ -68,7 +68,7 @@ add_definitions(
 	-DDEBUG=${debugging}
 )
 
-add_definitions( -DLOGGER_LEVEL=LOGGER_DEBUG ) # NONE, FATAL, ERROR, WARN, INFO, DEBUG, TRACE
+add_definitions( -DLOGGER_LEVEL=LOGGER_INFO ) # NONE, FATAL, ERROR, WARN, INFO, DEBUG, TRACE
 
 # Compiler flags
 #
@@ -92,4 +92,5 @@ add_subdirectory( common )
 add_subdirectory( e2ap/src )
 add_subdirectory( e2sm )
 add_subdirectory( o1 )
+add_subdirectory( ofh )
 add_subdirectory( src )

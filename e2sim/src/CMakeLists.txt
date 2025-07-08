@@ -17,6 +17,7 @@
 
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(cpprestsdk REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
 
 add_executable( e2sim e2node.cpp )
 
@@ -25,9 +26,6 @@ target_link_libraries( e2sim PRIVATE
     o1_objects
     base_objects
     rc_objects
-    envman
-    pistache
-    ue_client
     common_objects
     ranfunction_objects
     messagerouting_objects
@@ -38,19 +36,21 @@ target_link_libraries( e2sim PRIVATE
     procedure_objects
     )
 
-target_link_libraries( e2sim PRIVATE cpprestsdk::cpprest OpenSSL::Crypto )
-
-target_include_directories (e2sim PUBLIC
+target_include_directories ( e2sim PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
     # PRIVATE src
     )
 
+target_link_libraries( e2sim PUBLIC
+    ofh_objects
+    protobuf::libprotobuf
+    )
+
+target_link_libraries( e2sim PRIVATE cpprestsdk::cpprest OpenSSL::Crypto )
+
 # Prometheus
 target_include_directories( e2sim PRIVATE /usr/include/prometheus )
-target_include_directories( e2sim PRIVATE /usr/local/include/envman )
-target_include_directories( e2sim PRIVATE /usr/local/include/envman/api )
-target_include_directories( e2sim PRIVATE /usr/local/include/envman/model )
 if(PROMETHEUS_CPP_ENABLE_PUSH)
     target_link_libraries(e2sim PRIVATE prometheus-cpp::push)
 endif()

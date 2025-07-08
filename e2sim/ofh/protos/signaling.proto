@@ -1,0 +1,116 @@
+edition = "2023";
+
+package e2sim.ofh;
+
+message OfhMessage {
+  oneof type {
+    UeRegistrationRequestMessage registration_request = 1;
+    UeRegistrationResponseMessage registration_response = 2;
+    UeDeregistrationRequestMessage deregistration_request = 3;
+    UeDeregistrationResponseMessage deregistration_response = 4;
+    UeMetricsRequestMessage metrics_request = 5;
+    UeMetricsResponseMessage metrics_response = 6;
+    HandoverRequestMessage handover_request = 7;
+    HandoverResponseMessage handover_response = 8;
+    TxReferenceLevelRequestMessage tx_reference_level_request = 9;
+    TxReferenceLevelResponseMessage tx_reference_level_response = 10;
+    RadioUnitSetupRequestMessage ru_setup_request = 11;
+    RadioUnitSetupResponseMessage ru_setup_response = 12;
+    RadioUnitTearDownRequestMessage ru_teardown_request = 13;
+    RadioUnitTearDownResponseMessage ru_teardown_response = 14;
+  }
+}
+
+message RadioUnitSetupRequestMessage {
+  repeated Cell cells = 1;
+}
+
+message RadioUnitSetupResponseMessage {
+  bool status = 1;
+  string error = 2;
+}
+
+message RadioUnitTearDownRequestMessage {
+  repeated Cell cells = 1;
+}
+
+message RadioUnitTearDownResponseMessage {
+  bool status = 1;
+}
+
+message UeRegistrationRequestMessage {
+  repeated UeMetrics ue_metrics = 1;
+}
+
+message UeRegistrationResponseMessage {
+  bool status = 1;
+}
+
+message UeDeregistrationRequestMessage {
+  repeated UeDeregistration ues = 1;
+}
+
+message UeDeregistrationResponseMessage {
+  bool status = 1;
+}
+
+message UeMetricsRequestMessage {
+  repeated UeMetrics ue_metrics = 1;
+}
+
+message UeMetricsResponseMessage {
+  bool status = 1;
+}
+
+message HandoverRequestMessage {
+  UE ue = 1;
+  Cell target_cell = 2;
+}
+
+message HandoverResponseMessage {
+  UE ue = 1;
+  Cell target_cell = 2;
+  bool status = 3;
+  string error = 4;
+}
+
+message TxReferenceLevelRequestMessage {
+  Cell cell = 1;
+}
+
+message TxReferenceLevelResponseMessage {
+  Cell cell = 1;
+  bool status = 2;
+  string error = 3;
+}
+
+message UeDeregistration {
+  UE ue = 1;
+  Cell cell = 2;
+}
+
+message UeMetrics {
+  UE ue = 1;
+  CellMetrics primary_cell = 2;
+  repeated CellMetrics neighbor_cells = 3;
+}
+
+message Metrics {
+  float rsrp = 1;
+  float rsrq = 2;
+  float sinr = 3;
+}
+
+message CellMetrics {
+  Cell cell = 1;
+  Metrics metrics = 2;
+}
+
+message Cell {
+  uint32 pci = 1;
+  float gain = 2;
+}
+
+message UE {
+  string imsi = 1;
+}

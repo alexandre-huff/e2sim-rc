@@ -32,25 +32,11 @@ extern "C" {
   #include "E2AP-PDU.h"
 }
 
-// typedef struct { // FIXME remove all unused code comments
-//   PrintableString_t oid;
-//   OCTET_STRING_t ran_function_ostr;  // RAN function definition octet string
-// } encoded_ran_function_t;
-
-// typedef std::function<void(E2AP_PDU_t*)> SubscriptionCallback;
-// typedef std::function<void(E2AP_PDU_t*)> SubscriptionDeleteCallback;
-// typedef std::function<void(E2AP_PDU_t*, struct timespec*)> ControlCallback;
-
 class E2Sim {
 
 private:
 
   std::unordered_map<long, std::shared_ptr<RANFunction>> ranFunctions;
-
-  // std::unordered_map<long, encoded_ran_function_t *> ran_functions_registered;
-  // std::unordered_map<long, SubscriptionCallback> subscription_callbacks;
-  // std::unordered_map<long, SubscriptionDeleteCallback> subscription_delete_callbacks;
-  // std::unordered_map<long, ControlCallback> control_callbacks;
   std::shared_ptr<GlobalE2NodeData> globalE2NodeData;
 
   std::string e2_addr;  // E2Term address

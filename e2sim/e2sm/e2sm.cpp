@@ -18,8 +18,8 @@
 
 #include "e2sm.hpp"
 
-E2SM::E2SM(std::string shortName, std::string oid, std::string description, EnvironmentManager *env_manager, E2APMessageSender &sender, std::shared_ptr<GlobalE2NodeData> &global_data) :
-        ranFunctionName{shortName, oid, description}, envmanager(env_manager), e2apSender(sender), globalE2NodeData(global_data) {
+E2SM::E2SM(std::string shortName, std::string oid, std::string description, OfhDuServer &ofh_du, E2APMessageSender &sender, std::shared_ptr<GlobalE2NodeData> &global_data) :
+        ranFunctionName{shortName, oid, description}, ofhDu(ofh_du), e2apSender(sender), globalE2NodeData(global_data) {
 
     subManager = std::make_shared<SubscriptionManager>();
 }
@@ -83,8 +83,8 @@ E2APMessageSender &E2SM::getE2APMessageSender() {
     return e2apSender;
 }
 
-EnvironmentManager *E2SM::getEnvironmentManager() {
-    return envmanager;
+OfhDuServer &E2SM::getOfhDuServer() {
+    return ofhDu;
 }
 
 std::shared_ptr<GlobalE2NodeData> const &E2SM::getGlobalE2NodeData() const {

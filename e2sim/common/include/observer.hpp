@@ -1,6 +1,6 @@
 /*****************************************************************************
 #                                                                            *
-# Copyright 2024 Alexandre Huff                                              *
+# Copyright 2025 Alexandre Huff                                              *
 #                                                                            *
 # Licensed under the Apache License, Version 2.0 (the "License");            *
 # you may not use this file except in compliance with the License.           *
@@ -16,20 +16,17 @@
 #                                                                            *
 ******************************************************************************/
 
-#ifndef E2SM_UTILS_HPP
-#define E2SM_UTILS_HPP
+#ifndef OBSERVER_HPP
+#define OBSERVER_HPP
 
-#include <string>
+#include <any>
 
-extern "C" {
-    #include "NR-CGI.h"
-}
-
-namespace e2sm {
-namespace utils {
-    NR_CGI_t *encode_NR_CGI(const std::string &mcc, const std::string &mnc, const uint32_t gnb_id, const uint16_t pci);
-    bool decode_NR_CGI(const NR_CGI_t *nr_cgi, std::string &mcc, std::string &mnc, uint32_t &gnb_id, uint16_t &pci);
-}
-}
+template <typename E> requires std::is_enum_v<E>
+class Observer {
+   public:
+      Observer() {}
+      virtual ~Observer() {}
+      virtual bool update(E event, const std::any &subject)= 0;
+};
 
 #endif

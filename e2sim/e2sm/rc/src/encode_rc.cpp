@@ -500,7 +500,7 @@ void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIden
 
     NR_CGI_t *nr_cgi = (NR_CGI_t *) calloc(1, sizeof(NR_CGI_t));
 
-    nr_cgi->pLMNIdentity = *plmn_id;    // Is this as same as the plmn id from Global gNodeB IE? or from a given UE?
+    nr_cgi->pLMNIdentity = *plmn_id;
     if(plmn_id) free(plmn_id);
 
     if(gnb_id == NULL) {

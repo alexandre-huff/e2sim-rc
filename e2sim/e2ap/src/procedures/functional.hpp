@@ -27,12 +27,12 @@ extern "C" {
     #include "E2AP-PDU.h"
 }
 
-typedef std::function<void(E2AP_PDU_t *pdu, struct timespec *ts)> E2APMessageSender;
+using E2APMessageSender = std::function<void(E2AP_PDU_t *pdu, struct timespec *ts)>;
 
-typedef std::function<e2sim::messages::RICSubscriptionResponse *(e2sim::messages::RICSubscriptionRequest *request)> SubscriptionHandler;
-typedef std::function<e2sim::messages::RICSubscriptionDeleteResponse *(e2sim::messages::RICSubscriptionDeleteRequest *request)> SubscriptionDeleteHandler;
-typedef std::function<e2sim::messages::RICControlResponse *(e2sim::messages::RICControlRequest *request)> ControlHandler;
-typedef std::function<void(e2sim::messages::RICIndication *request)> IndicationHandler;
+using SubscriptionHandler = std::function<e2sim::messages::RICSubscriptionResponse *(e2sim::messages::RICSubscriptionRequest *request)>;
+using SubscriptionDeleteHandler = std::function<e2sim::messages::RICSubscriptionDeleteResponse *(e2sim::messages::RICSubscriptionDeleteRequest *request)>;
+using ControlHandler = std::function<e2sim::messages::RICControlResponse *(e2sim::messages::RICControlRequest *request)>;
+using IndicationHandler = std::function<void(e2sim::messages::RICIndication *request)>;
 
 
 class FunctionalProcedure {

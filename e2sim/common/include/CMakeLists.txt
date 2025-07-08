@@ -24,8 +24,9 @@ target_include_directories ( common_headers INTERFACE
 
 if( DEV_PKG )
     install( FILES
-        global_data.hpp
-        utils.hpp
+        messages.hpp
+        observer.hpp
+        subject.hpp
         DESTINATION ${install_inc}
     )
 endif()

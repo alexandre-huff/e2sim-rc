@@ -23,24 +23,20 @@ int ActionDefinition::getFormat() {
 }
 
 std::shared_ptr<RANParameter> const ActionDefinition::getRanParameter(int paramId) const {
-    const auto &param = parameters.find(paramId);
-    if (param == parameters.end()) {
-        return std::shared_ptr<RANParameter>();
+    for (auto &param : parameters) {
+        if (param->getParamId() == paramId) {
+            return param;
+        }
     }
-    return param->second;
+    return std::shared_ptr<RANParameter>();
 }
 
-bool ActionDefinition::addRanParameter(std::shared_ptr<RANParameter> parameter) {
-    auto ret = parameters.insert({parameter->getParamId(), parameter});
-    return ret.second;
+void ActionDefinition::addRanParameter(std::shared_ptr<RANParameter> parameter) {
+    parameters.emplace_back(parameter);
 }
 
 std::vector<std::shared_ptr<RANParameter>> const ActionDefinition::getRanParameters() const {
-    std::vector<std::shared_ptr<RANParameter>> list;
-    for (auto &param : parameters) {
-        list.emplace_back(param.second);
-    }
-    return std::move(list);
+    return parameters;
 }
 
 bool ActionDefinition::startAction(ric_subscription_info_t info, std::any svc_style_data) {

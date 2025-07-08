@@ -24,6 +24,9 @@
 
 #include "logger.h"
 #include "utils.hpp"
+#include "e2sm_utils.hpp"
+#include "encode_e2ap.hpp"
+#include "rc_param_codec.hpp"
 
 extern "C" {
     #include "UEID-GNB.h"
@@ -36,37 +39,38 @@ extern "C" {
     #include "NR-CGI.h"
 }
 
-HandoverControl::HandoverControl(e2sim::messages::RICControlRequest *request,
-                                common::rc::control_header_fmt1_data &hdr_data,
-                                common::rc::control_message_fmt1_data &msg_data,
-                                std::string open_api_base_url)  :
-                                request(request), headerData(hdr_data), msgData(msg_data) {
+ControlStyle3::ControlStyle3(std::shared_ptr<RICControlProcedure> procedure, std::shared_ptr<GlobalE2NodeData> global_data, OfhDuServer &ofh_du) :
+                            controlProcedure(procedure), ofhDu(ofh_du), globalData(global_data) { }
 
-    api_conf = std::make_shared<org::openapitools::client::api::ApiConfiguration>();
-    api_conf->setBaseUrl(open_api_base_url + "/v1");
-    api_client = std::make_shared<org::openapitools::client::api::ApiClient>(api_conf);
-    open_api = std::make_shared<org::openapitools::client::api::DefaultApi>(api_client);
-}
-
-void HandoverControl::runHandoverControl(e2sim::messages::RICControlResponse *response) {
+void ControlStyle3::runHandoverControl(e2sim::messages::RICControlRequest *request, common::rc::control_header_fmt1_data &hdr_data,
+                            common::rc::control_message_fmt1_data &msg_data, e2sim::messages::RICControlResponse *response) {
     LOGGER_TRACE_FUNCTION_IN
 
     response->succeeded = true;
 
-    std::string imsi = headerData.ue_id.mcc + headerData.ue_id.mnc + headerData.ue_id.msin;
+    std::string imsi = hdr_data.ue_id.mcc + hdr_data.ue_id.mnc + hdr_data.ue_id.msin;
 
-    if (headerData.ric_ControlAction_ID == 1) {
-        for (std::pair<RANParameter_ID_t, RANParameter_Value_t *> &param : msgData.ran_parameters) {
+    if (hdr_data.ric_ControlAction_ID == 1) {
+        for (std::pair<RANParameter_ID_t, RANParameter_ValueType_t *> &param : msg_data.ran_parameters) {
             switch (param.first) {  // RAN Parameter ID
                 case 4: // NR CGI as per 8.4.4.1 in E2SM-RC-R003-v03.00
                 {
-                    RANParameter_Value_t *ranp = param.second;
+                    RANParameter_ValueType_t *ranp = param.second;
 
                     // NR CGI element encoded as OctetString
-                    if (ranp->present == RANParameter_Value_PR_valueOctS) {   // should this be encoded as Octet String?
+                    if (ranp->present == RANParameter_ValueType_PR_ranP_Choice_ElementFalse) {   // should this be encoded as Octet String?
+                        OCTET_STRING_t *p4_data = common::rc::get_ran_parameter_value_data<OCTET_STRING_t>(
+                            ranp->choice.ranP_Choice_ElementFalse->ranParameter_value, RANParameter_Value_PR_valueOctS);
+                        if (!p4_data) {
+                            logger_error("NR CGI is not encoded as %s for Handover Control", asn_DEF_OCTET_STRING.name);
+                            response->succeeded = false;
+                            response->cause.present = Cause_PR_ricRequest;
+                            response->cause.choice.protocol = CauseRICrequest_control_message_invalid;
+                            break;
+                        }
+
                         NR_CGI_t *nr_cgi = NULL;
-                        bool success = common::utils::asn1_decode_and_check(&asn_DEF_NR_CGI, (void **)&nr_cgi,
-                                ranp->choice.valueOctS.buf, ranp->choice.valueOctS.size);
+                        bool success = common::utils::asn1_decode_and_check(&asn_DEF_NR_CGI, (void **)&nr_cgi, p4_data->buf, p4_data->size);
                         if (!success) {
                             logger_error("Unable to decode NR CGI for Handover Control");
                             response->succeeded = false;
@@ -78,53 +82,45 @@ void HandoverControl::runHandoverControl(e2sim::messages::RICControlResponse *re
                         // gNodeB data
                         std::string mcc;
                         std::string mnc;
-                        if (!common::utils::decodePlmnId(&nr_cgi->pLMNIdentity, mcc, mnc)) {
-                            logger_error("Unable to decode PLMN ID from NR CGI for Handover Control");
+                        uint32_t gnb_id;
+                        uint16_t pci;
+                        if (!e2sm::utils::decode_NR_CGI(nr_cgi, mcc, mnc, gnb_id, pci)) {
+                            logger_error("Unable to decode NR CGI for Handover Control");
                             response->succeeded = false;
                             response->cause.present = Cause_PR_ricRequest;
                             response->cause.choice.ricRequest = CauseRICrequest_control_message_invalid;
                             break;
                         }
 
-                        // we do not consider cell here, so the cell value is 0. Thus, NCI = gnbId * 2^(36-29) + cellid
-                        // we leave 7 bits for cellid
-                        uint64_t gnb_id;
-                        gnb_id = (uint64_t)nr_cgi->nRCellIdentity.buf[0] << 32;
-                        gnb_id |= (uint64_t)nr_cgi->nRCellIdentity.buf[1] << 24;
-                        gnb_id |= (uint64_t)nr_cgi->nRCellIdentity.buf[2] << 16;
-                        gnb_id |= (uint64_t)nr_cgi->nRCellIdentity.buf[3] << 8;
-                        gnb_id |= (uint64_t)nr_cgi->nRCellIdentity.buf[4];
+                        e2sim::ofh::OfhMessage msg;
+                        msg.mutable_handover_request()->mutable_ue()->set_imsi(imsi);
+                        msg.mutable_handover_request()->mutable_target_cell()->set_pci(pci);
 
-                        gnb_id = gnb_id >> nr_cgi->nRCellIdentity.bits_unused;
-                        gnb_id = gnb_id / (1 << 7); // we did not consider cellid for now
-                        // TODO check https://nrcalculator.firebaseapp.com/nrgnbidcalc.html
-                        // TODO check https://www.telecomhall.net/t/what-is-the-formula-for-cell-id-nci-in-5g-nr-networks/12623/2
+                        std::shared_ptr<e2sim::ue::UEInfo> ue = globalData->ue_list.getUEInfo(imsi);
+                        if (ue) {
+                            std::unique_ptr<e2sim::messages::RICControlResponse> resp = std::make_unique<e2sim::messages::RICControlResponse>();
+                            resp->ricRequestId = response->ricRequestId;
+                            resp->ranFunctionId = response->ranFunctionId;
+                            resp->callProcessId = response->callProcessId;
 
-                        std::shared_ptr<std::remove_cv<org::openapitools::client::model::_UE__iMSI__handover_put_request>::type> uEIMSIHandoverPutRequest =
-                            std::make_shared<std::remove_cv<org::openapitools::client::model::_UE__iMSI__handover_put_request>::type>();
-                        std::shared_ptr<org::openapitools::client::model::Cell_descriptor> cell =
-                            std::make_shared<org::openapitools::client::model::Cell_descriptor>();
-                        cell->setMcc(mcc);
-                        cell->setMnc(mnc);
-                        cell->setNodebId(gnb_id);
+                            if (ofhDu.send_msg(ue->connectedCell->getSocket(), msg)) {
+                                controlProcedure->put_ctrl_msg(ue->imsi, resp);
 
-                        uEIMSIHandoverPutRequest->setTargetCell(cell);
-
-                        logger_info("Handing over UE ID %s to mcc=%s mnc=%s gnbid=%lu", imsi.c_str(), mcc.c_str(), mnc.c_str(), gnb_id);
-
-                        try {
-                            auto ret = open_api->uEIMSIHandoverPut(imsi, uEIMSIHandoverPutRequest);
-                            auto status = ret.wait();
-
-                        } catch (org::openapitools::client::api::ApiException &ex) {
-                            logger_error("Unable to run Handover Control in UE Manager. Reason = %s", ex.what());
+                            } else {
+                                logger_error("Unable to send Handover Control message to UE id %s", imsi.c_str());
+                                response->succeeded = false;
+                                response->cause.present = Cause_PR_transport;
+                                response->cause.choice.transport = CauseTransport_unspecified;
+                            }
+                        } else {
+                            logger_error("Handover Control Message states an unknown UE imsi=%s (unregistered?)", imsi.c_str());
                             response->succeeded = false;
                             response->cause.present = Cause_PR_ricRequest;
-                            response->cause.choice.ricRequest = CauseRICrequest_control_failed_to_execute;
+                            response->cause.choice.ricRequest = CauseRICrequest_control_message_invalid;
                         }
 
                     } else {
-                        logger_error("NR CGI is not encoded as %s for Handover Control", asn_DEF_OCTET_STRING.name);
+                        logger_error("NR CGI is not an ELEMENT with Key Flag FALSE for Handover Control");
                         response->succeeded = false;
                         response->cause.present = Cause_PR_protocol;
                         response->cause.choice.protocol = CauseProtocol_abstract_syntax_error_falsely_constructed_message;
@@ -138,15 +134,78 @@ void HandoverControl::runHandoverControl(e2sim::messages::RICControlResponse *re
                     logger_warn("RAN Parameter ID %lu not implemented for CONTROL Style 3 and Action ID 1", param.first);
             }
 
-
+            if (response->succeeded == false) {
+                break;  // on error we abort processing the following elements
+            }
         }
 
     } else {
-        logger_error("Control Action ID %d not implemented for E2SM RC Control Header Action Format 1", headerData.ric_ControlAction_ID);
+        logger_error("Control Action ID %d not implemented for E2SM RC Control Header Action Format 1", hdr_data.ric_ControlAction_ID);
         response->succeeded = false;
         response->cause.present = Cause_PR_ricRequest;
         response->cause.choice.ricRequest = CauseRICrequest_action_not_supported;
     }
 
     LOGGER_TRACE_FUNCTION_OUT
+}
+
+bool ControlStyle3::update(e2sim::ofh::MessageTypes event, const std::any &subject) {
+    LOGGER_TRACE_FUNCTION_IN
+    bool success;
+    switch (event) {
+        case e2sim::ofh::MessageTypes::CTRL_RESP:
+        {
+            auto response = std::any_cast<e2sim::ofh::control_response_t>(subject);
+            success = runHandoverControlResponse(response);
+            break;
+        }
+        default:
+            logger_error("Unknown event message type %d to update ControlStyle3 Observer", event);
+            success = false;
+            break;
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+    return success;
+}
+
+bool ControlStyle3::runHandoverControlResponse(e2sim::ofh::control_response_t &response) {
+    LOGGER_TRACE_FUNCTION_IN
+    bool success;
+    std::unique_ptr<e2sim::messages::RICControlResponse> msg = controlProcedure->take_ctrl_msg(response.imsi);
+    if (msg) {
+        E2AP_PDU_t *pdu = nullptr;
+
+        if (response.status) {
+            msg->succeeded = true;
+            std::shared_ptr<e2sim::ue::UEInfo> ue = globalData->ue_list.getUEInfo(response.imsi);
+            if (ue) {
+                std::shared_ptr<Cell> cell = globalData->getCell(response.target_cell);
+                if (cell) {
+                    ue->connectedCell = cell;
+                } else {
+                    logger_error("Unable to update primary cell for UE imsi=%s, leading to inconsistent state. Reason: Cell pci=%u pointed by UE was not found");
+                }
+            } else {
+                logger_error("Unable to update primary cell for UE imsi=%s, leading to inconsistent state. Reason: Response imsi=%u was not found");
+            }
+
+            pdu = encoding::generate_e2ap_control_acknowledge(msg.get());
+        } else {
+            msg->succeeded = false;
+            msg->cause.present = Cause_PR_ricRequest;
+            msg->cause.choice.ricRequest = CauseRICrequest_control_failed_to_execute;
+            pdu = encoding::generate_e2ap_control_failure(msg.get());
+        }
+
+        controlProcedure->sendMessage(pdu);
+
+        success = true;
+    } else {
+        logger_error("Unable to find RICControlMessage correspoding to Handing Off UE Id %s to Cell %d", response.imsi, response.target_cell);
+        success = false;
+    }
+
+    LOGGER_TRACE_FUNCTION_OUT
+    return success;
 }

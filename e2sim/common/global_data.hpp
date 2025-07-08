@@ -25,6 +25,8 @@
 #include <vector>
 #include <memory>
 
+#define GNB_ID_LENGTH 29    // for now we use 29 bits to identify an E2 Node
+
 extern "C" {
     #include "GlobalE2node-ID.h"
     #include "PLMN-Identity.h"
@@ -37,18 +39,30 @@ extern "C" {
  *
  * As per O-RAN.WG4.MP-YANGs-R003-v14.00 -> RU Specific Models/Operations/o-ran-uplane-conf.yang
 */
-class TxReferenceLevel {
+class Cell {
 public:
-    TxReferenceLevel(double tx_gain=1.0) : gain(tx_gain) {};
+    Cell(uint16_t pci, double tx_gain=46.0, int socket=-1) : pci(pci), gain(tx_gain), socket(socket) {};
 
+    /* Set the Cell's TX Reference Level in db */
     void setGain(double tx_gain) {
-        std::lock_guard<std::mutex> guard(gain_lock);
         gain = tx_gain;
     }
 
+    /* Returns the Cell's TX Reference Level in db */
     double getGain() {
-        std::lock_guard<std::mutex> guard(gain_lock);
         return gain;
+    }
+
+    uint16_t getPci() {
+        return pci;
+    }
+
+    void setSocket(int socket) {
+        this->socket = socket;
+    }
+
+    int getSocket() {
+        return socket;
     }
 
 private:
@@ -58,7 +72,7 @@ private:
      * leaf gain {
      *   type decimal64 {
      *     fraction-digits 4;
-     *    }
+     *   }
      *   units dB;
      *   mandatory true;
      *   description
@@ -88,49 +102,55 @@ private:
     // double max;    // Maximum of supported gain reference level in dB
     // double min;    // Minimum of supported gain reference level in dB
 
-    std::mutex gain_lock;   // prevents the multithreaded O1 interface to run into race conditions
+    uint16_t pci;   // Physical Cell Identifier
+    int socket;     // Connection to the corresponding O-RU simulator
 };
 
 namespace e2sim {
 namespace ue {
     struct UEInfo {
         std::string imsi;
-        std::string endpoint;
+        std::shared_ptr<Cell> connectedCell;
     };
 }
 }
 
 class UEList {
 public:
-    void addUE(e2sim::ue::UEInfo &ue);
+    void addUE(std::shared_ptr<e2sim::ue::UEInfo> ue);
     void removeUE(std::string imsi);
-    std::unique_ptr<e2sim::ue::UEInfo> getUEInfo(std::string imsi);
-    std::vector<e2sim::ue::UEInfo> getUEs();
+    std::shared_ptr<e2sim::ue::UEInfo> getUEInfo(std::string imsi);
+    std::vector<std::shared_ptr<e2sim::ue::UEInfo>> getUEs();
 
 private:
-    std::unordered_map<std::string, e2sim::ue::UEInfo> ue_map;  // IMSI, UE data
+    std::unordered_map<std::string, std::shared_ptr<e2sim::ue::UEInfo>> ue_map;  // IMSI, UE data
 
     std::mutex ue_lock; // prevents the multithreaded E2 and O1 interface to run into race conditions
 };
 
 class GlobalE2NodeData {
 public:
-    GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id, std::string ue_mgr_addr);
+    GlobalE2NodeData(std::string mcc, std::string mnc, uint32_t gnb_id);
     ~GlobalE2NodeData();
 
     GlobalE2node_ID_t *getGlobalE2NodeId();
     PLMN_Identity_t *getGlobalE2NodePlmnId();
     BIT_STRING_t *getGlobalE2Node_gNBId();
 
-    TxReferenceLevel txLevel;
+    bool addCell(std::shared_ptr<Cell> cell);
+    void deleteCell(uint16_t pci);
+    std::shared_ptr<Cell> getCell(uint16_t pci);
+    void updateCellTxReferenceLevel(uint16_t pci, double gain);
+    std::vector<std::shared_ptr<Cell>> getCells();
 
     UEList ue_list;
 
     const uint32_t gnbid;
-    const std::string ueMgrAddr;
 
-private:
+    private:
     GlobalE2node_ID_t *globalE2NodeId;
+    std::unordered_map<uint16_t, std::shared_ptr<Cell>> cells;
+    std::mutex cellsLock;
 
 };
 

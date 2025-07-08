@@ -28,9 +28,9 @@ extern "C" {
     #include "RIC-EventTriggerCondition-ID.h"
     #include "TriggerType-Choice-RRCstate-Item.h"
     #include "RANParameter-ID.h"
-    #include "RANParameter-Value.h"
     #include "RIC-Style-Type.h"
     #include "RIC-ControlAction-ID.h"
+    #include "RANParameter-ValueType.h"
 }
 
 namespace common {
@@ -82,7 +82,7 @@ struct control_header_fmt1_data {
 };
 
 struct control_message_fmt1_data {
-    std::vector<std::pair<RANParameter_ID_t, RANParameter_Value_t *>> ran_parameters;
+    std::vector<std::pair<RANParameter_ID_t, RANParameter_ValueType_t *>> ran_parameters;
 };
 
 }
