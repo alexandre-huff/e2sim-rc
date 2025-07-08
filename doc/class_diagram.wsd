@@ -1,0 +1,135 @@
+@startuml class_diagram
+' PlantUML class Diagram
+' Run container with "docker run -d -p 8080:8080 plantuml/plantuml-server:jetty"
+
+skinparam TitleFontSize 20
+title E2Sim Class Diagram (High Level)
+
+skinparam LegendBorderThickness 0
+skinparam LegendBackgroundColor none
+legend bottom right
+"Sequence Of" is an ordered list implemented using a Vector.
+"Sequence" is a collection of types grouped together implemented using a Struct.
+end legend
+
+class E2AP {
+    +getRanFunction(ranFuncId: int)
+}
+abstract class GlobalProcedure <<abstract>> {
+    +runProcedure()
+}
+class E2Setup
+class ErrorIndication
+class E2ConnectionUpdate
+class RANFunction {
+    -ranFunctionId
+    -ranFuncionRevision
+}
+abstract class E2SM <<abstract>> {
+    +addProcedure(): bool
+    +addService(): bool
+}
+abstract class FunctionalProcedure <<abstract>>
+class RICSubscription {
+    +RICSubscription(handler: SubHandler)
+    +getHandler(): SubHandler
+}
+class RICSubscriptionDelete {
+    +getHandler(): Handler
+}
+class RICIndication {
+    +getHandler(): Handler
+}
+class RICControl {
+    +getHandler(): Handler
+}
+together {
+    class E2SM_KPM
+    class E2SM_RC
+}
+abstract class SubscriptionAction <<abstract>>
+class SubscriptionManager {
+    -subscriptions: Map<SubscriptionAction>
+    +addSubscriptionAction()
+    +delSubscriptionAction()
+    +delSubscription()
+}
+class Observervable
+class Observer
+class ThreadedAction
+abstract class E2SMService <<abstract>> {
+    -styles: Map
+    +addStyle()
+}
+class ServiceStyle {
+    -action: Vector
+    -trigger: Vector
+    +addAction()
+    +addTrigger()
+}
+class TriggerDefinition {
+    -styleId: int
+    -name: string
+}
+class ActionDefinition {
+    -parameters: Vector
+    -format: int
+    -startStopHandler: Handler
+    -controlHandler: Handler
+    +startAction(void *data)
+    +stopAction(void *data)
+    +runControlAction()
+}
+class RANParameter {
+    -id: int
+    -name: string
+    -type: Enum
+    -subParameters: Vector
+}
+class ReportService {
+    +getReportCallback()
+}
+class InsertService {
+    +getInsertCallback()
+}
+class ControlService {
+    +getControlCallback()
+}
+class PolicyService {
+    +getPolicyCallback()
+}
+class QueryService {
+    +getQueryCallback()
+}
+
+E2AP *-- GlobalProcedure
+GlobalProcedure <|-- E2Setup
+GlobalProcedure <|-- ErrorIndication
+GlobalProcedure <|-- E2ConnectionUpdate
+E2AP "1" o-- "*" RANFunction
+RANFunction *-- "1   " E2SM
+FunctionalProcedure --o E2SM
+RICSubscription --|> FunctionalProcedure
+RICSubscriptionDelete --|> FunctionalProcedure
+RICIndication --|> FunctionalProcedure
+RICControl --|> FunctionalProcedure
+E2SM <|-- E2SM_KPM
+E2SM <|-- E2SM_RC
+SubscriptionManager <.. E2SM
+SubscriptionManager o-- SubscriptionAction
+SubscriptionAction <|-- Observervable
+SubscriptionAction <|-- ThreadedAction
+Observervable  "1" -- "*" Observer
+E2SM o-- E2SMService
+E2SMService <|-- ReportService
+E2SMService <|-- InsertService
+E2SMService <|-- ControlService
+E2SMService <|-- PolicyService
+E2SMService <|-- QueryService
+ServiceStyle "*" --o E2SMService
+TriggerDefinition "*" --o ServiceStyle
+ActionDefinition " * " --o ServiceStyle
+ActionDefinition o-- " *   " RANParameter
+RANParameter "1" o-- "0..*" RANParameter
+
+@enduml
