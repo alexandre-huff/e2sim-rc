@@ -601,7 +601,7 @@ void ReportStyle4::encode_and_send_report_msg(std::vector<common::rc::indication
 
     E2AP_PDU_t *pdu = encoding::generate_e2ap_indication_pdu(indication_msg);
 
-    logger_info("Sending RIC Indication report message. Sequence Number %ld", seqid);
+    logger_debug("Sending RIC Indication report message. Sequence Number %ld", seqid);
 
     ricIndication->sendMessage(pdu, NULL);   // we don't want to track timestamps here
 

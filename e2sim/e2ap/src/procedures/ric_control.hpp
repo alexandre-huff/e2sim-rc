@@ -54,7 +54,6 @@ private:
     std::condition_variable cond;
     std::thread cleanup_th;
 
-    // static inline uint32_t encode_ric_request_id(uint16_t ric_requestor_id, uint16_t ric_instance_id); // FIXME remove
     void cleanup();
 };
 

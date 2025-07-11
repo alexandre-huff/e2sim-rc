@@ -367,9 +367,10 @@ void OfhDuServer::handle_tx_reference_level_response(const e2sim::ofh::TxReferen
     LOGGER_TRACE_FUNCTION_IN
 
     if (msg.status() == true) {
-        logger_info("Successfuly set Transmission Reference Level of Cell pci=%u to %.4f db", msg.cell().pci(), msg.cell().gain());
+        globalData->updateCellTxReferenceLevel(msg.cell().pci(), msg.cell().gain());
+        logger_info("Successfuly set Transmission Reference Level of Cell pci=%u to %.4f dBm", msg.cell().pci(), msg.cell().gain());
     } else {
-        logger_error("Unable to set Transmission Reference Level of Cell pci=%u to %.4f db. Reason: %s", msg.cell().pci(), msg.cell().gain(), msg.error());
+        logger_error("Unable to set Transmission Reference Level of Cell pci=%u to %.4f dBm. Reason: %s", msg.cell().pci(), msg.cell().gain(), msg.error());
     }
 
     // TODO needs implementation of observers. For now we assume all O1 requests of TX Reference Level are handled successfuly.

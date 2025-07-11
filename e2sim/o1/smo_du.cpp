@@ -20,12 +20,6 @@
 #include "logger.h"
 #include "utils.hpp"
 
-/*
-    This API should be rewriten according to our needs, but for now using it as it is
-    WARNING: can break on submodule updates as it is auto-generates
-*/
-// #include <ue_client/api/DefaultApi.h>
-
 void handle_error(pplx::task<void>& t, const utility::string_t msg) {
     try {
         t.get();
@@ -38,7 +32,7 @@ void handle_error(pplx::task<void>& t, const utility::string_t msg) {
     Handles O1 requests to change tx gain from O-RU
 
     Expects:
-    {gain: double}
+    {pci: int, gain: double}
 
     Replies HTTP status code 204 on success
 */
@@ -63,42 +57,6 @@ void O1Handler::post_tx_gain(web::http::http_request request) {
                     ofhDu.send_msg(socket, msg);
                 }
 
-                // std::shared_ptr<org::openapitools::client::api::ApiConfiguration> api_conf =
-                //     std::make_shared<org::openapitools::client::api::ApiConfiguration>();
-                // api_conf->setBaseUrl(globalE2NodeData->ueMgrAddr + "/v1");
-                // std::shared_ptr<org::openapitools::client::api::ApiClient> client =
-                //     std::make_shared<org::openapitools::client::api::ApiClient>(api_conf);
-
-                // org::openapitools::client::api::DefaultApi api(client);
-                // std::shared_ptr<org::openapitools::client::model::_cell__gnb_id__power_put_request> cellGnbIdPowerPutRequest =
-                //     std::make_shared<org::openapitools::client::model::_cell__gnb_id__power_put_request>();
-                // cellGnbIdPowerPutRequest->setTargetPower(gain);
-
-                // PLMN_Identity_t *plmn = globalE2NodeData->getGlobalE2NodePlmnId();
-                // std::string mcc;
-                // std::string mnc;
-                // common::utils::decodePlmnId(plmn, mcc, mnc);
-                // ASN_STRUCT_FREE(asn_DEF_PLMN_Identity, plmn);
-
-                // std::shared_ptr<org::openapitools::client::model::Cell_descriptor> cellDescriptor =
-                //     std::make_shared<org::openapitools::client::model::Cell_descriptor>();
-                // cellDescriptor->setMcc(mcc);
-                // cellDescriptor->setMnc(mnc);
-                // cellDescriptor->setNodebId(globalE2NodeData->gnbid);
-                // cellGnbIdPowerPutRequest->setTargetCell(cellDescriptor);
-
-                // try {
-                //     auto ret = api.cellGnbIdPowerPut(globalE2NodeData->gnbid, cellGnbIdPowerPutRequest);
-                //     auto status = ret.wait();
-
-                // } catch (org::openapitools::client::api::ApiException &ex) {
-                //     logger_error("unable to set TX Power in UE Manager. Reason = %s", ex.what());
-                //     throw;
-                // }
-
-                this->globalE2NodeData->updateCellTxReferenceLevel(pci, gain);
-                logger_info("RESTCONF: Transmission gain set to %.4lf", gain);
-
                 request.reply(web::http::status_codes::NoContent)
                     .then([](pplx::task<void> t) {
                         handle_error(t, "handle reply exception");
@@ -121,7 +79,7 @@ void O1Handler::post_tx_gain(web::http::http_request request) {
     Handles O1 requests to retrieve tx gain from O-RU
 
     Replies
-    {gain: double}
+    [{pci: int, gain: double}, {pci: int, gain: double}]
 
     Replies HTTP status code 200 on success
 */
