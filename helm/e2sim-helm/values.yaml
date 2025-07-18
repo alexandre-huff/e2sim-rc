@@ -2,16 +2,15 @@ affinity: {}
 fullnameOverride: ''
 image:
   args:
-    e2term: 10.43.0.225
+    e2term: service-ricplt-e2term-r4-e2term-sctp-alpha.ricplt.svc.cluster.local
     mcc: 724
     mnc: 11
-    nodebid: 2
-    port: 30001
-    ue_mgr: http://envman-service.ricplt.svc.cluster.local:8080
+    nodebid: 1
+    port: 36422
   command: e2sim
   pullPolicy: Always
   repository: zanattabruno/e2sim-rc
-  tag: 'TNSM-24'
+  tag: 'TNSM-25'
 nameOverride: ''
 #nodeSelector:
   #kubernetes.io/hostname: node2

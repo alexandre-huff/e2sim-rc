@@ -6,7 +6,7 @@ where:
     -h  show this help text
     -r  set repotag | default zanattabruno:latest"
 
-repotag=zanattabruno/e2sim-rc:TNSM-24
+repotag=zanattabruno/e2sim-rc:TNSM-25
 
 if [ "$*" == "" ]; then
     echo "No flag is passed using default repotag $repotag"
