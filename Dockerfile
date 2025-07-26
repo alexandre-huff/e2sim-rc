@@ -67,25 +67,22 @@ RUN apt-get update \
 # Stage to build E2SM-RC
 FROM e2sim-base AS e2sim-rc
 
-COPY . /playpen/
-
-WORKDIR /playpen/e2sim
-
-RUN git submodule update --init --recursive --recommend-shallow
-
-# build and install protobuf first
 WORKDIR /usr/local/src
 RUN git clone -b v29.0 https://github.com/protocolbuffers/protobuf.git
 WORKDIR /usr/local/src/protobuf
 RUN git submodule update --init --no-recommend-shallow
 RUN mkdir build && cd build \
-	&& cmake -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_LIBPROTOC=ON .. \
-	&& make -j 16 && make install && ldconfig
+    && cmake -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_LIBPROTOC=ON .. \
+    && make -j 4 && make install && ldconfig
+
+COPY . /playpen/
+
+WORKDIR /playpen/e2sim
 
 # build and install submodule dependencies
-WORKDIR /playpen/e2sim
-RUN cd 3rdparty/prometheus-cpp/ && mkdir build && cd build \
-    && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 16  && make install && ldconfig
+RUN git submodule update --init --recursive 3rdparty/prometheus-cpp \
+    && cd 3rdparty/prometheus-cpp/ && mkdir build && cd build \
+    && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig
 
 # build and install the e2sim-rc application
 RUN mkdir build && \
@@ -101,15 +98,12 @@ FROM ubuntu:22.04
 
 RUN apt-get update \
 	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-	libcurl4-openssl-dev \
 	libcpprest-dev \
 	ca-certificates \
 	&& apt-get clean
 
-COPY --from=e2sim-rc /usr/local/bin /usr/local/bin
-COPY --from=e2sim-rc /usr/local/lib /usr/local/lib
+COPY --from=e2sim-rc /usr/local/bin/e2sim /usr/local/bin
 
 RUN ldconfig
 
-# CMD e2sim-rc 10.110.102.29 -p 36422
 CMD ["tail", "-f", "/dev/null"]

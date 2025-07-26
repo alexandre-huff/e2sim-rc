@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include <any>
 #include <memory>
+#include <signal.h>
 
 #include "logger.h"
 #include "ofh_data.hpp"
@@ -61,6 +62,15 @@ bool OfhDuServer::start() {
         return false;
     }
 
+    // set socket timeout to shutdown gracefully
+    struct timeval timeout;
+    timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+    if (setsockopt(serverSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        logger_error("Unable to set server socket options %d. %s", port, strerror(errno));
+        return false;
+    }
+
     listener_th = std::thread(&OfhDuServer::listener, this);
 
     logger_info("OFH DU Server listening on port %d", port);
@@ -79,6 +89,12 @@ void OfhDuServer::listener() {
     while (ok2run) {
         clientSocket = accept(serverSocket, nullptr, nullptr);
         if(clientSocket == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+              continue;
+            }
+            if (errno == EINTR) {
+                break;
+            }
             logger_error("Unable to accept a new OFH socket connection. Exiting... %s", strerror(errno));
             break;
         }
@@ -104,6 +120,15 @@ void OfhDuServer::client_handler(int socket) {
 
     while (ok2run) {
         ssize_t recv_len = recv(socket, &length, sizeof(length), 0); //receive message length from the socket
+        if(recv_len == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+              continue;
+            }
+            if (errno == EINTR) {
+                break;
+            }
+        }
+
         if (recv_len > 0) {
             length = ntohl(length); // network byte order to host byte order
 
@@ -122,6 +147,15 @@ void OfhDuServer::client_handler(int socket) {
             recv_len = 0;
             do {
                 ssize_t len = recv(socket, data+recv_len, length-recv_len, 0); // receive the message itself from the socket
+                if(len == -1) {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    continue;
+                    }
+                    if (errno == EINTR) {
+                        break;
+                    }
+                }
+
                 recv_len += len;
 
                 if (recv_len == length) {
