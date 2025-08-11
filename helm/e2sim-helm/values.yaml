@@ -9,11 +9,11 @@ image:
     port: 36422
   command: e2sim
   pullPolicy: Always
-  repository: zanattabruno/e2sim-rc
+  repository: registry-docker-registry.registry.svc.cluster.local:5000/e2sim-rc
   tag: 'TNSM-25'
 nameOverride: ''
-#nodeSelector:
-  #kubernetes.io/hostname: node2
+nodeSelector:
+  kubernetes.io/hostname: node3
 podAnnotations: {}
 podSecurityContext: {}
 replicaCount: 1
