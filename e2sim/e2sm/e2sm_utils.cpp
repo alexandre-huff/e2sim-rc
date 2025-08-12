@@ -33,7 +33,8 @@ NR_CGI_t *e2sm::utils::encode_NR_CGI(const std::string& mcc, const std::string& 
         return nullptr;
     }
 
-    if (pci > (1 << (36 - GNB_ID_LENGTH) - 1)) {
+    // Max PCI is all the remaining bits after gNB ID in the 36-bit NCI: (1 << (36 - GNB_ID_LENGTH)) - 1
+    if (pci > ((1ULL << (36 - GNB_ID_LENGTH)) - 1)) {
         logger_error("PCI value cannot be higher than %d bits to encode NR CGI", 36 - GNB_ID_LENGTH);
         return nullptr;
     }
@@ -53,7 +54,7 @@ NR_CGI_t *e2sm::utils::encode_NR_CGI(const std::string& mcc, const std::string& 
     nr_cgi->nRCellIdentity.size = 5;
     nr_cgi->nRCellIdentity.bits_unused = 4; // 40 - 4 = 36 bits
     // Taking into account that GNB_ID Length is 29 bits, we have the following formula: NCI = gnbId * 2^(36-29) + cellid
-    // we leave 7 bits for cellid (pci) as long as GNB_ID length is 29 bits
+    // we leave (36 - GNB_ID_LENGTH) bits for cellid (pci); with default GNB_ID_LENGTH=29, that's 7 bits (0..127)
     // uint64_t nci = gnb_id << (36 - GNB_ID_LENGTH) + pci;
     uint64_t nci = (gnb_id << (36 - GNB_ID_LENGTH)) | pci;
     // Source: 3GPP TS 38.413, Sections 9.3.1.6 and 9.3.1.7
@@ -101,7 +102,8 @@ bool e2sm::utils::decode_NR_CGI(const NR_CGI_t *nr_cgi, std::string &mcc, std::s
 
     // bit rotation based on 3GPP TS 38.413, Sections 9.3.1.6 and 9.3.1.7
     nci = nci >> nr_cgi->nRCellIdentity.bits_unused;    // first, we have to rotate unused bits to the right
-    pci = nci & (36 - GNB_ID_LENGTH);                   // extract only the remaining bits from cell id
+    // Mask out only the remaining (36 - GNB_ID_LENGTH) bits to get PCI
+    pci = static_cast<uint16_t>(nci & ((1ULL << (36 - GNB_ID_LENGTH)) - 1));
     gnb_id = nci >> (36 - GNB_ID_LENGTH);
 
     if (gnb_id > ((1 << GNB_ID_LENGTH) - 1)) {
