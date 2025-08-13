@@ -23,6 +23,7 @@
 #include <any>
 #include <memory>
 #include <signal.h>
+#include <cstring>
 
 #include "logger.h"
 #include "ofh_data.hpp"
@@ -35,7 +36,9 @@ OfhDuServer::OfhDuServer(int port, std::shared_ptr<GlobalE2NodeData> global_data
 }
 
 OfhDuServer::~OfhDuServer() {
-    listener_th.join();
+    if (listener_th.joinable()) {
+        listener_th.join();
+    }
     logger_force(LOGGER_INFO, "OFH DU Server has finished");
 }
 
@@ -119,121 +122,150 @@ void OfhDuServer::client_handler(int socket) {
     e2sim::ofh::OfhMessage response;
 
     while (ok2run) {
-        ssize_t recv_len = recv(socket, &length, sizeof(length), 0); //receive message length from the socket
-        if(recv_len == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-              continue;
+        // 1) Read exactly 4 bytes for the length prefix (big-endian)
+        uint8_t lenbuf[sizeof(uint32_t)];
+        size_t got = 0;
+        while (ok2run && got < sizeof(uint32_t)) {
+            ssize_t r = recv(socket, lenbuf + got, sizeof(uint32_t) - got, 0);
+            if (r > 0) {
+                got += static_cast<size_t>(r);
+                continue;
             }
-            if (errno == EINTR) {
+            if (r == 0) { // peer closed
+                logger_info("Connection closed by remote peer");
+                goto client_cleanup;
+            }
+            // r < 0
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                // try again unless we're stopping
+                if (!ok2run) goto client_cleanup;
+                continue;
+            }
+            logger_error("recv error while reading header: %s", strerror(errno));
+            goto client_cleanup;
+        }
+
+        // Convert to host order
+        memcpy(&length, lenbuf, sizeof(uint32_t));
+        length = ntohl(length);
+
+        // 2) Sanity checks for length
+        // Treat zero-length as a keepalive/no-op (some clients may send this)
+        // Reject overly large messages to avoid memory abuse and resync issues
+        const uint32_t MAX_MSG = 16 * 1024 * 1024; // 16MB cap (adjust as needed)
+        if (length == 0) {
+            logger_debug("Received zero-length frame (keepalive). Ignoring.");
+            continue; // back to read next header
+        }
+        if (length > MAX_MSG) {
+            logger_error("OFH receive error: invalid message length: %u", length);
+            goto client_cleanup;
+        }
+
+        logger_debug("Receiving a message of %u bytes", length);
+
+        // 3) Ensure buffer capacity
+        if (length > data_len) {
+            uint8_t *temp = (uint8_t *) realloc(data, length);
+            if (temp == NULL) {
+                logger_error("Unable to reallocate memory to receive message, exiting thread, %s", strerror(errno));
+                goto client_cleanup;
+            }
+            data_len = length;
+            data = temp;
+        }
+
+        // 4) Read exactly 'length' bytes of payload
+        size_t recv_len = 0;
+        while (ok2run && recv_len < length) {
+            ssize_t r = recv(socket, data + recv_len, length - recv_len, 0);
+            if (r > 0) {
+                recv_len += static_cast<size_t>(r);
+                continue;
+            }
+            if (r == 0) {
+                logger_info("Connection closed by remote peer");
+                goto client_cleanup;
+            }
+            // r < 0
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                if (!ok2run) goto client_cleanup;
+                continue;
+            }
+            logger_error("recv error while reading payload: %s", strerror(errno));
+            goto client_cleanup;
+        }
+
+        // 5) Parse and handle message
+        request.Clear();
+        response.Clear();
+
+        if (!request.ParseFromArray(data, length)) {
+            logger_error("Unable to parse %s from socket", request.GetTypeName().c_str());
+            response.mutable_registration_response()->set_status(false);
+            send_msg(socket, response);
+            continue;
+        }
+
+        logger_debug("Received OFH Message:\n%s", request.DebugString().c_str());
+
+        switch (request.type_case()) {
+            case e2sim::ofh::OfhMessage::kRegistrationRequest:
+                handle_registration_request(request.registration_request(), response.mutable_registration_response());
+                send_msg(socket, response);
                 break;
-            }
+
+            case e2sim::ofh::OfhMessage::kDeregistrationRequest:
+                handle_deregistration_request(request.deregistration_request(), response.mutable_deregistration_response());
+                send_msg(socket, response);
+                break;
+
+            case e2sim::ofh::OfhMessage::kMetricsRequest:
+                handle_metrics_request(request.metrics_request());
+                break;
+
+            case e2sim::ofh::OfhMessage::kHandoverResponse:
+                handle_handover_response(request.handover_response());
+                break;
+
+            case e2sim::ofh::OfhMessage::kTxReferenceLevelResponse:
+                handle_tx_reference_level_response(request.tx_reference_level_response());
+                break;
+
+            case e2sim::ofh::OfhMessage::kRuSetupRequest:
+                handle_setup_request(socket, request.ru_setup_request(), response.mutable_ru_setup_response());
+                send_msg(socket, response);
+                break;
+
+            case e2sim::ofh::OfhMessage::kRuTeardownRequest:
+                handle_teardown_request(request.ru_teardown_request(), response.mutable_ru_teardown_response());
+                send_msg(socket, response);
+                break;
+
+            case e2sim::ofh::OfhMessage::kHeartbeat:
+                // No-op: used to keep the TCP connection alive
+                logger_debug("Received Heartbeat ts_ms=%llu", (unsigned long long)request.heartbeat().ts_ms());
+                break;
+
+            case e2sim::ofh::OfhMessage::TYPE_NOT_SET:
+                logger_warn("No %s field was set by remote peer", request.GetTypeName().c_str());
+                continue;
+                break;
+
+            default:
+                logger_error("Unexpected %s message type %d. Should we receive it?", request.GetTypeName().c_str(), request.type_case());
+                break;
         }
 
-        if (recv_len > 0) {
-            length = ntohl(length); // network byte order to host byte order
+    }
 
-            logger_debug("Receiving a message of %u bytes", length);
-
-            if (length > data_len) { // checking if we can store the received data
-                uint8_t *temp = (uint8_t *) realloc(data, length);
-                if (temp == NULL) {
-                    logger_error("Unable to reallocate memory to receive message, exiting thread, %s", strerror(errno));
-                    break;
-                }
-                data_len = length;
-                data = temp;
-            }
-
-            recv_len = 0;
-            do {
-                ssize_t len = recv(socket, data+recv_len, length-recv_len, 0); // receive the message itself from the socket
-                if(len == -1) {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    continue;
-                    }
-                    if (errno == EINTR) {
-                        break;
-                    }
-                }
-
-                recv_len += len;
-
-                if (recv_len == length) {
-                    request.Clear();
-                    response.Clear();
-
-                    if (!request.ParseFromArray(data, length)) {
-                        logger_error("Unable to parse %s from socket", request.GetTypeName().c_str());
-                        response.mutable_registration_response()->set_status(false);
-                        send_msg(socket, response);
-                        continue;
-                    }
-
-                    logger_debug("Received OFH Message:\n%s", request.DebugString().c_str());
-
-                    switch (request.type_case()) {
-                        case e2sim::ofh::OfhMessage::kRegistrationRequest:
-                            handle_registration_request(request.registration_request(), response.mutable_registration_response());
-                            send_msg(socket, response);
-                            break;
-
-                        case e2sim::ofh::OfhMessage::kDeregistrationRequest:
-                            handle_deregistration_request(request.deregistration_request(), response.mutable_deregistration_response());
-                            send_msg(socket, response);
-                            break;
-
-                        case e2sim::ofh::OfhMessage::kMetricsRequest:
-                            handle_metrics_request(request.metrics_request());
-                            break;
-
-                        case e2sim::ofh::OfhMessage::kHandoverResponse:
-                            handle_handover_response(request.handover_response());
-                            break;
-
-                        case e2sim::ofh::OfhMessage::kTxReferenceLevelResponse:
-                            handle_tx_reference_level_response(request.tx_reference_level_response());
-                            break;
-
-                        case e2sim::ofh::OfhMessage::kRuSetupRequest:
-                            handle_setup_request(socket, request.ru_setup_request(), response.mutable_ru_setup_response());
-                            send_msg(socket, response);
-                            break;
-
-                        case e2sim::ofh::OfhMessage::kRuTeardownRequest:
-                            handle_teardown_request(request.ru_teardown_request(), response.mutable_ru_teardown_response());
-                            send_msg(socket, response);
-                            break;
-
-                        case e2sim::ofh::OfhMessage::TYPE_NOT_SET:
-                            logger_warn("No %s field was set by remote peer", request.GetTypeName().c_str());
-                            continue;
-                            break;
-
-                        default:
-                            logger_error("Unexpected %s message type %d. Should we receive it?", request.GetTypeName().c_str(), request.type_case());
-                            break;
-                    }
-
-                } else if (len == 0) {
-                    logger_info("Connection closed by remote peer");
-                    break;
-
-                } else if (len == -1) { // on error
-                    logger_error("recv error: %s", strerror(errno)); // can change errno
-                    break;
-                }
-
-            } while (recv_len < length);
-
-        } else if (recv_len == 0) {
-            logger_info("Connection closed by remote peer");
-            break;
-
-        } else { // on error
-            logger_error("recv error: %s", strerror(errno)); // can change errno
-            break;
+client_cleanup:
+    // Cleanup: mark any cells bound to this socket as disconnected
+    for (std::shared_ptr<Cell> &cell : globalData->getCells()) {
+        if (cell && cell->getSocket() == socket) {
+            logger_info("Marking Cell pci=%u as disconnected (socket %d closed)", cell->getPci(), socket);
+            cell->setSocket(-1);
         }
-
     }
 
     close(socket);
@@ -245,21 +277,47 @@ void OfhDuServer::client_handler(int socket) {
 }
 
 bool OfhDuServer::send_msg(int socket, const e2sim::ofh::OfhMessage &msg) {
+    if (socket < 0) {
+        logger_error("Unable to send OFH message: invalid socket (%d)", socket);
+        return false;
+    }
     std::string data;
     if (!msg.SerializeToString(&data)) {
         logger_error("Unable to serialize OFH message");
         return false;
     }
 
-    uint32_t data_len = htonl(data.length());
-    int sent_len = send(socket, (void *)&data_len, sizeof(uint32_t), 0);
-    if(sent_len == -1) {
+    // Send 4-byte big-endian length and then the payload, handling partial sends
+    uint32_t net_len = htonl(static_cast<uint32_t>(data.size()));
+    const uint8_t *hdr = reinterpret_cast<const uint8_t *>(&net_len);
+    size_t sent = 0;
+    while (sent < sizeof(uint32_t)) {
+        ssize_t n = send(socket, hdr + sent, sizeof(uint32_t) - sent,
+#ifdef MSG_NOSIGNAL
+                         MSG_NOSIGNAL
+#else
+                         0
+#endif
+                         );
+        if (n > 0) { sent += static_cast<size_t>(n); continue; }
+        if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) { continue; }
         logger_error("Unable to send OFH message size. Cause: %s", strerror(errno));
         return false;
     }
 
-    sent_len = send(socket, (void*)data.c_str(), data.length(), 0);
-    if(sent_len == -1) {
+    const uint8_t *buf = reinterpret_cast<const uint8_t *>(data.data());
+    size_t to_send = data.size();
+    sent = 0;
+    while (sent < to_send) {
+        ssize_t n = send(socket, buf + sent, to_send - sent,
+#ifdef MSG_NOSIGNAL
+                         MSG_NOSIGNAL
+#else
+                         0
+#endif
+                         );
+        if (n > 0) { sent += static_cast<size_t>(n); continue; }
+        if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) { continue; }
         logger_error("Unable to send OFH message data. Cause: %s", strerror(errno));
         return false;
     }
@@ -415,18 +473,22 @@ void OfhDuServer::handle_tx_reference_level_response(const e2sim::ofh::TxReferen
 void OfhDuServer::handle_setup_request(int socket, const e2sim::ofh::RadioUnitSetupRequestMessage &request, e2sim::ofh::RadioUnitSetupResponseMessage *response) {
     LOGGER_TRACE_FUNCTION_IN
     response->set_status(true);
-    std::stringstream ss;
     for (auto &cell : request.cells()) {
-        std::shared_ptr<Cell> new_cell = std::make_shared<Cell>(cell.pci(), cell.gain(), socket);
-        if (!globalData->addCell(new_cell)) {
-            ss << cell.pci() << " ";
-            response->set_status(false);
+        // If cell already exists, update its socket and gain; else add it.
+        std::shared_ptr<Cell> existing = globalData->getCell(cell.pci());
+        if (existing) {
+            existing->setSocket(socket);
+            existing->setGain(cell.gain());
+            logger_info("Updated existing Cell pci=%u with new socket and gain %.4f dB", cell.pci(), cell.gain());
+        } else {
+            std::shared_ptr<Cell> new_cell = std::make_shared<Cell>(cell.pci(), cell.gain(), socket);
+            if (!globalData->addCell(new_cell)) {
+                logger_error("Unexpected failure to add Cell pci=%u during RU setup", cell.pci());
+                response->set_status(false);
+            } else {
+                logger_info("Added new Cell pci=%u with gain %.4f dB", cell.pci(), cell.gain());
+            }
         }
-    }
-
-    if (response->status() == false) {
-        ss << "have already been configured.";
-        response->set_error("Unable to setup all requested cells. Reason: Cells " + ss.str());
     }
 
     LOGGER_TRACE_FUNCTION_OUT

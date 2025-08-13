@@ -52,9 +52,18 @@ void O1Handler::post_tx_gain(web::http::http_request request) {
                 msg.mutable_tx_reference_level_request()->mutable_cell()->set_gain(gain);
                 msg.mutable_tx_reference_level_request()->mutable_cell()->set_pci(pci);
 
-                int socket = globalE2NodeData->getCell(pci)->getSocket();
-                if (socket != -1) {
-                    ofhDu.send_msg(socket, msg);
+                auto cellPtr = globalE2NodeData->getCell(pci);
+                if (!cellPtr) {
+                    logger_error("O1: Unknown Cell pci=%d for TX gain update", pci);
+                } else {
+                    int socket = cellPtr->getSocket();
+                    if (socket >= 0) {
+                        if (!ofhDu.send_msg(socket, msg)) {
+                            logger_error("O1: Failed to send TX gain request to pci=%d", pci);
+                        }
+                    } else {
+                        logger_error("O1: Cell pci=%d has no active socket to RU", pci);
+                    }
                 }
 
                 request.reply(web::http::status_codes::NoContent)

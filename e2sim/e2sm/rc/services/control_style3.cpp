@@ -103,7 +103,18 @@ void ControlStyle3::runHandoverControl(e2sim::messages::RICControlRequest *reque
                             resp->ranFunctionId = response->ranFunctionId;
                             resp->callProcessId = response->callProcessId;
 
-                            if (ofhDu.send_msg(ue->connectedCell->getSocket(), msg)) {
+                            auto cellPtr = ue->connectedCell;
+                            if (!cellPtr) {
+                                logger_error("UE %s has no connected cell set", imsi.c_str());
+                                response->succeeded = false;
+                                response->cause.present = Cause_PR_transport;
+                                response->cause.choice.transport = CauseTransport_unspecified;
+                            } else if (cellPtr->getSocket() < 0) {
+                                logger_error("UE %s connected cell pci=%u has invalid socket", imsi.c_str(), cellPtr->getPci());
+                                response->succeeded = false;
+                                response->cause.present = Cause_PR_transport;
+                                response->cause.choice.transport = CauseTransport_unspecified;
+                            } else if (ofhDu.send_msg(cellPtr->getSocket(), msg)) {
                                 controlProcedure->put_ctrl_msg(ue->imsi, resp);
 
                             } else {

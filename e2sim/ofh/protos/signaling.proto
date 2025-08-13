@@ -34,7 +34,14 @@ message OfhMessage {
     RadioUnitSetupResponseMessage ru_setup_response = 12;
     RadioUnitTearDownRequestMessage ru_teardown_request = 13;
     RadioUnitTearDownResponseMessage ru_teardown_response = 14;
+    Heartbeat heartbeat = 15;
   }
+}
+
+// Lightweight keepalive message. Server performs no-op on receipt but uses it to keep the connection open.
+message Heartbeat {
+  // Optional unix epoch milliseconds when the client sent the heartbeat.
+  uint64 ts_ms = 1;
 }
 
 message RadioUnitSetupRequestMessage {
