@@ -47,6 +47,8 @@ private:
 
     void listener();
     void client_handler(int socket);
+    // Marks any Cell using this socket as disconnected and closes the fd.
+    void mark_and_close_socket(int socket);
     void handle_registration_request(const e2sim::ofh::UeRegistrationRequestMessage &request, e2sim::ofh::UeRegistrationResponseMessage *response);
     void handle_deregistration_request(const e2sim::ofh::UeDeregistrationRequestMessage &request, e2sim::ofh::UeDeregistrationResponseMessage *response);
     void handle_metrics_request(const e2sim::ofh::UeMetricsRequestMessage &msg);

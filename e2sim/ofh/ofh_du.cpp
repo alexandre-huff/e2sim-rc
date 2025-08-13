@@ -24,10 +24,28 @@
 #include <memory>
 #include <signal.h>
 #include <cstring>
+#include <fcntl.h>
+#include <string>
+#include <cstdio>
+#include <unistd.h>
 
 #include "logger.h"
 #include "ofh_data.hpp"
 #include "messages.hpp"
+
+// Helper to log the first bytes of a buffer as hex (space-separated, capped)
+static std::string hex_prefix(const uint8_t *buf, size_t len, size_t max = 16) {
+    size_t n = len < max ? len : max;
+    std::string out;
+    out.reserve(n * 3 + 3);
+    char tmp[4];
+    for (size_t i = 0; i < n; ++i) {
+        snprintf(tmp, sizeof(tmp), "%02X ", buf[i]);
+        out.append(tmp);
+    }
+    if (len > max) out.append("...");
+    return out;
+}
 
 OfhDuServer::OfhDuServer(int port, std::shared_ptr<GlobalE2NodeData> global_data) {
     this->port = port;
@@ -50,6 +68,20 @@ bool OfhDuServer::start() {
         return false;
     }
 
+    // Avoid "address already in use" on quick restarts and allow multiple binds if supported
+    int yes = 1;
+    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+        logger_warn("Unable to set SO_REUSEADDR on port %d. %s", port, strerror(errno));
+    }
+#ifdef SO_REUSEPORT
+    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof(yes)) < 0) {
+        logger_warn("Unable to set SO_REUSEPORT on port %d. %s", port, strerror(errno));
+    }
+#endif
+
+    // Ignore SIGPIPE globally; we also use MSG_NOSIGNAL when available
+    signal(SIGPIPE, SIG_IGN);
+
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(port);
@@ -60,18 +92,19 @@ bool OfhDuServer::start() {
         return false;
     }
 
-    if (listen(serverSocket, 1) != 0) {
+    if (listen(serverSocket, 16) != 0) {
         logger_error("Unable to listen on port %d. %s", port, strerror(errno));
         return false;
     }
 
-    // set socket timeout to shutdown gracefully
-    struct timeval timeout;
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
-    if (setsockopt(serverSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-        logger_error("Unable to set server socket options %d. %s", port, strerror(errno));
-        return false;
+    // Make the listening socket non-blocking so we can exit promptly on stop()
+    int flags = fcntl(serverSocket, F_GETFL, 0);
+    if (flags != -1) {
+        if (fcntl(serverSocket, F_SETFL, flags | O_NONBLOCK) == -1) {
+            logger_warn("Unable to set listening socket non-blocking on port %d. %s", port, strerror(errno));
+        }
+    } else {
+        logger_warn("Unable to get flags for listening socket on port %d. %s", port, strerror(errno));
     }
 
     listener_th = std::thread(&OfhDuServer::listener, this);
@@ -93,13 +126,26 @@ void OfhDuServer::listener() {
         clientSocket = accept(serverSocket, nullptr, nullptr);
         if(clientSocket == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-              continue;
+                // Non-blocking accept: no pending connections
+                continue;
             }
             if (errno == EINTR) {
                 break;
             }
             logger_error("Unable to accept a new OFH socket connection. Exiting... %s", strerror(errno));
             break;
+        }
+
+        // Configure client socket: small recv timeout to allow graceful shutdown loops
+        struct timeval timeout;
+        timeout.tv_sec = 2;
+        timeout.tv_usec = 0;
+        if (setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+            logger_warn("Unable to set SO_RCVTIMEO on client socket. %s", strerror(errno));
+        }
+        int ka = 1;
+        if (setsockopt(clientSocket, SOL_SOCKET, SO_KEEPALIVE, &ka, sizeof(ka)) < 0) {
+            logger_warn("Unable to enable SO_KEEPALIVE on client socket. %s", strerror(errno));
         }
 
         std::thread th = std::thread(&OfhDuServer::client_handler, this, clientSocket);
@@ -141,7 +187,11 @@ void OfhDuServer::client_handler(int socket) {
                 if (!ok2run) goto client_cleanup;
                 continue;
             }
-            logger_error("recv error while reading header: %s", strerror(errno));
+            if (errno == ECONNRESET) {
+                logger_info("Peer reset connection while reading header (ECONNRESET)");
+            } else {
+                logger_error("recv error while reading header: %s", strerror(errno));
+            }
             goto client_cleanup;
         }
 
@@ -192,9 +242,25 @@ void OfhDuServer::client_handler(int socket) {
                 if (!ok2run) goto client_cleanup;
                 continue;
             }
-            logger_error("recv error while reading payload: %s", strerror(errno));
+            if (errno == ECONNRESET) {
+                logger_info("Peer reset connection while reading payload (ECONNRESET)");
+            } else {
+                logger_error("recv error while reading payload: %s", strerror(errno));
+            }
             goto client_cleanup;
         }
+
+        // 4b) Quick sanity test on receive: header matches payload size and leading bytes aren't ASCII '000'
+        if (recv_len == length) {
+            logger_debug("OFH recv: header=%u payload=%zu (match)", length, recv_len);
+        } else {
+            logger_error("OFH recv length mismatch: header=%u payload=%zu", length, recv_len);
+            goto client_cleanup;
+        }
+        if (length >= 3 && data[0] == 0x30 && data[1] == 0x30 && data[2] == 0x30) {
+            logger_warn("OFH recv: payload starts with ASCII '000' (0x30 0x30 0x30) — check client framing");
+        }
+        logger_debug("OFH recv payload[0..15]=%s", hex_prefix(data, length).c_str());
 
         // 5) Parse and handle message
         request.Clear();
@@ -261,14 +327,7 @@ void OfhDuServer::client_handler(int socket) {
 
 client_cleanup:
     // Cleanup: mark any cells bound to this socket as disconnected
-    for (std::shared_ptr<Cell> &cell : globalData->getCells()) {
-        if (cell && cell->getSocket() == socket) {
-            logger_info("Marking Cell pci=%u as disconnected (socket %d closed)", cell->getPci(), socket);
-            cell->setSocket(-1);
-        }
-    }
-
-    close(socket);
+    mark_and_close_socket(socket);
 
     if (data != NULL)
         free(data);
@@ -286,9 +345,23 @@ bool OfhDuServer::send_msg(int socket, const e2sim::ofh::OfhMessage &msg) {
         logger_error("Unable to serialize OFH message");
         return false;
     }
+    if (data.empty()) {
+        // Avoid sending zero-length frames. This likely means 'msg' has no type set.
+        logger_warn("Refusing to send zero-length frame (empty OfhMessage). Did you forget to set a message type?");
+        return false;
+    }
+
+    logger_debug("Sending OFH message type=%d size=%zu bytes", msg.type_case(), data.size());
+    // Quick sanity test on send: show first bytes and warn on ASCII '000'
+    const uint8_t *bytes = reinterpret_cast<const uint8_t *>(data.data());
+    if (data.size() >= 3 && bytes[0] == 0x30 && bytes[1] == 0x30 && bytes[2] == 0x30) {
+        logger_warn("OFH send: payload starts with ASCII '000' (0x30 0x30 0x30) — check message content");
+    }
+    logger_debug("OFH send payload[0..15]=%s", hex_prefix(bytes, data.size()).c_str());
 
     // Send 4-byte big-endian length and then the payload, handling partial sends
     uint32_t net_len = htonl(static_cast<uint32_t>(data.size()));
+    logger_debug("OFH send header length=%u", static_cast<unsigned>(data.size()));
     const uint8_t *hdr = reinterpret_cast<const uint8_t *>(&net_len);
     size_t sent = 0;
     while (sent < sizeof(uint32_t)) {
@@ -301,7 +374,12 @@ bool OfhDuServer::send_msg(int socket, const e2sim::ofh::OfhMessage &msg) {
                          );
         if (n > 0) { sent += static_cast<size_t>(n); continue; }
         if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) { continue; }
-        logger_error("Unable to send OFH message size. Cause: %s", strerror(errno));
+        if (n == -1 && (errno == EPIPE || errno == ECONNRESET)) {
+            logger_error("Peer disconnected while sending OFH message size. Cause: %s", strerror(errno));
+            mark_and_close_socket(socket);
+        } else {
+            logger_error("Unable to send OFH message size. Cause: %s", strerror(errno));
+        }
         return false;
     }
 
@@ -318,11 +396,27 @@ bool OfhDuServer::send_msg(int socket, const e2sim::ofh::OfhMessage &msg) {
                          );
         if (n > 0) { sent += static_cast<size_t>(n); continue; }
         if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) { continue; }
-        logger_error("Unable to send OFH message data. Cause: %s", strerror(errno));
+        if (n == -1 && (errno == EPIPE || errno == ECONNRESET)) {
+            logger_error("Peer disconnected while sending OFH message data. Cause: %s", strerror(errno));
+            mark_and_close_socket(socket);
+        } else {
+            logger_error("Unable to send OFH message data. Cause: %s", strerror(errno));
+        }
         return false;
     }
 
     return true;
+}
+
+void OfhDuServer::mark_and_close_socket(int socket) {
+    if (socket < 0) return;
+    for (std::shared_ptr<Cell> &cell : globalData->getCells()) {
+        if (cell && cell->getSocket() == socket) {
+            logger_info("Marking Cell pci=%u as disconnected (socket %d closed)", cell->getPci(), socket);
+            cell->setSocket(-1);
+        }
+    }
+    close(socket);
 }
 
 void OfhDuServer::handle_registration_request(const e2sim::ofh::UeRegistrationRequestMessage &request, e2sim::ofh::UeRegistrationResponseMessage *response) {
