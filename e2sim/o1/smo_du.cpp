@@ -55,14 +55,20 @@ void O1Handler::post_tx_gain(web::http::http_request request) {
                 auto cellPtr = globalE2NodeData->getCell(pci);
                 if (!cellPtr) {
                     logger_error("O1: Unknown Cell pci=%d for TX gain update", pci);
+                    // Record desired gain so when cell appears later we can send it
+                    globalE2NodeData->setPendingTxReferenceLevel(pci, gain);
                 } else {
                     int socket = cellPtr->getSocket();
                     if (socket >= 0) {
                         if (!ofhDu.send_msg(socket, msg)) {
                             logger_error("O1: Failed to send TX gain request to pci=%d", pci);
+                            // Persist request for retry
+                            globalE2NodeData->setPendingTxReferenceLevel(pci, gain);
                         }
                     } else {
                         logger_error("O1: Cell pci=%d has no active socket to RU", pci);
+                        // Persist request for retry when RU reconnects
+                        globalE2NodeData->setPendingTxReferenceLevel(pci, gain);
                     }
                 }
 

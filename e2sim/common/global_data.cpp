@@ -188,6 +188,29 @@ std::vector<std::shared_ptr<Cell>> GlobalE2NodeData::getCells() {
      return std::move(list);
 }
 
+void GlobalE2NodeData::setPendingTxReferenceLevel(uint16_t pci, double gain) {
+    std::lock_guard<std::mutex> guard(pendingLock);
+    pending_tx_gain[pci] = gain;
+}
+
+bool GlobalE2NodeData::hasPendingTxReferenceLevel(uint16_t pci) {
+    std::lock_guard<std::mutex> guard(pendingLock);
+    return pending_tx_gain.find(pci) != pending_tx_gain.end();
+}
+
+bool GlobalE2NodeData::getPendingTxReferenceLevel(uint16_t pci, double &outGain) {
+    std::lock_guard<std::mutex> guard(pendingLock);
+    auto it = pending_tx_gain.find(pci);
+    if (it == pending_tx_gain.end()) return false;
+    outGain = it->second;
+    return true;
+}
+
+void GlobalE2NodeData::clearPendingTxReferenceLevel(uint16_t pci) {
+    std::lock_guard<std::mutex> guard(pendingLock);
+    pending_tx_gain.erase(pci);
+}
+
 /*
      Add a new UEInfo in the list of connected UEs
      UEInfo is only added if it is not already present in the UEList.
@@ -215,8 +238,10 @@ std::shared_ptr<e2sim::ue::UEInfo> UEList::getUEInfo(std::string imsi) {
 
 std::vector<std::shared_ptr<e2sim::ue::UEInfo>> UEList::getUEs() {
     std::vector<std::shared_ptr<e2sim::ue::UEInfo>> ues;
-
-    throw new std::runtime_error("NOT IMPLEMENTED");
-
+    std::lock_guard<std::mutex> guard(ue_lock);
+    ues.reserve(ue_map.size());
+    for (const auto &kv : ue_map) {
+        ues.emplace_back(kv.second);
+    }
     return ues;
 }

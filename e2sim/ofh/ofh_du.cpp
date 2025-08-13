@@ -450,7 +450,8 @@ void OfhDuServer::handle_registration_request(const e2sim::ofh::UeRegistrationRe
 
         std::shared_ptr<Cell> cell = globalData->getCell(request_data.primary_cell.pci);
         if (cell == nullptr) {
-            logger_error("Unable to register new UE imsi=%s. Reason: Cell pci=%u pointed by UE was not found");
+            logger_error("Unable to register new UE imsi=%s. Reason: Cell pci=%u pointed by UE was not found",
+                        request_data.imsi.c_str(), request_data.primary_cell.pci);
             response->set_status(false);
             continue;
         }
@@ -555,6 +556,8 @@ void OfhDuServer::handle_tx_reference_level_response(const e2sim::ofh::TxReferen
     if (msg.status() == true) {
         globalData->updateCellTxReferenceLevel(msg.cell().pci(), msg.cell().gain());
         logger_info("Successfuly set Transmission Reference Level of Cell pci=%u to %.4f dBm", msg.cell().pci(), msg.cell().gain());
+    // Clear any pending desired value for this cell since it was applied successfully
+    globalData->clearPendingTxReferenceLevel(msg.cell().pci());
     } else {
         logger_error("Unable to set Transmission Reference Level of Cell pci=%u to %.4f dBm. Reason: %s", msg.cell().pci(), msg.cell().gain(), msg.error());
     }
@@ -574,6 +577,18 @@ void OfhDuServer::handle_setup_request(int socket, const e2sim::ofh::RadioUnitSe
             existing->setSocket(socket);
             existing->setGain(cell.gain());
             logger_info("Updated existing Cell pci=%u with new socket and gain %.4f dB", cell.pci(), cell.gain());
+            // Flush any pending TX gain desired by O1 for this cell
+            double desiredGain;
+            if (globalData->getPendingTxReferenceLevel(cell.pci(), desiredGain)) {
+                e2sim::ofh::OfhMessage msg;
+                msg.mutable_tx_reference_level_request()->mutable_cell()->set_gain(desiredGain);
+                msg.mutable_tx_reference_level_request()->mutable_cell()->set_pci(cell.pci());
+                if (!send_msg(socket, msg)) {
+                    logger_warn("Deferring pending TX gain request for pci=%u due to send failure", cell.pci());
+                } else {
+                    logger_info("Sent pending TX Reference Level to pci=%u: %.4f dB", cell.pci(), desiredGain);
+                }
+            }
         } else {
             std::shared_ptr<Cell> new_cell = std::make_shared<Cell>(cell.pci(), cell.gain(), socket);
             if (!globalData->addCell(new_cell)) {
@@ -581,6 +596,18 @@ void OfhDuServer::handle_setup_request(int socket, const e2sim::ofh::RadioUnitSe
                 response->set_status(false);
             } else {
                 logger_info("Added new Cell pci=%u with gain %.4f dB", cell.pci(), cell.gain());
+                // Flush any pending TX gain desired by O1 for this newly added cell
+                double desiredGain;
+                if (globalData->getPendingTxReferenceLevel(cell.pci(), desiredGain)) {
+                    e2sim::ofh::OfhMessage msg;
+                    msg.mutable_tx_reference_level_request()->mutable_cell()->set_gain(desiredGain);
+                    msg.mutable_tx_reference_level_request()->mutable_cell()->set_pci(cell.pci());
+                    if (!send_msg(socket, msg)) {
+                        logger_warn("Deferring pending TX gain request for pci=%u due to send failure", cell.pci());
+                    } else {
+                        logger_info("Sent pending TX Reference Level to pci=%u: %.4f dB", cell.pci(), desiredGain);
+                    }
+                }
             }
         }
     }

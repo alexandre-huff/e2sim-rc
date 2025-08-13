@@ -143,6 +143,13 @@ public:
     void updateCellTxReferenceLevel(uint16_t pci, double gain);
     std::vector<std::shared_ptr<Cell>> getCells();
 
+    // Pending TX Reference Level (gain) desired by O1 that should be sent to O-RU when possible
+    void setPendingTxReferenceLevel(uint16_t pci, double gain);
+    bool hasPendingTxReferenceLevel(uint16_t pci);
+    // returns true and sets outGain if there is a pending value
+    bool getPendingTxReferenceLevel(uint16_t pci, double &outGain);
+    void clearPendingTxReferenceLevel(uint16_t pci);
+
     UEList ue_list;
 
     const uint32_t gnbid;
@@ -151,6 +158,11 @@ public:
     GlobalE2node_ID_t *globalE2NodeId;
     std::unordered_map<uint16_t, std::shared_ptr<Cell>> cells;
     std::mutex cellsLock;
+
+    // Protects access to pending_tx_gain
+    std::mutex pendingLock;
+    // map of PCI -> desired TX gain to be sent to O-RU when socket is available
+    std::unordered_map<uint16_t, double> pending_tx_gain;
 
 };
 
