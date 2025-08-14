@@ -267,6 +267,20 @@ void OfhDuServer::client_handler(int socket) {
         response.Clear();
 
         if (!request.ParseFromArray(data, length)) {
+            // Extra diagnostics: detect a likely double length prefix inside payload
+            if (length >= sizeof(uint32_t)) {
+                uint32_t inner_len_be = 0;
+                memcpy(&inner_len_be, data, sizeof(uint32_t));
+                uint32_t inner_len = ntohl(inner_len_be);
+                // Heuristic: if inner_len matches exactly outer length minus header, it's almost certainly double-prefixed
+                if (inner_len == (length - sizeof(uint32_t))) {
+                    logger_error(
+                        "Protobuf parse failed: payload appears to start with an extra 4-byte length prefix (inner=%u, outer=%u). "
+                        "Fix peer framing to send exactly [4-byte big-endian length][raw protobuf bytes], without an inner length.",
+                        inner_len, length);
+                    logger_error("OFH recv payload head (8 bytes): %s", hex_prefix(data, length, 8).c_str());
+                }
+            }
             logger_error("Unable to parse %s from socket", request.GetTypeName().c_str());
             response.mutable_registration_response()->set_status(false);
             send_msg(socket, response);
@@ -544,7 +558,7 @@ void OfhDuServer::handle_handover_response(const e2sim::ofh::HandoverResponseMes
     }
 
     if (msg.status() == false) {
-        logger_error("Unable to handoff UE ID %s to pci=%d error=%s", msg.ue().imsi(), msg.target_cell().pci(), msg.error());
+        logger_error("Unable to handoff UE ID %s to pci=%d error=%s", msg.ue().imsi().c_str(), msg.target_cell().pci(), msg.error().c_str());
     }
 
     LOGGER_TRACE_FUNCTION_OUT
@@ -559,7 +573,7 @@ void OfhDuServer::handle_tx_reference_level_response(const e2sim::ofh::TxReferen
     // Clear any pending desired value for this cell since it was applied successfully
     globalData->clearPendingTxReferenceLevel(msg.cell().pci());
     } else {
-        logger_error("Unable to set Transmission Reference Level of Cell pci=%u to %.4f dBm. Reason: %s", msg.cell().pci(), msg.cell().gain(), msg.error());
+        logger_error("Unable to set Transmission Reference Level of Cell pci=%u to %.4f dBm. Reason: %s", msg.cell().pci(), msg.cell().gain(), msg.error().c_str());
     }
 
     // TODO needs implementation of observers. For now we assume all O1 requests of TX Reference Level are handled successfuly.
