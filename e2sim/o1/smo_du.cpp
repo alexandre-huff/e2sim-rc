@@ -52,6 +52,9 @@ void O1Handler::post_tx_gain(web::http::http_request request) {
                 msg.mutable_tx_reference_level_request()->mutable_cell()->set_gain(gain);
                 msg.mutable_tx_reference_level_request()->mutable_cell()->set_pci(pci);
 
+                // Persist target gain selected by O1 for reconciliation after reconnects
+                globalE2NodeData->setDesiredTxReferenceLevel(pci, gain);
+
                 auto cellPtr = globalE2NodeData->getCell(pci);
                 if (!cellPtr) {
                     logger_error("O1: Unknown Cell pci=%d for TX gain update", pci);

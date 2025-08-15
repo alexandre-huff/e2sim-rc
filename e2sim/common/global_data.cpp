@@ -211,6 +211,24 @@ void GlobalE2NodeData::clearPendingTxReferenceLevel(uint16_t pci) {
     pending_tx_gain.erase(pci);
 }
 
+void GlobalE2NodeData::setDesiredTxReferenceLevel(uint16_t pci, double gain) {
+    std::lock_guard<std::mutex> guard(desiredLock);
+    desired_tx_gain[pci] = gain;
+}
+
+bool GlobalE2NodeData::hasDesiredTxReferenceLevel(uint16_t pci) {
+    std::lock_guard<std::mutex> guard(desiredLock);
+    return desired_tx_gain.find(pci) != desired_tx_gain.end();
+}
+
+bool GlobalE2NodeData::getDesiredTxReferenceLevel(uint16_t pci, double &outGain) {
+    std::lock_guard<std::mutex> guard(desiredLock);
+    auto it = desired_tx_gain.find(pci);
+    if (it == desired_tx_gain.end()) return false;
+    outGain = it->second;
+    return true;
+}
+
 /*
      Add a new UEInfo in the list of connected UEs
      UEInfo is only added if it is not already present in the UEList.

@@ -22,6 +22,10 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <mutex>
+#include <unordered_map>
+#include <chrono>
+ #include <atomic>
 
 #include "ofh_data.hpp"
 #include "signaling.pb.h"
@@ -39,16 +43,22 @@ public:
 
 private:
     int port;
-    bool ok2run;
+    std::atomic<bool> ok2run;
     int serverSocket;
     std::thread listener_th;
+    std::thread reconciler_th;
     std::vector<std::thread> client_handlers;
     std::shared_ptr<GlobalE2NodeData> globalData;
+
+    // Throttle resend attempts per PCI
+    std::mutex resendLock;
+    std::unordered_map<uint16_t, std::chrono::steady_clock::time_point> lastSendTs;
 
     void listener();
     void client_handler(int socket);
     // Marks any Cell using this socket as disconnected and closes the fd.
     void mark_and_close_socket(int socket);
+    void reconcile_tx_gains_loop();
     void handle_registration_request(const e2sim::ofh::UeRegistrationRequestMessage &request, e2sim::ofh::UeRegistrationResponseMessage *response);
     void handle_deregistration_request(const e2sim::ofh::UeDeregistrationRequestMessage &request, e2sim::ofh::UeDeregistrationResponseMessage *response);
     void handle_metrics_request(const e2sim::ofh::UeMetricsRequestMessage &msg);

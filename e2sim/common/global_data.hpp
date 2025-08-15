@@ -150,6 +150,11 @@ public:
     bool getPendingTxReferenceLevel(uint16_t pci, double &outGain);
     void clearPendingTxReferenceLevel(uint16_t pci);
 
+    // Desired TX Reference Level (target) as decided by O1; persists across RU reconnects
+    void setDesiredTxReferenceLevel(uint16_t pci, double gain);
+    bool hasDesiredTxReferenceLevel(uint16_t pci);
+    bool getDesiredTxReferenceLevel(uint16_t pci, double &outGain);
+
     UEList ue_list;
 
     const uint32_t gnbid;
@@ -163,6 +168,11 @@ public:
     std::mutex pendingLock;
     // map of PCI -> desired TX gain to be sent to O-RU when socket is available
     std::unordered_map<uint16_t, double> pending_tx_gain;
+
+    // Protects access to desired_tx_gain
+    std::mutex desiredLock;
+    // map of PCI -> target TX gain as decided by O1 (persisted for reconciliation on reconnect)
+    std::unordered_map<uint16_t, double> desired_tx_gain;
 
 };
 
