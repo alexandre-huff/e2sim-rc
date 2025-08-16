@@ -103,14 +103,13 @@ void O1Handler::post_tx_gain(web::http::http_request request) {
 */
 void O1Handler::get_tx_gain(web::http::http_request request) {
     logger_info("RESTCONF: Received GET request");
-    int i = 0;
-    web::json::value list = web::json::value::array();
-    for (std::shared_ptr<Cell> &cell : globalE2NodeData->getCells()) {
+    auto snapshots = globalE2NodeData->getCellSnapshots();
+    web::json::value list = web::json::value::array(snapshots.size());
+    for (size_t i = 0; i < snapshots.size(); ++i) {
         web::json::value elem = web::json::value::object();
-        elem[U("pci")] = web::json::value((uint16_t)cell->getPci());
-        elem[U("gain")] = web::json::value((double)cell->getGain());
+        elem[U("pci")] = web::json::value((uint16_t)snapshots[i].pci);
+        elem[U("gain")] = web::json::value((double)snapshots[i].gain);
         list[i] = elem;
-        i++;
     }
 
     std::string str = list.serialize();

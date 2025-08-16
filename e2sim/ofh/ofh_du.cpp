@@ -163,18 +163,44 @@ void OfhDuServer::listener() {
 }
 
 void OfhDuServer::reconcile_tx_gains_loop() {
-    // Periodically try to apply desired or pending TX gains to connected RUs
+    // Periodically reconcile desired/pending TX gains, enforce timeouts/backoff,
+    // and verify read-after-write. Also monitor heartbeat-based connection health.
     using namespace std::chrono_literals;
     while (ok2run) {
-        // Sleep first to avoid hammering on start
-        std::this_thread::sleep_for(1s);
+        std::this_thread::sleep_for(200ms);
         if (!ok2run) break;
 
-    // Snapshot the cells to avoid holding locks while sending
+        // 1) Heartbeat health check per socket: mark down if stale; up if resumed
+        {
+            std::lock_guard<std::mutex> g(hbMutex);
+            auto now = std::chrono::steady_clock::now();
+            for (auto &kv : lastHeartbeatTs) {
+                int sock = kv.first;
+                auto last = kv.second;
+                bool isUp = socketUp[sock];
+                if (isUp && (now - last) > hbGrace) {
+                    socketUp[sock] = false;
+                    ofh_connected--;
+                    logger_warn("OFH: socket %d heartbeat missed > %llds, marking down and pausing sends", sock, (long long)hbGrace.count());
+                }
+            }
+        }
+
+        // 2) Build a snapshot of cells to iterate outside locks
         std::vector<std::shared_ptr<Cell>> cells = globalData->getCells();
+        auto now = std::chrono::steady_clock::now();
         for (auto &cell : cells) {
             int sock = cell->getSocket();
-            if (sock < 0) continue;
+            if (sock < 0) continue; // no transport
+
+            // Skip if socket marked down by heartbeat monitor
+            bool isUp = true;
+            {
+                std::lock_guard<std::mutex> g(hbMutex);
+                auto it = socketUp.find(sock);
+                if (it != socketUp.end()) isUp = it->second;
+            }
+            if (!isUp) continue;
 
             double gain;
             bool haveDesired = globalData->getDesiredTxReferenceLevel(cell->getPci(), gain);
@@ -182,37 +208,63 @@ void OfhDuServer::reconcile_tx_gains_loop() {
             if (!(haveDesired || havePending)) continue;
 
             // Avoid churn when already at desired value
-            if (haveDesired) {
-                constexpr double GAIN_EPS = 0.01;
-                if (std::fabs(cell->getGain() - gain) <= GAIN_EPS) {
-                    continue;
-                }
+            if (haveDesired && std::fabs(cell->getGain() - gain) <= gainEpsilon) {
+                continue;
             }
 
-            // Per-PCI resend cooldown (3s) to avoid spamming RUs/logs
-            bool cooledDown = true;
+            // Circuit breaker / backoff per PCI
+            bool canSend = true;
             {
-                std::lock_guard<std::mutex> g(resendLock);
-                auto it = lastSendTs.find(cell->getPci());
-                if (it != lastSendTs.end()) {
-                    auto elapsed = std::chrono::steady_clock::now() - it->second;
-                    if (elapsed < std::chrono::seconds(3)) {
-                        cooledDown = false;
+                std::lock_guard<std::mutex> g(opsMutex);
+                auto &st = ops[cell->getPci()];
+                st.desired = gain;
+                if (st.blockUntil != std::chrono::steady_clock::time_point{} && now < st.blockUntil) {
+                    canSend = false;
+                } else if (st.awaitingResponse) {
+                    // Check timeout on awaiting response
+                    if ((now - st.sentAt) > responseTimeout) {
+                        st.awaitingResponse = false;
+                        set_gain_timeout_total++;
+                        // Exponential backoff escalation
+                        if (st.backoff == std::chrono::milliseconds{0}) st.backoff = initialBackoff; else st.backoff = std::min(st.backoff * 2, maxBackoff);
+                        st.nextDue = now + st.backoff;
+                        st.attempts++;
+                        logger_warn("SetGain timeout pci=%u desired=%.4f attempts=%d backoff=%lldms", cell->getPci(), gain, st.attempts, (long long)st.backoff.count());
+                        if (st.attempts >= circuitBreakerThreshold) {
+                            st.blockUntil = now + circuitBreakerCooloff;
+                            logger_error("Circuit breaker tripped for pci=%u cooloff=%llds", cell->getPci(), (long long)circuitBreakerCooloff.count());
+                        }
+                    } else {
+                        canSend = false; // waiting still
+                    }
+                } else {
+                    // Not awaiting: respect nextDue if set
+                    if (st.nextDue != std::chrono::steady_clock::time_point{} && now < st.nextDue) {
+                        canSend = false;
                     }
                 }
             }
-            if (!cooledDown) continue;
+            if (!canSend) continue;
 
+            // Send request
             e2sim::ofh::OfhMessage msg;
             msg.mutable_tx_reference_level_request()->mutable_cell()->set_gain(gain);
             msg.mutable_tx_reference_level_request()->mutable_cell()->set_pci(cell->getPci());
             if (!send_msg(sock, msg)) {
-                // Leave pending as-is; will retry on next loop
                 logger_debug("Reconcile: send failed for pci=%u, will retry", cell->getPci());
+                // Schedule retry with backoff
+                std::lock_guard<std::mutex> g(opsMutex);
+                auto &st = ops[cell->getPci()];
+                if (st.backoff == std::chrono::milliseconds{0}) st.backoff = initialBackoff; else st.backoff = std::min(st.backoff * 2, maxBackoff);
+                st.nextDue = std::chrono::steady_clock::now() + st.backoff;
+                st.attempts++;
             } else {
                 logger_debug("Reconcile: requested TX gain %.4f dB for pci=%u", gain, cell->getPci());
-                std::lock_guard<std::mutex> g(resendLock);
-                lastSendTs[cell->getPci()] = std::chrono::steady_clock::now();
+                std::lock_guard<std::mutex> g(opsMutex);
+                auto &st = ops[cell->getPci()];
+                st.awaitingResponse = true;
+                st.sentAt = std::chrono::steady_clock::now();
+                if (st.backoff == std::chrono::milliseconds{0}) st.backoff = initialBackoff; // baseline for potential retries
             }
         }
     }
@@ -383,8 +435,11 @@ void OfhDuServer::client_handler(int socket) {
                 break;
 
             case e2sim::ofh::OfhMessage::kHeartbeat:
-                // No-op: used to keep the TCP connection alive
-                logger_debug("Received Heartbeat ts_ms=%llu", (unsigned long long)request.heartbeat().ts_ms());
+                on_heartbeat(socket);
+                ofh_heartbeat_alive++;
+                if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+                    logger_debug("Received Heartbeat ts_ms=%llu", (unsigned long long)request.heartbeat().ts_ms());
+                }
                 break;
 
             case e2sim::ofh::OfhMessage::TYPE_NOT_SET:
@@ -402,6 +457,7 @@ void OfhDuServer::client_handler(int socket) {
 client_cleanup:
     // Cleanup: mark any cells bound to this socket as disconnected
     mark_and_close_socket(socket);
+    on_socket_down(socket);
 
     if (data != NULL)
         free(data);
@@ -484,6 +540,11 @@ bool OfhDuServer::send_msg(int socket, const e2sim::ofh::OfhMessage &msg) {
 
 void OfhDuServer::mark_and_close_socket(int socket) {
     if (socket < 0) return;
+    // Remove writer mutex for this socket if any
+    {
+        std::lock_guard<std::mutex> g(writersMutex);
+        socketWriters.erase(socket);
+    }
     for (std::shared_ptr<Cell> &cell : globalData->getCells()) {
         if (cell && cell->getSocket() == socket) {
             logger_info("Marking Cell pci=%u as disconnected (socket %d closed)", cell->getPci(), socket);
@@ -497,7 +558,6 @@ void OfhDuServer::handle_registration_request(const e2sim::ofh::UeRegistrationRe
     LOGGER_TRACE_FUNCTION_IN
 
     bool success = false;
-
     response->set_status(true);
 
     for (auto &metrics : request.ue_metrics()) {
@@ -627,90 +687,103 @@ void OfhDuServer::handle_handover_response(const e2sim::ofh::HandoverResponseMes
 void OfhDuServer::handle_tx_reference_level_response(const e2sim::ofh::TxReferenceLevelResponseMessage &msg) {
     LOGGER_TRACE_FUNCTION_IN
 
-    if (msg.status() == true) {
-        globalData->updateCellTxReferenceLevel(msg.cell().pci(), msg.cell().gain());
-        logger_info("Successfuly set Transmission Reference Level of Cell pci=%u to %.4f dBm", msg.cell().pci(), msg.cell().gain());
-    // Clear any pending retry for this cell since it was applied successfully
-    globalData->clearPendingTxReferenceLevel(msg.cell().pci());
-    } else {
-        logger_error("Unable to set Transmission Reference Level of Cell pci=%u to %.4f dBm. Reason: %s", msg.cell().pci(), msg.cell().gain(), msg.error().c_str());
-    }
+    uint16_t pci = static_cast<uint16_t>(msg.cell().pci());
+    double gain = static_cast<double>(msg.cell().gain());
 
-    // TODO needs implementation of observers. For now we assume all O1 requests of TX Reference Level are handled successfuly.
+    if (msg.status()) {
+        // Update in-memory state and clear any pending entry for this PCI
+        globalData->updateCellTxReferenceLevel(pci, gain);
+        globalData->clearPendingTxReferenceLevel(pci);
+        logger_info("Successfully set Transmission Reference Level of Cell pci=%u to %.4f dB", pci, gain);
+
+        // Mark success in op tracker and verify actual value (read-after-write)
+        bool needsVerify = false;
+        {
+            std::lock_guard<std::mutex> g(opsMutex);
+            auto it = ops.find(pci);
+            if (it != ops.end()) {
+                auto &st = it->second;
+                st.awaitingResponse = false;
+                st.attempts = 0; // reset on success
+                st.blockUntil = {};
+                st.backoff = initialBackoff;
+                // immediate verify: compare current cell gain vs desired epsilon
+                needsVerify = true;
+            }
+        }
+        set_gain_success_total++;
+
+        if (needsVerify) {
+            auto cellPtr = globalData->getCell(pci);
+            if (cellPtr) {
+                double desired = gain; // default to response gain
+                {
+                    double maybeDesired;
+                    if (globalData->getDesiredTxReferenceLevel(pci, maybeDesired)) {
+                        desired = maybeDesired;
+                    }
+                }
+                if (std::fabs(cellPtr->getGain() - desired) > gainEpsilon) {
+                    logger_warn("Verify mismatch pci=%u desired=%.4f actual=%.4f -> scheduling retry", pci, desired, cellPtr->getGain());
+                    set_gain_mismatch_total++;
+                    schedule_tx_gain(pci, desired, true /* immediate */);
+                }
+            }
+        }
+    } else {
+        logger_error("Failed to set Transmission Reference Level for pci=%u: %s", pci, msg.error().c_str());
+        // Treat as a failed attempt and backoff
+        std::lock_guard<std::mutex> g(opsMutex);
+        auto &st = ops[pci];
+        st.awaitingResponse = false;
+        if (st.backoff == std::chrono::milliseconds{0}) st.backoff = initialBackoff; else st.backoff = std::min(st.backoff * 2, maxBackoff);
+        st.nextDue = std::chrono::steady_clock::now() + st.backoff;
+        st.attempts++;
+        if (st.attempts >= circuitBreakerThreshold) {
+            st.blockUntil = std::chrono::steady_clock::now() + circuitBreakerCooloff;
+            logger_error("Circuit breaker tripped for pci=%u cooloff=%llds (response error)", pci, (long long)circuitBreakerCooloff.count());
+        }
+    }
 
     LOGGER_TRACE_FUNCTION_OUT
 }
 
 void OfhDuServer::handle_setup_request(int socket, const e2sim::ofh::RadioUnitSetupRequestMessage &request, e2sim::ofh::RadioUnitSetupResponseMessage *response) {
     LOGGER_TRACE_FUNCTION_IN
+
     response->set_status(true);
-    for (auto &cell : request.cells()) {
-        // If cell already exists, update its socket and gain; else add it.
-        std::shared_ptr<Cell> existing = globalData->getCell(cell.pci());
-        if (existing) {
-            existing->setSocket(socket);
-            existing->setGain(cell.gain());
-            logger_info("Updated existing Cell pci=%u with new socket and gain %.4f dB", cell.pci(), cell.gain());
-            // Apply desired TX gain if available; otherwise flush any pending TX gain desired by O1 for this cell
-            double desiredGain;
-            bool haveDesired = globalData->getDesiredTxReferenceLevel(cell.pci(), desiredGain);
-            bool havePending = !haveDesired && globalData->getPendingTxReferenceLevel(cell.pci(), desiredGain);
-            constexpr double GAIN_EPS = 0.01; // 0.01 dB tolerance to avoid churn
-            bool shouldSend = false;
-            if (haveDesired) {
-                if (std::fabs(existing->getGain() - desiredGain) > GAIN_EPS) {
-                    shouldSend = true;
-                }
-            } else if (havePending) {
-                shouldSend = true;
-            }
-            if (shouldSend) {
-                e2sim::ofh::OfhMessage msg;
-                msg.mutable_tx_reference_level_request()->mutable_cell()->set_gain(desiredGain);
-                msg.mutable_tx_reference_level_request()->mutable_cell()->set_pci(cell.pci());
-                if (!send_msg(socket, msg)) {
-                    logger_warn("Deferring TX gain request for pci=%u due to send failure", cell.pci());
-                } else {
-                    logger_info("Sent desired TX Reference Level to pci=%u: %.4f dB", cell.pci(), desiredGain);
-                    std::lock_guard<std::mutex> g(resendLock);
-                    lastSendTs[cell.pci()] = std::chrono::steady_clock::now();
+    on_socket_up(socket);
+
+    for (const auto &cellMsg : request.cells()) {
+        uint16_t pci = static_cast<uint16_t>(cellMsg.pci());
+        double gain = static_cast<double>(cellMsg.gain());
+
+        auto cellPtr = globalData->getCell(pci);
+        if (!cellPtr) {
+            // Create new Cell with provided gain and bind socket
+            std::shared_ptr<Cell> newCell = std::make_shared<Cell>(pci, gain, socket);
+            if (!globalData->addCell(newCell)) {
+                // Rare race: was added concurrently; fetch and update
+                cellPtr = globalData->getCell(pci);
+                if (cellPtr) {
+                    cellPtr->setGain(gain);
+                    cellPtr->setSocket(socket);
                 }
             }
         } else {
-            std::shared_ptr<Cell> new_cell = std::make_shared<Cell>(cell.pci(), cell.gain(), socket);
-            if (!globalData->addCell(new_cell)) {
-                logger_error("Unexpected failure to add Cell pci=%u during RU setup", cell.pci());
-                response->set_status(false);
-            } else {
-                logger_info("Added new Cell pci=%u with gain %.4f dB", cell.pci(), cell.gain());
-                // Apply desired TX gain if available; otherwise flush any pending TX gain desired by O1 for this newly added cell
-                double desiredGain;
-                bool haveDesired = globalData->getDesiredTxReferenceLevel(cell.pci(), desiredGain);
-                bool havePending = !haveDesired && globalData->getPendingTxReferenceLevel(cell.pci(), desiredGain);
-                constexpr double GAIN_EPS = 0.01; // 0.01 dB tolerance
-                bool shouldSend = false;
-                if (haveDesired) {
-                    if (std::fabs(new_cell->getGain() - desiredGain) > GAIN_EPS) {
-                        shouldSend = true;
-                    }
-                } else if (havePending) {
-                    shouldSend = true;
-                }
-                if (shouldSend) {
-                    e2sim::ofh::OfhMessage msg;
-                    msg.mutable_tx_reference_level_request()->mutable_cell()->set_gain(desiredGain);
-                    msg.mutable_tx_reference_level_request()->mutable_cell()->set_pci(cell.pci());
-                    if (!send_msg(socket, msg)) {
-                        logger_warn("Deferring TX gain request for pci=%u due to send failure", cell.pci());
-                    } else {
-                        logger_info("Sent desired TX Reference Level to pci=%u: %.4f dB", cell.pci(), desiredGain);
-                        std::lock_guard<std::mutex> g(resendLock);
-                        lastSendTs[cell.pci()] = std::chrono::steady_clock::now();
-                    }
-                }
-            }
+            // Update existing cell state and bind socket
+            cellPtr->setGain(gain);
+            cellPtr->setSocket(socket);
         }
+
+    logger_info("RU setup: pci=%u connected on socket=%d, gain=%.4f dB", pci, socket, gain);
+
+        // If there was a pending target gain for this PCI, keep it for reconciliation loop to send
+        // Desired gain is persisted separately; no action needed here beyond binding the socket.
     }
+
+    // After all cells are bound to this socket, trigger desired state re-sync
+    schedule_resync_for_socket(socket);
 
     LOGGER_TRACE_FUNCTION_OUT
 }
@@ -724,4 +797,62 @@ void OfhDuServer::handle_teardown_request(const e2sim::ofh::RadioUnitTearDownReq
     response->set_status(true);
 
     LOGGER_TRACE_FUNCTION_OUT
+}
+
+// ===== Internal helpers =====
+void OfhDuServer::on_heartbeat(int socket) {
+    auto now = std::chrono::steady_clock::now();
+    bool wasDown = false;
+    {
+        std::lock_guard<std::mutex> g(hbMutex);
+        lastHeartbeatTs[socket] = now;
+        auto it = socketUp.find(socket);
+        if (it == socketUp.end() || !it->second) {
+            wasDown = true;
+            socketUp[socket] = true;
+            ofh_connected++;
+        }
+    }
+    if (wasDown) {
+        logger_info("OFH: socket %d marked UP (heartbeat)", socket);
+        schedule_resync_for_socket(socket);
+    }
+}
+
+void OfhDuServer::on_socket_up(int socket) {
+    std::lock_guard<std::mutex> g(hbMutex);
+    socketUp[socket] = true;
+    lastHeartbeatTs[socket] = std::chrono::steady_clock::now();
+    ofh_connected++;
+}
+
+void OfhDuServer::on_socket_down(int socket) {
+    std::lock_guard<std::mutex> g(hbMutex);
+    auto it = socketUp.find(socket);
+    if (it != socketUp.end() && it->second) {
+        it->second = false;
+        ofh_connected--;
+    }
+}
+
+void OfhDuServer::schedule_resync_for_socket(int socket) {
+    // Push full desired gains set for any cells bound to this socket
+    auto cells = globalData->getCells();
+    for (auto &cell : cells) {
+        if (cell->getSocket() != socket) continue;
+        double desired;
+        if (globalData->getDesiredTxReferenceLevel(cell->getPci(), desired)) {
+            schedule_tx_gain(cell->getPci(), desired, true);
+        }
+    }
+}
+
+void OfhDuServer::schedule_tx_gain(uint16_t pci, double desired, bool immediate) {
+    std::lock_guard<std::mutex> g(opsMutex);
+    auto &st = ops[pci];
+    st.desired = desired;
+    if (immediate) {
+        st.nextDue = std::chrono::steady_clock::time_point{}; // allow immediate send on next loop
+        st.awaitingResponse = false;
+    }
 }

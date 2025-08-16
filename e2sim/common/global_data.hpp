@@ -142,6 +142,9 @@ public:
     std::shared_ptr<Cell> getCell(uint16_t pci);
     void updateCellTxReferenceLevel(uint16_t pci, double gain);
     std::vector<std::shared_ptr<Cell>> getCells();
+    // Thread-safe snapshot of current cells' pci and gain
+    struct CellSnapshot { uint16_t pci; double gain; };
+    std::vector<CellSnapshot> getCellSnapshots();
 
     // Pending TX Reference Level (gain) desired by O1 that should be sent to O-RU when possible
     void setPendingTxReferenceLevel(uint16_t pci, double gain);

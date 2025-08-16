@@ -147,8 +147,10 @@ void GlobalE2NodeData::updateCellTxReferenceLevel(uint16_t pci, double gain) {
     if (it != cells.end()) {
         it->second->setGain(gain);
     } else {
-        std::shared_ptr<Cell> cell = std::make_shared<Cell>(pci, gain);
-        addCell(cell);
+    // Avoid calling addCell() here because it also locks cellsLock.
+    // Insert directly while holding the lock to prevent deadlock.
+    std::shared_ptr<Cell> cell = std::make_shared<Cell>(pci, gain);
+    cells[pci] = cell;
     }
 }
 
@@ -169,6 +171,7 @@ void GlobalE2NodeData::deleteCell(uint16_t pci) {
 }
 
 std::shared_ptr<Cell> GlobalE2NodeData::getCell(uint16_t pci) {
+    std::lock_guard<std::mutex> guard(cellsLock);
     auto it = cells.find(pci);
     if (it != cells.end()) {
         return it->second;
@@ -186,6 +189,17 @@ std::vector<std::shared_ptr<Cell>> GlobalE2NodeData::getCells() {
         list.emplace_back(cell.second);
     }
      return std::move(list);
+}
+
+std::vector<GlobalE2NodeData::CellSnapshot> GlobalE2NodeData::getCellSnapshots() {
+    std::lock_guard<std::mutex> guard(cellsLock);
+    std::vector<CellSnapshot> out;
+    out.reserve(cells.size());
+    for (const auto &kv : cells) {
+        const auto &cell = kv.second;
+        out.push_back(CellSnapshot{cell->getPci(), cell->getGain()});
+    }
+    return out;
 }
 
 void GlobalE2NodeData::setPendingTxReferenceLevel(uint16_t pci, double gain) {
