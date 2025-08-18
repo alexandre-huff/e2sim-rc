@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "e2sim-helm.fullname" . }}-ofh
+  labels:
+    {{- include "e2sim-helm.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.portOfh }}
+      targetPort: ofh
+      protocol: TCP
+  selector:
+    {{- include "e2sim-helm.selectorLabels" . | nindent 4 }}

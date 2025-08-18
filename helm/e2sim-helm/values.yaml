@@ -21,6 +21,7 @@ resources: {}
 service:
   portSimulator: 8081
   portO1: 8090
+  portOfh: 34567
   tls: []
   type: ClusterIP
   typehandover: NodePort
