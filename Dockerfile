@@ -73,7 +73,7 @@ WORKDIR /usr/local/src/protobuf
 RUN git submodule update --init --no-recommend-shallow
 RUN mkdir build && cd build \
     && cmake -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_LIBPROTOC=ON .. \
-    && make -j 4 && make install && ldconfig
+    && make -j 20 && make install && ldconfig
 
 COPY . /playpen/
 
@@ -82,13 +82,13 @@ WORKDIR /playpen/e2sim
 # build and install submodule dependencies
 RUN git submodule update --init --recursive 3rdparty/prometheus-cpp \
     && cd 3rdparty/prometheus-cpp/ && mkdir build && cd build \
-    && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig
+    && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 20  && make install && ldconfig
 
 # build and install the e2sim-rc application
 RUN mkdir build && \
 	cd build && \
 	cmake .. && \
-	make -j 16 && \
+	make -j 20 && \
 	make install
 
 #
