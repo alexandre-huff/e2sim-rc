@@ -42,6 +42,8 @@ ASN_MODULE_SRCS=	\
 	RANParameter-Testing-Item-Choice-ElementFalse.c	\
 	RANParameter-Testing-LIST.c	\
 	RANParameter-Testing-STRUCTURE.c	\
+	UE-Group-Definition.c	\
+	UEGroupDefinitionIdentifier-Item.c	\
 	RAN-CallProcess-ID.c	\
 	RIC-CallProcessType-ID.c	\
 	RIC-CallProcessType-Name.c	\
@@ -55,8 +57,13 @@ ASN_MODULE_SRCS=	\
 	RIC-EventTrigger-Cell-ID.c	\
 	RIC-InsertIndication-ID.c	\
 	RIC-InsertIndication-Name.c	\
+	UE-Group-ID.c	\
+	EntityFilter-ID.c	\
 	RIC-PolicyAction.c	\
 	RIC-PolicyAction-RANParameter-Item.c	\
+	UE-Filter-ID.c	\
+	Associated-UE-Info.c	\
+	Associated-UE-Info-Item.c	\
 	E2SM-RC-EventTrigger.c	\
 	E2SM-RC-EventTrigger-Format1.c	\
 	E2SM-RC-EventTrigger-Format1-Item.c	\
@@ -73,7 +80,10 @@ ASN_MODULE_SRCS=	\
 	TriggerType-Choice-RRCstate-Item.c	\
 	TriggerType-Choice-UEID.c	\
 	TriggerType-Choice-L2state.c	\
-	E2SM-RC-EventTrigger-Format5.c	\
+	TriggerType-Choice-UEcontext.c	\
+	TriggerType-Choice-L2MACschChg.c	\
+	L2MACschChgType-Choice.c	\
+	TriggerType-Choice-MIMOandBFconfig.c	\
 	E2SM-RC-ActionDefinition.c	\
 	E2SM-RC-ActionDefinition-Format1.c	\
 	E2SM-RC-ActionDefinition-Format1-Item.c	\
@@ -97,9 +107,6 @@ ASN_MODULE_SRCS=	\
 	E2SM-RC-IndicationMessage-Format2-RANParameter-Item.c	\
 	E2SM-RC-IndicationMessage-Format3.c	\
 	E2SM-RC-IndicationMessage-Format3-Item.c	\
-	E2SM-RC-IndicationMessage-Format4.c	\
-	E2SM-RC-IndicationMessage-Format4-ItemUE.c	\
-	E2SM-RC-IndicationMessage-Format4-ItemCell.c	\
 	E2SM-RC-IndicationMessage-Format5.c	\
 	E2SM-RC-IndicationMessage-Format5-Item.c	\
 	E2SM-RC-IndicationMessage-Format6.c	\
@@ -111,12 +118,17 @@ ASN_MODULE_SRCS=	\
 	E2SM-RC-ControlHeader.c	\
 	E2SM-RC-ControlHeader-Format1.c	\
 	E2SM-RC-ControlHeader-Format2.c	\
+	E2SM-RC-ControlHeader-Format3.c	\
 	E2SM-RC-ControlMessage.c	\
 	E2SM-RC-ControlMessage-Format1.c	\
 	E2SM-RC-ControlMessage-Format1-Item.c	\
 	E2SM-RC-ControlMessage-Format2.c	\
 	E2SM-RC-ControlMessage-Format2-Style-Item.c	\
 	E2SM-RC-ControlMessage-Format2-ControlAction-Item.c	\
+	E2SM-RC-ControlMessage-Format3.c	\
+	E2SM-RC-EntityFilter.c	\
+	EntityAgnostic-ranP-ControlParameters.c	\
+	EntitySpecific-ranP-ControlParameters.c	\
 	E2SM-RC-ControlOutcome.c	\
 	E2SM-RC-ControlOutcome-Format1.c	\
 	E2SM-RC-ControlOutcome-Format1-Item.c	\
@@ -126,6 +138,18 @@ ASN_MODULE_SRCS=	\
 	E2SM-RC-ControlOutcome-Format2-RANP-Item.c	\
 	E2SM-RC-ControlOutcome-Format3.c	\
 	E2SM-RC-ControlOutcome-Format3-Item.c	\
+	E2SM-RC-QueryHeader.c	\
+	E2SM-RC-QueryHeader-Format1.c	\
+	E2SM-RC-QueryDefinition.c	\
+	E2SM-RC-QueryDefinition-Format1.c	\
+	E2SM-RC-QueryDefinition-Format1-Item.c	\
+	E2SM-RC-QueryOutcome.c	\
+	E2SM-RC-QueryOutcome-Format1.c	\
+	E2SM-RC-QueryOutcome-Format1-ItemCell.c	\
+	E2SM-RC-QueryOutcome-Format1-ItemParameters.c	\
+	E2SM-RC-QueryOutcome-Format2.c	\
+	E2SM-RC-QueryOutcome-Format2-ItemUE.c	\
+	E2SM-RC-QueryOutcome-Format2-ItemParameters.c	\
 	E2SM-RC-RANFunctionDefinition.c	\
 	RANFunctionDefinition-EventTrigger.c	\
 	RANFunctionDefinition-EventTrigger-Style-Item.c	\
@@ -147,11 +171,16 @@ ASN_MODULE_SRCS=	\
 	ControlOutcome-RANParameter-Item.c	\
 	RANFunctionDefinition-Control-Action-Item.c	\
 	ControlAction-RANParameter-Item.c	\
+	ListOfAdditionalSupportedFormats-UEGroupControl.c	\
+	AdditionalSupportedFormat-UEGroupControl.c	\
 	RANFunctionDefinition-Policy.c	\
 	RANFunctionDefinition-Policy-Item.c	\
 	RANFunctionDefinition-Policy-Action-Item.c	\
 	PolicyAction-RANParameter-Item.c	\
 	PolicyCondition-RANParameter-Item.c	\
+	RANFunctionDefinition-Query.c	\
+	RANFunctionDefinition-Query-Item.c	\
+	Query-RANParameter-Item.c	\
 	CGI.c	\
 	CoreCPID.c	\
 	InterfaceIdentifier.c	\
@@ -286,6 +315,8 @@ ASN_MODULE_HDRS=	\
 	RANParameter-Testing-Item-Choice-ElementFalse.h	\
 	RANParameter-Testing-LIST.h	\
 	RANParameter-Testing-STRUCTURE.h	\
+	UE-Group-Definition.h	\
+	UEGroupDefinitionIdentifier-Item.h	\
 	RAN-CallProcess-ID.h	\
 	RIC-CallProcessType-ID.h	\
 	RIC-CallProcessType-Name.h	\
@@ -299,8 +330,13 @@ ASN_MODULE_HDRS=	\
 	RIC-EventTrigger-Cell-ID.h	\
 	RIC-InsertIndication-ID.h	\
 	RIC-InsertIndication-Name.h	\
+	UE-Group-ID.h	\
+	EntityFilter-ID.h	\
 	RIC-PolicyAction.h	\
 	RIC-PolicyAction-RANParameter-Item.h	\
+	UE-Filter-ID.h	\
+	Associated-UE-Info.h	\
+	Associated-UE-Info-Item.h	\
 	E2SM-RC-EventTrigger.h	\
 	E2SM-RC-EventTrigger-Format1.h	\
 	E2SM-RC-EventTrigger-Format1-Item.h	\
@@ -317,7 +353,10 @@ ASN_MODULE_HDRS=	\
 	TriggerType-Choice-RRCstate-Item.h	\
 	TriggerType-Choice-UEID.h	\
 	TriggerType-Choice-L2state.h	\
-	E2SM-RC-EventTrigger-Format5.h	\
+	TriggerType-Choice-UEcontext.h	\
+	TriggerType-Choice-L2MACschChg.h	\
+	L2MACschChgType-Choice.h	\
+	TriggerType-Choice-MIMOandBFconfig.h	\
 	E2SM-RC-ActionDefinition.h	\
 	E2SM-RC-ActionDefinition-Format1.h	\
 	E2SM-RC-ActionDefinition-Format1-Item.h	\
@@ -341,9 +380,6 @@ ASN_MODULE_HDRS=	\
 	E2SM-RC-IndicationMessage-Format2-RANParameter-Item.h	\
 	E2SM-RC-IndicationMessage-Format3.h	\
 	E2SM-RC-IndicationMessage-Format3-Item.h	\
-	E2SM-RC-IndicationMessage-Format4.h	\
-	E2SM-RC-IndicationMessage-Format4-ItemUE.h	\
-	E2SM-RC-IndicationMessage-Format4-ItemCell.h	\
 	E2SM-RC-IndicationMessage-Format5.h	\
 	E2SM-RC-IndicationMessage-Format5-Item.h	\
 	E2SM-RC-IndicationMessage-Format6.h	\
@@ -355,12 +391,17 @@ ASN_MODULE_HDRS=	\
 	E2SM-RC-ControlHeader.h	\
 	E2SM-RC-ControlHeader-Format1.h	\
 	E2SM-RC-ControlHeader-Format2.h	\
+	E2SM-RC-ControlHeader-Format3.h	\
 	E2SM-RC-ControlMessage.h	\
 	E2SM-RC-ControlMessage-Format1.h	\
 	E2SM-RC-ControlMessage-Format1-Item.h	\
 	E2SM-RC-ControlMessage-Format2.h	\
 	E2SM-RC-ControlMessage-Format2-Style-Item.h	\
 	E2SM-RC-ControlMessage-Format2-ControlAction-Item.h	\
+	E2SM-RC-ControlMessage-Format3.h	\
+	E2SM-RC-EntityFilter.h	\
+	EntityAgnostic-ranP-ControlParameters.h	\
+	EntitySpecific-ranP-ControlParameters.h	\
 	E2SM-RC-ControlOutcome.h	\
 	E2SM-RC-ControlOutcome-Format1.h	\
 	E2SM-RC-ControlOutcome-Format1-Item.h	\
@@ -370,6 +411,18 @@ ASN_MODULE_HDRS=	\
 	E2SM-RC-ControlOutcome-Format2-RANP-Item.h	\
 	E2SM-RC-ControlOutcome-Format3.h	\
 	E2SM-RC-ControlOutcome-Format3-Item.h	\
+	E2SM-RC-QueryHeader.h	\
+	E2SM-RC-QueryHeader-Format1.h	\
+	E2SM-RC-QueryDefinition.h	\
+	E2SM-RC-QueryDefinition-Format1.h	\
+	E2SM-RC-QueryDefinition-Format1-Item.h	\
+	E2SM-RC-QueryOutcome.h	\
+	E2SM-RC-QueryOutcome-Format1.h	\
+	E2SM-RC-QueryOutcome-Format1-ItemCell.h	\
+	E2SM-RC-QueryOutcome-Format1-ItemParameters.h	\
+	E2SM-RC-QueryOutcome-Format2.h	\
+	E2SM-RC-QueryOutcome-Format2-ItemUE.h	\
+	E2SM-RC-QueryOutcome-Format2-ItemParameters.h	\
 	E2SM-RC-RANFunctionDefinition.h	\
 	RANFunctionDefinition-EventTrigger.h	\
 	RANFunctionDefinition-EventTrigger-Style-Item.h	\
@@ -391,11 +444,16 @@ ASN_MODULE_HDRS=	\
 	ControlOutcome-RANParameter-Item.h	\
 	RANFunctionDefinition-Control-Action-Item.h	\
 	ControlAction-RANParameter-Item.h	\
+	ListOfAdditionalSupportedFormats-UEGroupControl.h	\
+	AdditionalSupportedFormat-UEGroupControl.h	\
 	RANFunctionDefinition-Policy.h	\
 	RANFunctionDefinition-Policy-Item.h	\
 	RANFunctionDefinition-Policy-Action-Item.h	\
 	PolicyAction-RANParameter-Item.h	\
 	PolicyCondition-RANParameter-Item.h	\
+	RANFunctionDefinition-Query.h	\
+	RANFunctionDefinition-Query-Item.h	\
+	Query-RANParameter-Item.h	\
 	CGI.h	\
 	CoreCPID.h	\
 	InterfaceIdentifier.h	\
@@ -493,6 +551,8 @@ ASN_MODULE_HDRS+=BOOLEAN.h
 ASN_MODULE_SRCS+=BOOLEAN.c
 ASN_MODULE_HDRS+=INTEGER.h
 ASN_MODULE_SRCS+=INTEGER.c
+ASN_MODULE_HDRS+=NULL.h
+ASN_MODULE_SRCS+=NULL.c
 ASN_MODULE_HDRS+=NativeEnumerated.h
 ASN_MODULE_SRCS+=NativeEnumerated.c
 ASN_MODULE_HDRS+=NativeInteger.h

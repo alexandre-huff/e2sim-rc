@@ -94,6 +94,12 @@ int decode_e2sm_rc_control_message(const OCTET_STRING_t *msg_bytes, E2SM_RC_Cont
         return -1;
     }
 
+    logger_debug("Control Message bytes (size=%zu): ", msg_bytes->size);
+    for (size_t i = 0; i < msg_bytes->size && i < 64; i++) {
+        fprintf(stderr, "%02X ", msg_bytes->buf[i]);
+    }
+    fprintf(stderr, "\n");
+
     *msg_out = NULL;
 
     asn_dec_rval_t rval = asn_decode(NULL, ATS_ALIGNED_BASIC_PER,
