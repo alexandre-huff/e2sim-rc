@@ -44,6 +44,7 @@ extern "C"
 
 #include "rc_callbacks.hpp"
 #include "encode_rc.hpp"
+#include "decode_rc.hpp"
 #include "e2sim.hpp"
 #include "e2sim_defs.h"
 #include "encode_e2ap.hpp"
@@ -358,6 +359,42 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
                     logger_warn("should send control request ack to RIC. Not yet implemented..");
                 }
 
+                break;
+            }
+            case RICcontrolRequest_IEs__value_PR_RICcontrolHeader:
+            {
+                logger_trace("in case control header");
+                RICcontrolHeader_t *ctrl_header = &next_ie->value.choice.RICcontrolHeader;
+
+                E2SM_RC_ControlHeader_t *e2sm_header = NULL;
+                if (decode_e2sm_rc_control_header(ctrl_header, &e2sm_header) == 0 && e2sm_header) {
+                    control_header_fmt1_t header_info;
+                    if (extract_control_header_fmt1(e2sm_header, &header_info) == 0) {
+                        logger_info("Received E2SM-RC Control Header: style_type=%ld, action_id=%ld",
+                                    header_info.ric_style_type, header_info.ric_control_action_id);
+                    }
+                    ASN_STRUCT_FREE(asn_DEF_E2SM_RC_ControlHeader, e2sm_header);
+                }
+                break;
+            }
+            case RICcontrolRequest_IEs__value_PR_RICcontrolMessage:
+            {
+                logger_trace("in case control message");
+                RICcontrolMessage_t *ctrl_msg = &next_ie->value.choice.RICcontrolMessage;
+
+                E2SM_RC_ControlMessage_t *e2sm_msg = NULL;
+                if (decode_e2sm_rc_control_message(ctrl_msg, &e2sm_msg) == 0 && e2sm_msg) {
+                    slice_sla_policy_t policy;
+                    init_slice_sla_policy(&policy);
+
+                    if (extract_slice_sla_policy(e2sm_msg, &policy) == 0) {
+                        logger_info("Successfully extracted Slice SLA Policy from E2SM-RC Control Message");
+                        log_slice_sla_policy(&policy);
+                    } else {
+                        logger_error("Failed to extract Slice SLA Policy from Control Message");
+                    }
+                    ASN_STRUCT_FREE(asn_DEF_E2SM_RC_ControlMessage, e2sm_msg);
+                }
                 break;
             }
             default:

@@ -1,0 +1,24 @@
+affinity: {}
+fullnameOverride: ''
+image:
+  args:
+    e2term: service-ricplt-e2term-sctp-alpha.ricplt.svc.cluster.local
+    mcc: 724
+    mnc: 11
+    nodebid: 1
+    port: 36422
+  command: e2sim-rc
+  pullPolicy: Always
+  repository: docker.io/zanattabruno/e2sim-rc
+  tag: 'orion'
+nameOverride: ''
+nodeSelector:
+podAnnotations: {}
+podSecurityContext: {}
+replicaCount: 1
+resources: {}
+service:
+  portSimulator: 8080
+  tls: []
+  type: ClusterIP
+tolerations: []

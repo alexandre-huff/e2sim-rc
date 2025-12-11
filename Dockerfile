@@ -35,7 +35,7 @@
 # the builder has: git, wget, cmake, gcc/g++, make, python2/3.
 #
 ARG CONTAINER_PULL_REGISTRY=nexus3.o-ran-sc.org:10002
-FROM ${CONTAINER_PULL_REGISTRY}/o-ran-sc/bldr-ubuntu20-c-go:1.0.0 as e2sim-base
+FROM ${CONTAINER_PULL_REGISTRY}/o-ran-sc/bldr-ubuntu20-c-go:1.0.0 AS e2sim-base
 
 WORKDIR /playpen
 
@@ -72,7 +72,7 @@ WORKDIR /playpen/e2sim
 # build and install submodule dependencies
 RUN git submodule update --init --recursive 3rdparty/prometheus-cpp \
     && cd 3rdparty/prometheus-cpp/ && mkdir build && cd build \
-    && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 4  && make install && ldconfig
+    && cmake .. -DBUILD_SHARED_LIBS=OFF && make -j 12  && make install && ldconfig
 
 RUN git submodule update --init --recursive 3rdparty/nlohmann_json_release
 
@@ -80,7 +80,7 @@ RUN git submodule update --init --recursive 3rdparty/nlohmann_json_release
 RUN mkdir build && \
 	cd build && \
 	cmake .. && \
-	make -j 4 && \
+	make -j 12 && \
 	make install
 
 #
@@ -96,5 +96,5 @@ RUN apt-get update \
 
 COPY --from=e2sim-rc /usr/local/bin/e2sim-rc /usr/local/bin/e2sim-rc
 
-# CMD e2sim-rc 10.110.102.29 -p 36422
-CMD sleep 100000000
+# CMD ["e2sim-rc", "10.110.102.29", "-p", "36422"]
+CMD ["sleep", "100000000"]

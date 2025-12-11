@@ -15,7 +15,7 @@
 #==================================================================================
 #
 
-add_library( rc_objects OBJECT encode_rc.cpp rc_callbacks.cpp )
+add_library( rc_objects OBJECT encode_rc.cpp decode_rc.cpp rc_callbacks.cpp )
 
 target_link_libraries( rc_objects PRIVATE e2ap_asn1_objects
                                         e2sm_rc_asn1_objects
@@ -33,6 +33,7 @@ target_include_directories (rc_objects PUBLIC
 if( DEV_PKG )
     install( FILES
         encode_rc.hpp
+        decode_rc.hpp
         rc_callbacks.hpp
         DESTINATION ${install_inc}
     )
