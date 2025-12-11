@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
     SubscriptionDeleteCallback subscription_delete_cb = std::bind(&callback_rc_subscription_delete_request, _1, e2sim, &ok2run);
     e2sim->register_subscription_delete_callback(1, subscription_delete_cb);
 
-    ControlCallback control_request_cb = std::bind(&callback_rc_control_request, _1, _2, cmd_args.num2send, metrics.histogram, metrics.gauge, &sent_ts_map, &recv_ts_map);
+    ControlCallback control_request_cb = std::bind(&callback_rc_control_request, _1, _2, cmd_args.num2send, metrics.histogram, metrics.gauge, &sent_ts_map, &recv_ts_map, e2sim);
     e2sim->register_control_callback(1, control_request_cb);
     // TODO e2sim->register_e2ap_removal_callback...
 
@@ -330,7 +330,7 @@ void callback_receive_1st_control_handover(E2AP_PDU_t *ctrl_req_pdu, struct time
 
     logger_force(LOGGER_TRACE, "in func %s", __func__);
 
-    ControlCallback control_request_cb = std::bind(&callback_rc_control_request, _1, _2, cmd_args.num2send, metrics.histogram, metrics.gauge, &sent_ts_map, &recv_ts_map);
+    ControlCallback control_request_cb = std::bind(&callback_rc_control_request, _1, _2, cmd_args.num2send, metrics.histogram, metrics.gauge, &sent_ts_map, &recv_ts_map, e2sim);
     e2sim->register_control_callback(1, control_request_cb);   // change the control callback to the regular one
 
     // call manually first control callback
@@ -401,7 +401,7 @@ void drive_e2term_handover(std::string old_e2term_addr, int old_e2term_port, std
     e2sim->register_subscription_delete_callback(1, subscription_delete_cb);
 
     // ControlCallback control_request_cb = std::bind(&callback_receive_1st_control_handover, _1, _2, e2sim, old_e2term_addr, old_e2term_port, insert_cb);
-    ControlCallback control_request_cb = std::bind(&callback_rc_control_request, _1, _2, cmd_args.num2send, metrics.histogram, metrics.gauge, &sent_ts_map, &recv_ts_map);
+    ControlCallback control_request_cb = std::bind(&callback_rc_control_request, _1, _2, cmd_args.num2send, metrics.histogram, metrics.gauge, &sent_ts_map, &recv_ts_map, e2sim);
     e2sim->register_control_callback(1, control_request_cb);
     // TODO e2sim->register_e2ap_removal_callback...
 

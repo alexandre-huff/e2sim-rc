@@ -74,6 +74,8 @@ namespace encoding {
 
   void generate_e2ap_removal_request(E2AP_PDU_t *e2ap_pdu);
 
+  void generate_e2ap_control_acknowledge(E2AP_PDU_t *e2ap_pdu, long reqRequestorId, long reqInstanceId, long ranFunctionId, OCTET_STRING_t *callProcessId);
+
   PLMN_Identity_t *encodePlmnId(const char *mcc, const char *mnc);
 }
 

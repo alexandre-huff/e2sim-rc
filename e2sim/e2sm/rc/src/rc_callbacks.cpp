@@ -287,7 +287,7 @@ void callback_rc_subscription_delete_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2s
     logger_trace("callback_rc_subscription_delete_request has finished");
 }
 
-void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv_ts, unsigned long num2send, Histogram *histogram, Gauge *gauge, std::unordered_map<unsigned int, unsigned long> *sent_ts_map, std::unordered_map<unsigned int, unsigned long> *recv_ts_map) {
+void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv_ts, unsigned long num2send, Histogram *histogram, Gauge *gauge, std::unordered_map<unsigned int, unsigned long> *sent_ts_map, std::unordered_map<unsigned int, unsigned long> *recv_ts_map, E2Sim *e2sim) {
     logger_trace("Calling %s", __func__);
 
     RICcontrolRequest_t orig_req =
@@ -302,6 +302,13 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
 
     RICcontrolRequest_IEs__value_PR pres;
 
+    // Variables to collect for ACK
+    long reqRequestorId = -1;
+    long reqInstanceId = -1;
+    long ranFunctionId = -1;
+    bool shouldSendAck = false;
+    OCTET_STRING_t *callProcessId = NULL;
+
     for (int i = 0; i < count; i++)
     {
         RICcontrolRequest_IEs_t *next_ie = ies[i];
@@ -311,10 +318,26 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
 
         switch (pres)
         {
+            case RICcontrolRequest_IEs__value_PR_RICrequestID:
+            {
+                logger_trace("in case ric request id");
+                reqRequestorId = next_ie->value.choice.RICrequestID.ricRequestorID;
+                reqInstanceId = next_ie->value.choice.RICrequestID.ricInstanceID;
+                logger_debug("ricRequestorId %ld, ricInstanceId %ld", reqRequestorId, reqInstanceId);
+                break;
+            }
+            case RICcontrolRequest_IEs__value_PR_RANfunctionID:
+            {
+                logger_trace("in case ran function id");
+                ranFunctionId = next_ie->value.choice.RANfunctionID;
+                logger_debug("ranFunctionId %ld", ranFunctionId);
+                break;
+            }
             case RICcontrolRequest_IEs__value_PR_RICcallProcessID:
             {
                 logger_trace("in case call process id");
                 RICcallProcessID_t processId = next_ie->value.choice.RICcallProcessID;
+                callProcessId = &next_ie->value.choice.RICcallProcessID;
                 if (LOGGER_LEVEL >= LOGGER_DEBUG) {
                     logger_debug("call process id is below");
                     asn_fprint(stderr, &asn_DEF_RICcallProcessID, &processId);
@@ -356,7 +379,7 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
                 RICcontrolAckRequest_t ack = next_ie->value.choice.RICcontrolAckRequest;
                 logger_debug("control ack request is %ld", ack);
                 if (ack == RICcontrolAckRequest_ack) {
-                    logger_warn("should send control request ack to RIC. Not yet implemented..");
+                    shouldSendAck = true;
                 }
 
                 break;
@@ -403,6 +426,14 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
                 break;
             }
         }
+    }
+
+    // Send RIC Control Acknowledge if requested
+    if (shouldSendAck && e2sim != NULL && reqRequestorId >= 0 && reqInstanceId >= 0 && ranFunctionId >= 0) {
+        E2AP_PDU_t *ack_pdu = (E2AP_PDU_t *)calloc(1, sizeof(E2AP_PDU_t));
+        encoding::generate_e2ap_control_acknowledge(ack_pdu, reqRequestorId, reqInstanceId, ranFunctionId, callProcessId);
+        logger_info("Sending RIC-CONTROL-ACKNOWLEDGE");
+        e2sim->encode_and_send_sctp_data(ack_pdu, NULL);
     }
 
     logger_trace("After Processing Control Request");

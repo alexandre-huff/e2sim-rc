@@ -37,6 +37,7 @@ extern "C" {
 #include "InitiatingMessage.h"
 #include "SuccessfulOutcome.h"
 #include "UnsuccessfulOutcome.h"
+#include "RICcontrolAcknowledge.h"
 #include "GlobalE2node-ID.h"
 #include "GlobalE2node-gNB-ID.h"
 #include "GlobalgNB-ID.h"
@@ -1301,4 +1302,59 @@ PLMN_Identity_t *encoding::encodePlmnId(const char *mcc, const char *mnc) {
   }
 
   return plmn;
+}
+
+void encoding::generate_e2ap_control_acknowledge(E2AP_PDU_t *e2ap_pdu, long reqRequestorId, long reqInstanceId, long ranFunctionId, OCTET_STRING_t *callProcessId) {
+  logger_trace("in function %s", __func__);
+
+  RICcontrolAcknowledge_IEs_t *ricReqId =
+    (RICcontrolAcknowledge_IEs_t*)calloc(1, sizeof(RICcontrolAcknowledge_IEs_t));
+  ricReqId->id = ProtocolIE_ID_id_RICrequestID;
+  ricReqId->criticality = Criticality_reject;
+  ricReqId->value.present = RICcontrolAcknowledge_IEs__value_PR_RICrequestID;
+  ricReqId->value.choice.RICrequestID.ricRequestorID = reqRequestorId;
+  ricReqId->value.choice.RICrequestID.ricInstanceID = reqInstanceId;
+
+  RICcontrolAcknowledge_IEs_t *funcId =
+    (RICcontrolAcknowledge_IEs_t*)calloc(1, sizeof(RICcontrolAcknowledge_IEs_t));
+  funcId->id = ProtocolIE_ID_id_RANfunctionID;
+  funcId->criticality = Criticality_reject;
+  funcId->value.present = RICcontrolAcknowledge_IEs__value_PR_RANfunctionID;
+  funcId->value.choice.RANfunctionID = ranFunctionId;
+
+  RICcontrolAcknowledge_t *ricCtrlAck = (RICcontrolAcknowledge_t*)calloc(1, sizeof(RICcontrolAcknowledge_t));
+  ASN_SEQUENCE_ADD(&ricCtrlAck->protocolIEs.list, ricReqId);
+  ASN_SEQUENCE_ADD(&ricCtrlAck->protocolIEs.list, funcId);
+
+  if (callProcessId != NULL) {
+    RICcontrolAcknowledge_IEs_t *cpId =
+      (RICcontrolAcknowledge_IEs_t*)calloc(1, sizeof(RICcontrolAcknowledge_IEs_t));
+    cpId->id = ProtocolIE_ID_id_RICcallProcessID;
+    cpId->criticality = Criticality_reject;
+    cpId->value.present = RICcontrolAcknowledge_IEs__value_PR_RICcallProcessID;
+    OCTET_STRING_fromBuf(&cpId->value.choice.RICcallProcessID, (const char*)callProcessId->buf, callProcessId->size);
+    ASN_SEQUENCE_ADD(&ricCtrlAck->protocolIEs.list, cpId);
+  }
+
+  SuccessfulOutcome_t *successoutcome = (SuccessfulOutcome_t*)calloc(1, sizeof(SuccessfulOutcome_t));
+  successoutcome->procedureCode = ProcedureCode_id_RICcontrol;
+  successoutcome->criticality = Criticality_reject;
+  successoutcome->value.present = SuccessfulOutcome__value_PR_RICcontrolAcknowledge;
+  successoutcome->value.choice.RICcontrolAcknowledge = *ricCtrlAck;
+  if (ricCtrlAck) free(ricCtrlAck);
+
+  e2ap_pdu->present = E2AP_PDU_PR_successfulOutcome;
+  e2ap_pdu->choice.successfulOutcome = successoutcome;
+
+  char error_buf[300] = {0, };
+  size_t errlen = 0;
+
+  int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf, &errlen);
+  if (ret != 0) {
+    logger_error("E2AP_PDU check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+  }
+
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
+  }
 }

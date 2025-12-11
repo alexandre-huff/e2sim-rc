@@ -54,6 +54,6 @@ void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2sim, Ins
 
 void callback_rc_subscription_delete_request(E2AP_PDU_t *pdu, E2Sim *e2sim, volatile bool *ok2run);
 
-void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts, unsigned long num2send, Histogram *histogram, Gauge *gauge, std::unordered_map<unsigned int, unsigned long> *sent_ts_map, std::unordered_map<unsigned int, unsigned long> *recv_ts_map);
+void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts, unsigned long num2send, Histogram *histogram, Gauge *gauge, std::unordered_map<unsigned int, unsigned long> *sent_ts_map, std::unordered_map<unsigned int, unsigned long> *recv_ts_map, E2Sim *e2sim);
 
 #endif
