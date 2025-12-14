@@ -111,15 +111,20 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     ctrl_item->ric_CallProcessIDFormat_Type = (RIC_Format_Type_t *) calloc(1, sizeof(RIC_Format_Type_t));
     *ctrl_item->ric_CallProcessIDFormat_Type = 1;
 
-    // RANFunctionDefinition_Control_Action_Item_t *ctrl_act_item =
-    //         (RANFunctionDefinition_Control_Action_Item_t *) calloc(1, sizeof(RANFunctionDefinition_Control_Action_Item_t));
-    // ctrl_act_item->ric_ControlAction_ID = 1;
-    // uint8_t *ctrl_act_name = (uint8_t *) "UE Admission Control";
-    // len = strlen((char *) ctrl_act_name);
-    // ctrl_act_item->ric_ControlAction_Name.buf = (uint8_t *) calloc(len, sizeof(uint8_t));
-    // memcpy(ctrl_act_item->ric_ControlAction_Name.buf, ctrl_act_name, len);
-    // ctrl_act_item->ric_ControlAction_Name.size = len;
-    // ASN_SEQUENCE_ADD(&ctrl_item->ric_ControlAction_List->list, ctrl_act_item);
+    // Control Action List - defines supported control actions for this style
+    ctrl_item->ric_ControlAction_List =
+            (RANFunctionDefinition_Control_Item::RANFunctionDefinition_Control_Item__ric_ControlAction_List *)
+            calloc(1, sizeof(RANFunctionDefinition_Control_Item::RANFunctionDefinition_Control_Item__ric_ControlAction_List));
+
+    RANFunctionDefinition_Control_Action_Item_t *ctrl_act_item =
+            (RANFunctionDefinition_Control_Action_Item_t *) calloc(1, sizeof(RANFunctionDefinition_Control_Action_Item_t));
+    ctrl_act_item->ric_ControlAction_ID = 6;
+    uint8_t *ctrl_act_name = (uint8_t *) "Slice-level PRB quota";
+    len = strlen((char *) ctrl_act_name);
+    ctrl_act_item->ric_ControlAction_Name.buf = (uint8_t *) calloc(len, sizeof(uint8_t));
+    memcpy(ctrl_act_item->ric_ControlAction_Name.buf, ctrl_act_name, len);
+    ctrl_act_item->ric_ControlAction_Name.size = len;
+    ASN_SEQUENCE_ADD(&ctrl_item->ric_ControlAction_List->list, ctrl_act_item);
 
     ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Control->ric_ControlStyle_List.list, ctrl_item);
     logger_trace("ranFunction_Definition_Control set up");
