@@ -75,6 +75,7 @@ E2Sim::E2Sim(const char *mcc, const char *mnc, uint32_t gnb_id) {
   this->gnb_id.buf[3] = (gnb_id & 0X000000FF);
 
   retryConnection = true;
+  removalSent = false;
   client_fd = -1;
 
   logger_trace("end of %s constructor", __func__);
@@ -334,6 +335,11 @@ void E2Sim::listener(){
     switch (ret) {
       case 0:
         logger_trace("EAGAIN");
+        // If E2 Removal Request was sent and we timeout waiting for response, proceed with shutdown
+        if (removalSent) {
+          logger_warn("Timeout waiting for E2-REMOVAL-RESPONSE, proceeding with shutdown");
+          ok2run = false;
+        }
         continue;
         break;
 
@@ -403,22 +409,27 @@ void E2Sim::run(const char *e2term_addr, int e2term_port) {
 void E2Sim::shutdown() {
   logger_trace("in %s", __func__);
   retryConnection = false;
-  ok2run = false;
-  // TODO Check how to implement E2AP-REMOVAL-RESPONSE and graceful shutdown
-  /**
-   * Currently, RIC does not implement E2-REMOVAL-REQUEST yet.
-   * E2 removal is already implemented in E2Sim. We only need to
-   * uncomment the following code to enable it.
-   * We expect E2AP-REMOVAL-RESPONSE, so do not shutdown yet
-   */
-  // E2AP_PDU_t *e2ap_pdu = (E2AP_PDU_t *) calloc(1, sizeof(E2AP_PDU_t));
-  // encoding::generate_e2ap_removal_request(e2ap_pdu);
-  // logger_info("Sending E2AP-REMOVAL-REQUEST");
-  // encode_and_send_sctp_data(e2ap_pdu, NULL);
-  /**
-  * Shutdown is expected to be called on processing either
-  * E2-REMOVAL-REQUEST or E2-REMOVAL-RESPONSE messages
-  */
+
+  // Check if this is the first call (signal handler) or second call (from message handler after E2 Removal Response)
+  if (!removalSent.exchange(true)) {
+    // First call: send E2 Removal Request and keep listener running to wait for response
+    if (client_fd > 0) {
+      E2AP_PDU_t *e2ap_pdu = (E2AP_PDU_t *) calloc(1, sizeof(E2AP_PDU_t));
+      encoding::generate_e2ap_removal_request(e2ap_pdu);
+      logger_info("Sending E2-REMOVAL-REQUEST to unregister from Near-RT RIC");
+      encode_and_send_sctp_data(e2ap_pdu, NULL);  // e2ap_asn1c_encode_pdu frees the PDU
+      logger_info("Waiting for E2-REMOVAL-RESPONSE...");
+      // Keep ok2run=true to wait for E2 Removal Response
+    } else {
+      // No connection, just stop
+      logger_warn("No active connection, skipping E2-REMOVAL-REQUEST");
+      ok2run = false;
+    }
+  } else {
+    // Second call: E2 Removal Response received (or timeout), stop the listener
+    logger_info("E2 node successfully unregistered from Near-RT RIC");
+    ok2run = false;
+  }
 }
 
 void E2Sim::setRetryConnection(bool retry) {

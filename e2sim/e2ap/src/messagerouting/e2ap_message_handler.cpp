@@ -307,12 +307,13 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
         break;
 
       case E2AP_PDU_PR_successfulOutcome:
-        logger_info("[E2AP] Received E2-REMOVAL-RESPONSE");
+        logger_info("[E2AP] Received E2-REMOVAL-RESPONSE - E2 node unregistration successful");
         e2sim->shutdown();
         break;
 
       case E2AP_PDU_PR_unsuccessfulOutcome:
-        logger_warn("[E2AP] Received E2-REMOVAL-FAILURE");
+        logger_warn("[E2AP] Received E2-REMOVAL-FAILURE - E2 node unregistration failed");
+        e2sim->shutdown();  // Still proceed with shutdown even on failure
         break;
 
       default:

@@ -60,6 +60,7 @@ private:
   int client_fd;
   bool ok2run;  // controls the sctp receiver run loop
   std::atomic<bool> retryConnection;  // controls if the E2Sim should resend E2-SETUP-REQUEST
+  std::atomic<bool> removalSent;  // tracks if E2 Removal Request was sent
 
   std::thread sctp_listener_th;
 

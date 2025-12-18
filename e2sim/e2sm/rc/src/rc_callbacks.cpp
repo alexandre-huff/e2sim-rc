@@ -23,6 +23,9 @@
 #include <unordered_map>
 #include <thread>
 #include <chrono>
+#include <map>
+#include <string>
+#include <mutex>
 
 extern "C"
 {
@@ -40,6 +43,7 @@ extern "C"
     #include "ProtocolIE-SingleContainer.h"
     #include "InitiatingMessage.h"
     #include "RICcontrolAckRequest.h"
+    #include "Cause.h"
 }
 
 #include "rc_callbacks.hpp"
@@ -48,9 +52,125 @@ extern "C"
 #include "e2sim.hpp"
 #include "e2sim_defs.h"
 #include "encode_e2ap.hpp"
+#include "e2sim_rc.hpp"
 
 using namespace std;
 using namespace prometheus;
+
+// Slice allocation registry for tracking PRB allocations
+typedef struct {
+    uint8_t plmn_id[3];
+    int sst;
+    int sd;
+    int allocated_prb_ratio;    // The min_prb_ratio allocated to this slice
+} slice_allocation_t;
+
+static std::map<std::string, slice_allocation_t> active_slices;
+static std::mutex slices_mutex;
+
+/**
+ * Generate a unique key for a slice based on PLMN, SST, and SD
+ */
+static std::string generate_slice_key(const uint8_t plmn_id[3], int sst, int sd) {
+    char key[32];
+    snprintf(key, sizeof(key), "%02x%02x%02x-%d-%06x",
+             plmn_id[0], plmn_id[1], plmn_id[2], sst, sd);
+    return std::string(key);
+}
+
+/**
+ * Validate if the requested PRB ratio can be accommodated within capacity limits.
+ * Uses min_prb_ratio as the committed/guaranteed allocation.
+ *
+ * @param policy The slice policy with PRB ratios
+ * @param capacity The node capacity limits
+ * @return true if the policy can be applied, false if it exceeds capacity
+ */
+static bool validate_prb_capacity(const slice_sla_policy_t *policy, node_capacity_t *capacity) {
+    if (!policy || !capacity) {
+        return false;
+    }
+
+    // Use min_prb_ratio as the guaranteed allocation to check
+    int requested_prb = 0;
+    if (policy->min_prb_ratio_valid) {
+        requested_prb = policy->min_prb_ratio;
+    } else if (policy->max_prb_ratio_valid) {
+        // Fall back to max if min is not specified
+        requested_prb = policy->max_prb_ratio;
+    } else if (policy->ded_prb_ratio_valid) {
+        requested_prb = policy->ded_prb_ratio;
+    }
+
+    if (requested_prb <= 0) {
+        // No PRB allocation requested, allow it
+        return true;
+    }
+
+    // Generate slice key to check if this is an update
+    std::string slice_key;
+    if (policy->plmn_id_valid && policy->sst_valid) {
+        slice_key = generate_slice_key(policy->plmn_id, policy->sst,
+                                       policy->sd_valid ? policy->sd : 0xFFFFFF);
+    }
+
+    std::lock_guard<std::mutex> lock(slices_mutex);
+
+    // Calculate current total allocation excluding this slice (for updates)
+    int current_allocation = 0;
+    for (const auto& pair : active_slices) {
+        if (pair.first != slice_key) {
+            current_allocation += pair.second.allocated_prb_ratio;
+        }
+    }
+
+    int new_total = current_allocation + requested_prb;
+
+    logger_info("PRB Capacity Check: requested=%d%%, current_allocated=%d%%, total_after=%d%%, limit=%d%%",
+                requested_prb, current_allocation, new_total, capacity->total_prb_dl);
+
+    // Check against capacity limit
+    if (new_total > capacity->total_prb_dl) {
+        logger_warn("PRB Capacity EXCEEDED: requested=%d%% would result in %d%% allocation (limit=%d%%)",
+                    requested_prb, new_total, capacity->total_prb_dl);
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Register or update a slice allocation in the registry
+ */
+static void register_slice_allocation(const slice_sla_policy_t *policy) {
+    if (!policy || !policy->plmn_id_valid || !policy->sst_valid) {
+        return;
+    }
+
+    std::string slice_key = generate_slice_key(policy->plmn_id, policy->sst,
+                                               policy->sd_valid ? policy->sd : 0xFFFFFF);
+
+    int allocated_prb = 0;
+    if (policy->min_prb_ratio_valid) {
+        allocated_prb = policy->min_prb_ratio;
+    } else if (policy->max_prb_ratio_valid) {
+        allocated_prb = policy->max_prb_ratio;
+    } else if (policy->ded_prb_ratio_valid) {
+        allocated_prb = policy->ded_prb_ratio;
+    }
+
+    std::lock_guard<std::mutex> lock(slices_mutex);
+
+    slice_allocation_t alloc;
+    memcpy(alloc.plmn_id, policy->plmn_id, 3);
+    alloc.sst = policy->sst;
+    alloc.sd = policy->sd_valid ? policy->sd : 0xFFFFFF;
+    alloc.allocated_prb_ratio = allocated_prb;
+
+    active_slices[slice_key] = alloc;
+
+    logger_info("Slice registered: key=%s, allocated_prb=%d%%", slice_key.c_str(), allocated_prb);
+}
 
 void callback_rc_subscription_request(E2AP_PDU_t *sub_req_pdu, E2Sim *e2sim, InsertLoopCallback run_insert_loop, e2sm_rc_subscription_t *current_sub) {
     // Record RIC Request ID
@@ -302,12 +422,17 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
 
     RICcontrolRequest_IEs__value_PR pres;
 
-    // Variables to collect for ACK
+    // Variables to collect for ACK/FAILURE
     long reqRequestorId = -1;
     long reqInstanceId = -1;
     long ranFunctionId = -1;
     bool shouldSendAck = false;
     OCTET_STRING_t *callProcessId = NULL;
+
+    // Policy extraction for capacity validation
+    slice_sla_policy_t policy;
+    init_slice_sla_policy(&policy);
+    bool policyExtracted = false;
 
     for (int i = 0; i < count; i++)
     {
@@ -407,12 +532,10 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
 
                 E2SM_RC_ControlMessage_t *e2sm_msg = NULL;
                 if (decode_e2sm_rc_control_message(ctrl_msg, &e2sm_msg) == 0 && e2sm_msg) {
-                    slice_sla_policy_t policy;
-                    init_slice_sla_policy(&policy);
-
                     if (extract_slice_sla_policy(e2sm_msg, &policy) == 0) {
                         logger_info("Successfully extracted Slice SLA Policy from E2SM-RC Control Message");
                         log_slice_sla_policy(&policy);
+                        policyExtracted = true;
                     } else {
                         logger_error("Failed to extract Slice SLA Policy from Control Message");
                     }
@@ -428,12 +551,37 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
         }
     }
 
-    // Send RIC Control Acknowledge if requested
+    // Capacity validation and response handling
     if (shouldSendAck && e2sim != NULL && reqRequestorId >= 0 && reqInstanceId >= 0 && ranFunctionId >= 0) {
-        E2AP_PDU_t *ack_pdu = (E2AP_PDU_t *)calloc(1, sizeof(E2AP_PDU_t));
-        encoding::generate_e2ap_control_acknowledge(ack_pdu, reqRequestorId, reqInstanceId, ranFunctionId, callProcessId);
-        logger_info("Sending RIC-CONTROL-ACKNOWLEDGE");
-        e2sim->encode_and_send_sctp_data(ack_pdu, NULL);
+        node_capacity_t *capacity = get_node_capacity();
+        bool capacityOk = true;
+
+        // Validate PRB capacity if policy was extracted
+        if (policyExtracted && capacity != NULL) {
+            capacityOk = validate_prb_capacity(&policy, capacity);
+        }
+
+        if (capacityOk) {
+            // Register the slice allocation
+            if (policyExtracted) {
+                register_slice_allocation(&policy);
+            }
+
+            // Send ACK
+            E2AP_PDU_t *ack_pdu = (E2AP_PDU_t *)calloc(1, sizeof(E2AP_PDU_t));
+            encoding::generate_e2ap_control_acknowledge(ack_pdu, reqRequestorId, reqInstanceId, ranFunctionId, callProcessId);
+            logger_info("Sending RIC-CONTROL-ACKNOWLEDGE");
+            e2sim->encode_and_send_sctp_data(ack_pdu, NULL);
+        } else {
+            // Send FAILURE due to capacity exceeded
+            E2AP_PDU_t *fail_pdu = (E2AP_PDU_t *)calloc(1, sizeof(E2AP_PDU_t));
+            Cause_t cause;
+            cause.present = Cause_PR_ricRequest;
+            cause.choice.ricRequest = CauseRICrequest_function_resource_limit;
+            encoding::generate_e2ap_control_failure(fail_pdu, reqRequestorId, reqInstanceId, ranFunctionId, callProcessId, &cause);
+            logger_warn("Sending RIC-CONTROL-FAILURE: PRB capacity exceeded");
+            e2sim->encode_and_send_sctp_data(fail_pdu, NULL);
+        }
     }
 
     logger_trace("After Processing Control Request");

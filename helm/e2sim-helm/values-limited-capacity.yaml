@@ -1,3 +1,7 @@
+# Test values for e2sim-rc with limited PRB capacity
+# Use this to test policy rejection when capacity is exceeded:
+#   helm install e2sim-limited ./helm/e2sim-helm -f helm/e2sim-helm/values-limited-capacity.yaml
+
 affinity: {}
 fullnameOverride: ''
 image:
@@ -7,10 +11,10 @@ image:
     mnc: 11
     nodebid: 1
     port: 36422
-    # PRB capacity limits (0-100%). Set lower values to simulate limited resources.
-    # Policies requesting PRBs exceeding these limits will receive RIC_CONTROL_FAILURE.
-    totalPrbDl: 100
-    totalPrbUl: 100
+    # Limited PRB capacity for testing policy rejection
+    # Any policy requesting more than 50% PRB will be rejected
+    totalPrbDl: 50
+    totalPrbUl: 50
   command: e2sim-rc
   pullPolicy: Always
   repository: docker.io/zanattabruno/e2sim-rc

@@ -39,6 +39,14 @@ typedef struct {
     Gauge *gauge = nullptr;
 } metrics_t;
 
+// E2Node capacity configuration for PRB limitation
+typedef struct {
+    int total_prb_dl;               // Total DL PRBs available (e.g., 273 for 100MHz)
+    int total_prb_ul;               // Total UL PRBs available
+    int allocated_prb_dl;           // Currently allocated DL PRBs (percentage, 0-100)
+    int allocated_prb_ul;           // Currently allocated UL PRBs (percentage, 0-100)
+} node_capacity_t;
+
 // helper for command line input arguments
 typedef struct {
     std::string server_ip;          // E2Term IP
@@ -50,6 +58,8 @@ typedef struct {
     uint32_t simulation_id;         // Simulation ID for prometheus reports
     std::string mcc;                // gNodeB Mobile Country Code
     std::string mnc;                // gNodeB Mobile Network Code
+    int total_prb_dl;               // Total DL PRBs capacity (percentage limit, 0-100)
+    int total_prb_ul;               // Total UL PRBs capacity (percentage limit, 0-100)
 } args_t;
 
 typedef std::function<void(long requestorId, long instanceId, long ranFunctionId, long actionId)> InsertLoopCallback;
@@ -61,5 +71,6 @@ void run_insert_loop(long requestorId, long instanceId, long ranFunctionId, long
 void save_timestamp_report();
 void start_http_listener();
 void shutdown_http_listener();
+node_capacity_t *get_node_capacity();
 
 #endif

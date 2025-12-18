@@ -38,6 +38,7 @@ extern "C" {
 #include "SuccessfulOutcome.h"
 #include "UnsuccessfulOutcome.h"
 #include "RICcontrolAcknowledge.h"
+#include "RICcontrolFailure.h"
 #include "GlobalE2node-ID.h"
 #include "GlobalE2node-gNB-ID.h"
 #include "GlobalgNB-ID.h"
@@ -1352,6 +1353,81 @@ void encoding::generate_e2ap_control_acknowledge(E2AP_PDU_t *e2ap_pdu, long reqR
   int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf, &errlen);
   if (ret != 0) {
     logger_error("E2AP_PDU check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+  }
+
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
+  }
+}
+
+void encoding::generate_e2ap_control_failure(E2AP_PDU_t *e2ap_pdu, long reqRequestorId, long reqInstanceId,
+                                              long ranFunctionId, OCTET_STRING_t *callProcessId, Cause_t *cause) {
+  logger_trace("in function %s", __func__);
+
+  // RIC Request ID
+  RICcontrolFailure_IEs_t *ricReqId =
+    (RICcontrolFailure_IEs_t*)calloc(1, sizeof(RICcontrolFailure_IEs_t));
+  ricReqId->id = ProtocolIE_ID_id_RICrequestID;
+  ricReqId->criticality = Criticality_reject;
+  ricReqId->value.present = RICcontrolFailure_IEs__value_PR_RICrequestID;
+  ricReqId->value.choice.RICrequestID.ricRequestorID = reqRequestorId;
+  ricReqId->value.choice.RICrequestID.ricInstanceID = reqInstanceId;
+
+  // RAN Function ID
+  RICcontrolFailure_IEs_t *funcId =
+    (RICcontrolFailure_IEs_t*)calloc(1, sizeof(RICcontrolFailure_IEs_t));
+  funcId->id = ProtocolIE_ID_id_RANfunctionID;
+  funcId->criticality = Criticality_reject;
+  funcId->value.present = RICcontrolFailure_IEs__value_PR_RANfunctionID;
+  funcId->value.choice.RANfunctionID = ranFunctionId;
+
+  // Cause (mandatory for failure)
+  RICcontrolFailure_IEs_t *causeIe =
+    (RICcontrolFailure_IEs_t*)calloc(1, sizeof(RICcontrolFailure_IEs_t));
+  causeIe->id = ProtocolIE_ID_id_Cause;
+  causeIe->criticality = Criticality_ignore;
+  causeIe->value.present = RICcontrolFailure_IEs__value_PR_Cause;
+  if (cause != NULL) {
+    causeIe->value.choice.Cause = *cause;
+  } else {
+    // Default cause: function resource limit
+    causeIe->value.choice.Cause.present = Cause_PR_ricRequest;
+    causeIe->value.choice.Cause.choice.ricRequest = CauseRICrequest_function_resource_limit;
+  }
+
+  RICcontrolFailure_t *ricCtrlFail = (RICcontrolFailure_t*)calloc(1, sizeof(RICcontrolFailure_t));
+  ASN_SEQUENCE_ADD(&ricCtrlFail->protocolIEs.list, ricReqId);
+  ASN_SEQUENCE_ADD(&ricCtrlFail->protocolIEs.list, funcId);
+
+  // Optional: RIC Call Process ID
+  if (callProcessId != NULL) {
+    RICcontrolFailure_IEs_t *cpId =
+      (RICcontrolFailure_IEs_t*)calloc(1, sizeof(RICcontrolFailure_IEs_t));
+    cpId->id = ProtocolIE_ID_id_RICcallProcessID;
+    cpId->criticality = Criticality_reject;
+    cpId->value.present = RICcontrolFailure_IEs__value_PR_RICcallProcessID;
+    OCTET_STRING_fromBuf(&cpId->value.choice.RICcallProcessID, (const char*)callProcessId->buf, callProcessId->size);
+    ASN_SEQUENCE_ADD(&ricCtrlFail->protocolIEs.list, cpId);
+  }
+
+  ASN_SEQUENCE_ADD(&ricCtrlFail->protocolIEs.list, causeIe);
+
+  UnsuccessfulOutcome_t *unsuccessoutcome = (UnsuccessfulOutcome_t*)calloc(1, sizeof(UnsuccessfulOutcome_t));
+  unsuccessoutcome->procedureCode = ProcedureCode_id_RICcontrol;
+  unsuccessoutcome->criticality = Criticality_reject;
+  unsuccessoutcome->value.present = UnsuccessfulOutcome__value_PR_RICcontrolFailure;
+  unsuccessoutcome->value.choice.RICcontrolFailure = *ricCtrlFail;
+  if (ricCtrlFail) free(ricCtrlFail);
+
+  e2ap_pdu->present = E2AP_PDU_PR_unsuccessfulOutcome;
+  e2ap_pdu->choice.unsuccessfulOutcome = unsuccessoutcome;
+
+  char error_buf_fail[300] = {0, };
+  size_t errlen_fail = 0;
+
+  int ret_fail = asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf_fail, &errlen_fail);
+  if (ret_fail != 0) {
+    logger_error("E2AP_PDU (ControlFailure) check constraints failed. error length = %lu, error buf = %s", errlen_fail, error_buf_fail);
   }
 
   if (LOGGER_LEVEL >= LOGGER_DEBUG) {

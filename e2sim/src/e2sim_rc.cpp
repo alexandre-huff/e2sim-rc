@@ -57,6 +57,7 @@ extern "C" {
 
 args_t cmd_args;        // command line arguments
 metrics_t metrics;
+node_capacity_t node_capacity;  // E2Node PRB capacity for policy validation
 
 std::unordered_map<unsigned int, unsigned long> sent_ts_map; // timestamp of sent messages (INSERT) in nanoseconds
 std::unordered_map<unsigned int, unsigned long> recv_ts_map; // timestamp of received messages (CONTROL) in nanoseconds
@@ -83,7 +84,14 @@ int main(int argc, char *argv[]) {
 
     cmd_args = parse_input_options(argc, argv);
 
+    // Initialize node capacity from command line arguments
+    node_capacity.total_prb_dl = cmd_args.total_prb_dl;
+    node_capacity.total_prb_ul = cmd_args.total_prb_ul;
+    node_capacity.allocated_prb_dl = 0;
+    node_capacity.allocated_prb_ul = 0;
+
     logger_force(LOGGER_INFO, "Starting E2 Simulator for E2SM-RC");
+    logger_force(LOGGER_INFO, "PRB Capacity Limits - DL: %d%%, UL: %d%%", node_capacity.total_prb_dl, node_capacity.total_prb_ul);
 
     init_prometheus(metrics);
     start_http_listener();
@@ -154,6 +162,8 @@ args_t parse_input_options(int argc, char *argv[]) {
     args.simulation_id = 0;
     args.mcc = "001";
     args.mnc = "01";
+    args.total_prb_dl = 100;    // Default: no capacity limit (100%)
+    args.total_prb_ul = 100;    // Default: no capacity limit (100%)
 
     static struct option long_options[] =
     {
@@ -165,6 +175,8 @@ args_t parse_input_options(int argc, char *argv[]) {
         {"mcc", required_argument, 0, 'm'},
         {"mnc", required_argument, 0, 'c'},
         {"simulation", required_argument, 0, 's'},
+        {"total-prb-dl", required_argument, 0, 'd'},
+        {"total-prb-ul", required_argument, 0, 'u'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
     };
@@ -172,7 +184,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     int c;
     while(1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "i:p:w:n:b:m:c:s:h", long_options, &option_index);
+        c = getopt_long(argc, argv, "i:p:w:n:b:m:c:s:d:u:h", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -202,6 +214,16 @@ args_t parse_input_options(int argc, char *argv[]) {
             case 's':
                 args.simulation_id = strtoumax(optarg, NULL, 10);
                 break;
+            case 'd':
+                args.total_prb_dl = atoi(optarg);
+                if (args.total_prb_dl < 0) args.total_prb_dl = 0;
+                if (args.total_prb_dl > 100) args.total_prb_dl = 100;
+                break;
+            case 'u':
+                args.total_prb_ul = atoi(optarg);
+                if (args.total_prb_ul < 0) args.total_prb_ul = 0;
+                if (args.total_prb_ul > 100) args.total_prb_ul = 100;
+                break;
             case 'w':
                 args.report_wait = atoi(optarg);
                 if (args.num2send == UNLIMITED_MESSAGES) {
@@ -214,16 +236,18 @@ args_t parse_input_options(int argc, char *argv[]) {
                 fprintf(stderr,
                     "\nUsage: %s [options] e2term-address\n\n"
                     "Options:\n"
-                    "  -p  --port         E2Term SCTP port number\n"
-                    "  -n  --num2send     Number of messages to send\n"
-                    "  -i  --interval     Interval in milliseconds between sending each message to the RIC\n"
-                    "  -m  --mcc          gNodeB Mobile Country Code\n"
-                    "  -c  --mnc          gNodeB Mobile Network Code\n"
-                    "  -b  --nodebid      gNodeB Identity 0..2^29-1 (e.g. 15 or 0xF)\n"
-                    "  -w  --wait4report  Wait seconds for draining replies and generate the final report\n"
-                    "                     Requires --num2send argument\n"
-                    "  -s  --simulation   Simulation ID for prometheus reports (0..2^32-1)\n"
-                    "  -h  --help         Display this information and quit\n\n", argv[0]);
+                    "  -p  --port          E2Term SCTP port number\n"
+                    "  -n  --num2send      Number of messages to send\n"
+                    "  -i  --interval      Interval in milliseconds between sending each message to the RIC\n"
+                    "  -m  --mcc           gNodeB Mobile Country Code\n"
+                    "  -c  --mnc           gNodeB Mobile Network Code\n"
+                    "  -b  --nodebid       gNodeB Identity 0..2^29-1 (e.g. 15 or 0xF)\n"
+                    "  -d  --total-prb-dl  Total DL PRB capacity limit (0-100%%, default 100)\n"
+                    "  -u  --total-prb-ul  Total UL PRB capacity limit (0-100%%, default 100)\n"
+                    "  -w  --wait4report   Wait seconds for draining replies and generate the final report\n"
+                    "                      Requires --num2send argument\n"
+                    "  -s  --simulation    Simulation ID for prometheus reports (0..2^32-1)\n"
+                    "  -h  --help          Display this information and quit\n\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
@@ -233,6 +257,14 @@ args_t parse_input_options(int argc, char *argv[]) {
     }
 
     return args;
+}
+
+/*
+    Returns a pointer to the global node capacity structure.
+    Used by control callbacks to validate PRB requests against capacity limits.
+*/
+node_capacity_t *get_node_capacity() {
+    return &node_capacity;
 }
 
 /*
