@@ -28,23 +28,24 @@ extern "C" {
     #include "E2SM-RC-ControlMessage.h"
 }
 
-// RAN Parameter IDs as defined in orion-xapp/src/e2/control.cpp
-#define RANP_ID_SLICE_SLA_POLICY_LIST       1
-#define RANP_ID_SLICE_SLA_POLICY            3
-#define RANP_ID_SLICE_MEMBER_LIST           5
-#define RANP_ID_PLMN_IDENTITY               7
-#define RANP_ID_SNSSAI                      8
-#define RANP_ID_SST                         9
-#define RANP_ID_SD                          10
-#define RANP_ID_MAX_DL_THPT_PER_SLICE       11
-#define RANP_ID_MAX_UL_THPT_PER_SLICE       12
-#define RANP_ID_MAX_DL_THPT_PER_UE          13
-#define RANP_ID_MAX_UL_THPT_PER_UE          14
-#define RANP_ID_DL_SLICE_PRIORITY           15
-#define RANP_ID_UL_SLICE_PRIORITY           16
+// Standard E2SM-RC RAN Parameter IDs for Control Style 2, Action 6 (Slice-level PRB quota)
+// These IDs follow the srsRAN/O-RAN standard implementation
+#define RANP_ID_RRM_POLICY_RATIO_LIST       1   // RRM Policy Ratio List (LIST)
+#define RANP_ID_RRM_POLICY_RATIO_GROUP      2   // RRM Policy Ratio Group (STRUCTURE) - not explicitly used in messages
+#define RANP_ID_RRM_POLICY                  3   // RRM Policy (STRUCTURE)
+#define RANP_ID_RRM_POLICY_MEMBER_LIST      5   // RRM Policy Member List (LIST)
+#define RANP_ID_RRM_POLICY_MEMBER           6   // RRM Policy Member (STRUCTURE) - not explicitly used in messages
+#define RANP_ID_PLMN_IDENTITY               7   // PLMN Identity (OCTET_STRING, 3 bytes)
+#define RANP_ID_SNSSAI                      8   // S-NSSAI (STRUCTURE)
+#define RANP_ID_SST                         9   // SST (OCTET_STRING, 1 byte)
+#define RANP_ID_SD                          10  // SD (OCTET_STRING, 3 bytes)
+#define RANP_ID_MIN_PRB_POLICY_RATIO        11  // Min PRB Policy Ratio (INTEGER, 0-100%)
+#define RANP_ID_MAX_PRB_POLICY_RATIO        12  // Max PRB Policy Ratio (INTEGER, 0-100%)
+#define RANP_ID_DED_PRB_POLICY_RATIO        13  // Dedicated PRB Policy Ratio (INTEGER, 0-100%)
 
 /**
  * Structure to hold the decoded slice SLA policy received from the xApp
+ * Updated to use standard E2SM-RC PRB ratios instead of throughput values
  */
 typedef struct {
     // Slice identification
@@ -55,7 +56,15 @@ typedef struct {
     int sd;                     // Slice Differentiator (3 bytes, optional)
     bool sd_valid;
 
-    // SLA objectives (throughput in bits per second)
+    // Standard E2SM-RC PRB ratios (percentages, 0-100)
+    int min_prb_ratio;          // Minimum PRB ratio (ID 11)
+    bool min_prb_ratio_valid;
+    int max_prb_ratio;          // Maximum PRB ratio (ID 12)
+    bool max_prb_ratio_valid;
+    int ded_prb_ratio;          // Dedicated PRB ratio (ID 13)
+    bool ded_prb_ratio_valid;
+
+    // Legacy throughput fields (kept for backward compatibility, not used in standard E2SM-RC)
     long max_dl_thpt_per_slice;
     bool max_dl_thpt_per_slice_valid;
     long max_ul_thpt_per_slice;
@@ -65,7 +74,7 @@ typedef struct {
     long max_ul_thpt_per_ue;
     bool max_ul_thpt_per_ue_valid;
 
-    // Slice priorities
+    // Slice priorities (legacy, not used in standard E2SM-RC)
     int dl_slice_priority;
     bool dl_slice_priority_valid;
     int ul_slice_priority;

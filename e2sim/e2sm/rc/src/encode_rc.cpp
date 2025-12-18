@@ -99,8 +99,8 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
             (RANFunctionDefinition_Control_t *) calloc(1, sizeof(RANFunctionDefinition_Control_t));
     RANFunctionDefinition_Control_Item_t *ctrl_item =
             (RANFunctionDefinition_Control_Item_t *) calloc(1, sizeof(RANFunctionDefinition_Control_Item_t));
-    ctrl_item->ric_ControlStyle_Type = 4;
-    uint8_t *ctrl_name = (uint8_t *) "Radio access control";
+    ctrl_item->ric_ControlStyle_Type = 2;  // Radio Resource Allocation Control (standard E2SM-RC)
+    uint8_t *ctrl_name = (uint8_t *) "Radio Resource Allocation Control";
     len = strlen((char *) ctrl_name);
     ctrl_item->ric_ControlStyle_Name.buf = (uint8_t *) calloc(len, sizeof(uint8_t));
     memcpy(ctrl_item->ric_ControlStyle_Name.buf, ctrl_name, len);

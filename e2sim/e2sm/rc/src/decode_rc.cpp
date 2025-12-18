@@ -46,6 +46,15 @@ void init_slice_sla_policy(slice_sla_policy_t *policy) {
     policy->sd = 0;
     policy->sd_valid = false;
 
+    // Standard E2SM-RC PRB ratios
+    policy->min_prb_ratio = 0;
+    policy->min_prb_ratio_valid = false;
+    policy->max_prb_ratio = 100;
+    policy->max_prb_ratio_valid = false;
+    policy->ded_prb_ratio = 0;
+    policy->ded_prb_ratio_valid = false;
+
+    // Legacy throughput fields (backward compatibility)
     policy->max_dl_thpt_per_slice = 0;
     policy->max_dl_thpt_per_slice_valid = false;
     policy->max_ul_thpt_per_slice = 0;
@@ -223,51 +232,27 @@ static void process_ran_parameter_value(long param_id, const RANParameter_ValueT
             }
             break;
 
-        case RANP_ID_MAX_DL_THPT_PER_SLICE:
+        case RANP_ID_MIN_PRB_POLICY_RATIO:
             if (extract_int_value(value, &int_val)) {
-                policy->max_dl_thpt_per_slice = int_val;
-                policy->max_dl_thpt_per_slice_valid = true;
-                logger_debug("Extracted maxDlThptPerSlice: %ld", policy->max_dl_thpt_per_slice);
+                policy->min_prb_ratio = (int)int_val;
+                policy->min_prb_ratio_valid = true;
+                logger_debug("Extracted Min PRB Policy Ratio: %d%%", policy->min_prb_ratio);
             }
             break;
 
-        case RANP_ID_MAX_UL_THPT_PER_SLICE:
+        case RANP_ID_MAX_PRB_POLICY_RATIO:
             if (extract_int_value(value, &int_val)) {
-                policy->max_ul_thpt_per_slice = int_val;
-                policy->max_ul_thpt_per_slice_valid = true;
-                logger_debug("Extracted maxUlThptPerSlice: %ld", policy->max_ul_thpt_per_slice);
+                policy->max_prb_ratio = (int)int_val;
+                policy->max_prb_ratio_valid = true;
+                logger_debug("Extracted Max PRB Policy Ratio: %d%%", policy->max_prb_ratio);
             }
             break;
 
-        case RANP_ID_MAX_DL_THPT_PER_UE:
+        case RANP_ID_DED_PRB_POLICY_RATIO:
             if (extract_int_value(value, &int_val)) {
-                policy->max_dl_thpt_per_ue = int_val;
-                policy->max_dl_thpt_per_ue_valid = true;
-                logger_debug("Extracted maxDlThptPerUe: %ld", policy->max_dl_thpt_per_ue);
-            }
-            break;
-
-        case RANP_ID_MAX_UL_THPT_PER_UE:
-            if (extract_int_value(value, &int_val)) {
-                policy->max_ul_thpt_per_ue = int_val;
-                policy->max_ul_thpt_per_ue_valid = true;
-                logger_debug("Extracted maxUlThptPerUe: %ld", policy->max_ul_thpt_per_ue);
-            }
-            break;
-
-        case RANP_ID_DL_SLICE_PRIORITY:
-            if (extract_int_value(value, &int_val)) {
-                policy->dl_slice_priority = (int)int_val;
-                policy->dl_slice_priority_valid = true;
-                logger_debug("Extracted dlSlicePriority: %d", policy->dl_slice_priority);
-            }
-            break;
-
-        case RANP_ID_UL_SLICE_PRIORITY:
-            if (extract_int_value(value, &int_val)) {
-                policy->ul_slice_priority = (int)int_val;
-                policy->ul_slice_priority_valid = true;
-                logger_debug("Extracted ulSlicePriority: %d", policy->ul_slice_priority);
+                policy->ded_prb_ratio = (int)int_val;
+                policy->ded_prb_ratio_valid = true;
+                logger_debug("Extracted Dedicated PRB Policy Ratio: %d%%", policy->ded_prb_ratio);
             }
             break;
 
@@ -432,27 +417,41 @@ void log_slice_sla_policy(const slice_sla_policy_t *policy) {
         logger_info("Slice SLA Policy - SD: %06X (%d)", policy->sd, policy->sd);
     }
 
+    // Standard E2SM-RC PRB ratios
+    if (policy->min_prb_ratio_valid) {
+        logger_info("Slice SLA Policy - Min PRB Ratio: %d%%", policy->min_prb_ratio);
+    }
+
+    if (policy->max_prb_ratio_valid) {
+        logger_info("Slice SLA Policy - Max PRB Ratio: %d%%", policy->max_prb_ratio);
+    }
+
+    if (policy->ded_prb_ratio_valid) {
+        logger_info("Slice SLA Policy - Dedicated PRB Ratio: %d%%", policy->ded_prb_ratio);
+    }
+
+    // Legacy throughput fields (for backward compatibility)
     if (policy->max_dl_thpt_per_slice_valid) {
-        logger_info("Slice SLA Policy - Max DL Throughput Per Slice: %ld bps", policy->max_dl_thpt_per_slice);
+        logger_info("Slice SLA Policy - Max DL Throughput Per Slice: %ld bps (legacy)", policy->max_dl_thpt_per_slice);
     }
 
     if (policy->max_ul_thpt_per_slice_valid) {
-        logger_info("Slice SLA Policy - Max UL Throughput Per Slice: %ld bps", policy->max_ul_thpt_per_slice);
+        logger_info("Slice SLA Policy - Max UL Throughput Per Slice: %ld bps (legacy)", policy->max_ul_thpt_per_slice);
     }
 
     if (policy->max_dl_thpt_per_ue_valid) {
-        logger_info("Slice SLA Policy - Max DL Throughput Per UE: %ld bps", policy->max_dl_thpt_per_ue);
+        logger_info("Slice SLA Policy - Max DL Throughput Per UE: %ld bps (legacy)", policy->max_dl_thpt_per_ue);
     }
 
     if (policy->max_ul_thpt_per_ue_valid) {
-        logger_info("Slice SLA Policy - Max UL Throughput Per UE: %ld bps", policy->max_ul_thpt_per_ue);
+        logger_info("Slice SLA Policy - Max UL Throughput Per UE: %ld bps (legacy)", policy->max_ul_thpt_per_ue);
     }
 
     if (policy->dl_slice_priority_valid) {
-        logger_info("Slice SLA Policy - DL Slice Priority: %d", policy->dl_slice_priority);
+        logger_info("Slice SLA Policy - DL Slice Priority: %d (legacy)", policy->dl_slice_priority);
     }
 
     if (policy->ul_slice_priority_valid) {
-        logger_info("Slice SLA Policy - UL Slice Priority: %d", policy->ul_slice_priority);
+        logger_info("Slice SLA Policy - UL Slice Priority: %d (legacy)", policy->ul_slice_priority);
     }
 }

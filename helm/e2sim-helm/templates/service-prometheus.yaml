@@ -7,7 +7,8 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.portSimulator }}
+    - name: prometheus
+      port: {{ .Values.service.portPrometheus }}
       targetPort: prometheus
       protocol: TCP
   selector:

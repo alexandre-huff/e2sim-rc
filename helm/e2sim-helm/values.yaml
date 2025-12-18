@@ -18,7 +18,7 @@ podSecurityContext: {}
 replicaCount: 1
 resources: {}
 service:
-  portSimulator: 8080
+  portPrometheus: 8080
   tls: []
   type: ClusterIP
 tolerations: []
