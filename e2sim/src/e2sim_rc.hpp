@@ -41,10 +41,16 @@ typedef struct {
 
 // E2Node capacity configuration for PRB limitation
 typedef struct {
-    int total_prb_dl;               // Total DL PRBs available (e.g., 273 for 100MHz)
-    int total_prb_ul;               // Total UL PRBs available
+    int total_prb_dl;               // Total DL PRBs available (percentage, 0-100)
+    int total_prb_ul;               // Total UL PRBs available (percentage, 0-100)
     int allocated_prb_dl;           // Currently allocated DL PRBs (percentage, 0-100)
     int allocated_prb_ul;           // Currently allocated UL PRBs (percentage, 0-100)
+    // Cell capacity parameters (advertised in RAN Function Definition)
+    long max_dl_capacity_kbps;      // Maximum downlink capacity in kbps
+    long max_ul_capacity_kbps;      // Maximum uplink capacity in kbps
+    long bandwidth_mhz;             // Cell bandwidth in MHz
+    long num_prbs;                  // Number of Physical Resource Blocks
+    long subcarrier_spacing_khz;    // Subcarrier spacing in kHz
 } node_capacity_t;
 
 // helper for command line input arguments
@@ -60,6 +66,12 @@ typedef struct {
     std::string mnc;                // gNodeB Mobile Network Code
     int total_prb_dl;               // Total DL PRBs capacity (percentage limit, 0-100)
     int total_prb_ul;               // Total UL PRBs capacity (percentage limit, 0-100)
+    // Cell capacity parameters
+    long max_dl_capacity_kbps;      // Maximum DL capacity in kbps
+    long max_ul_capacity_kbps;      // Maximum UL capacity in kbps
+    long bandwidth_mhz;             // Cell bandwidth in MHz
+    long num_prbs;                  // Number of PRBs
+    long subcarrier_spacing_khz;    // Subcarrier spacing in kHz
 } args_t;
 
 typedef std::function<void(long requestorId, long instanceId, long ranFunctionId, long actionId)> InsertLoopCallback;

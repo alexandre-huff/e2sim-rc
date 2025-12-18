@@ -15,6 +15,12 @@ image:
     # Any policy requesting more than 50% PRB will be rejected
     totalPrbDl: 50
     totalPrbUl: 50
+    # Cell capacity parameters (same as default, but PRB limits are reduced)
+    maxDlCapacityKbps: "2500000"
+    maxUlCapacityKbps: "1000000"
+    bandwidthMhz: "100"
+    numPrbs: "273"
+    subcarrierSpacingKhz: "30"
   command: e2sim-rc
   pullPolicy: Always
   repository: docker.io/zanattabruno/e2sim-rc

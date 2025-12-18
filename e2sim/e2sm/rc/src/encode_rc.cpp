@@ -28,6 +28,48 @@
 
 using namespace std;
 
+// Vendor-specific RAN Parameter IDs for cell capacity advertisement
+namespace {
+    constexpr long PARAM_ID_MAX_DL_CAPACITY_KBPS = 60001;
+    constexpr long PARAM_ID_MAX_UL_CAPACITY_KBPS = 60002;
+    constexpr long PARAM_ID_TOTAL_PRB_DL = 60003;
+    constexpr long PARAM_ID_TOTAL_PRB_UL = 60004;
+    constexpr long PARAM_ID_BANDWIDTH_MHZ = 60005;
+    constexpr long PARAM_ID_NUM_PRBS = 60006;
+    constexpr long PARAM_ID_SUBCARRIER_SPACING = 60007;
+}
+
+void add_capacity_ran_parameter(RANFunctionDefinition_Control_Action_Item_t *ctrl_act_item,
+                                 long param_id, const char *param_name) {
+    if (!ctrl_act_item || !param_name) {
+        logger_error("Invalid arguments to add_capacity_ran_parameter");
+        return;
+    }
+
+    // Allocate RAN Parameter list if not exists
+    if (!ctrl_act_item->ran_ControlActionParameters_List) {
+        ctrl_act_item->ran_ControlActionParameters_List =
+            (RANFunctionDefinition_Control_Action_Item::RANFunctionDefinition_Control_Action_Item__ran_ControlActionParameters_List *)
+            calloc(1, sizeof(RANFunctionDefinition_Control_Action_Item::RANFunctionDefinition_Control_Action_Item__ran_ControlActionParameters_List));
+    }
+
+    // Create RAN Parameter Item
+    ControlAction_RANParameter_Item_t *param_item =
+        (ControlAction_RANParameter_Item_t *) calloc(1, sizeof(ControlAction_RANParameter_Item_t));
+
+    param_item->ranParameter_ID = param_id;
+
+    size_t name_len = strlen(param_name);
+    param_item->ranParameter_name.buf = (uint8_t *) calloc(name_len, sizeof(uint8_t));
+    memcpy(param_item->ranParameter_name.buf, param_name, name_len);
+    param_item->ranParameter_name.size = name_len;
+
+    // Add to list
+    ASN_SEQUENCE_ADD(&ctrl_act_item->ran_ControlActionParameters_List->list, param_item);
+
+    logger_debug("Added RAN Parameter ID %ld (%s) to Control Action", param_id, param_name);
+}
+
 void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def) {
     int ret;    // Temporary return value
     size_t len; // Temporary length to avoid unnecessary strlen calls
@@ -124,6 +166,19 @@ void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def)
     ctrl_act_item->ric_ControlAction_Name.buf = (uint8_t *) calloc(len, sizeof(uint8_t));
     memcpy(ctrl_act_item->ric_ControlAction_Name.buf, ctrl_act_name, len);
     ctrl_act_item->ric_ControlAction_Name.size = len;
+
+    // Add vendor-specific capacity RAN Parameters (60001-60007)
+    // These advertise the E2 Node's cell capability parameters to xApps
+    add_capacity_ran_parameter(ctrl_act_item, PARAM_ID_MAX_DL_CAPACITY_KBPS, "maxDlCapacityKbps");
+    add_capacity_ran_parameter(ctrl_act_item, PARAM_ID_MAX_UL_CAPACITY_KBPS, "maxUlCapacityKbps");
+    add_capacity_ran_parameter(ctrl_act_item, PARAM_ID_TOTAL_PRB_DL, "totalPrbDl");
+    add_capacity_ran_parameter(ctrl_act_item, PARAM_ID_TOTAL_PRB_UL, "totalPrbUl");
+    add_capacity_ran_parameter(ctrl_act_item, PARAM_ID_BANDWIDTH_MHZ, "bandwidthMhz");
+    add_capacity_ran_parameter(ctrl_act_item, PARAM_ID_NUM_PRBS, "numPrbs");
+    add_capacity_ran_parameter(ctrl_act_item, PARAM_ID_SUBCARRIER_SPACING, "subcarrierSpacing");
+
+    logger_info("Added vendor-specific capacity RAN Parameters (60001-60007) to RAN Function Definition");
+
     ASN_SEQUENCE_ADD(&ctrl_item->ric_ControlAction_List->list, ctrl_act_item);
 
     ASN_SEQUENCE_ADD(&ranfunc_def->ranFunctionDefinition_Control->ric_ControlStyle_List.list, ctrl_item);

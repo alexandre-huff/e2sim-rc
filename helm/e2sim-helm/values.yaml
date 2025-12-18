@@ -11,6 +11,13 @@ image:
     # Policies requesting PRBs exceeding these limits will receive RIC_CONTROL_FAILURE.
     totalPrbDl: 100
     totalPrbUl: 100
+    # Cell capacity parameters (advertised in RAN Function Definition to xApps)
+    # These values are used by xApps to convert throughput-based policies to PRB ratios
+    maxDlCapacityKbps: "2500000"    # ~2.5 Gbps DL peak capacity
+    maxUlCapacityKbps: "1000000"    # ~1 Gbps UL peak capacity
+    bandwidthMhz: "100"             # Cell bandwidth in MHz
+    numPrbs: "273"                  # Number of PRBs (273 for 100 MHz with 30 kHz SCS)
+    subcarrierSpacingKhz: "30"      # Subcarrier spacing in kHz
   command: e2sim-rc
   pullPolicy: Always
   repository: docker.io/zanattabruno/e2sim-rc

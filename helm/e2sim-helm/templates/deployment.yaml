@@ -28,7 +28,20 @@ spec:
               containerPort: 8080
               protocol: TCP
           command: ["{{ .Values.image.command }}"]
-          args: ["{{ .Values.image.args.e2term }}", "--mcc", "{{ .Values.image.args.mcc }}", "--mnc", "{{ .Values.image.args.mnc }}", "--nodebid", "{{ .Values.image.args.nodebid }}", "-p", "{{ .Values.image.args.port }}", "--total-prb-dl", "{{ .Values.image.args.totalPrbDl | default 100 }}", "--total-prb-ul", "{{ .Values.image.args.totalPrbUl | default 100 }}"]          
+          args: [
+            "{{ .Values.image.args.e2term }}",
+            "--mcc", "{{ .Values.image.args.mcc }}",
+            "--mnc", "{{ .Values.image.args.mnc }}",
+            "--nodebid", "{{ .Values.image.args.nodebid }}",
+            "-p", "{{ .Values.image.args.port }}",
+            "--total-prb-dl", "{{ .Values.image.args.totalPrbDl | default 100 }}",
+            "--total-prb-ul", "{{ .Values.image.args.totalPrbUl | default 100 }}",
+            "--max-dl-capacity", "{{ printf "%.0f" (float64 (.Values.image.args.maxDlCapacityKbps | default 2500000)) }}",
+            "--max-ul-capacity", "{{ printf "%.0f" (float64 (.Values.image.args.maxUlCapacityKbps | default 1000000)) }}",
+            "--bandwidth", "{{ .Values.image.args.bandwidthMhz | default 100 }}",
+            "--num-prbs", "{{ .Values.image.args.numPrbs | default 273 }}",
+            "--scs", "{{ .Values.image.args.subcarrierSpacingKhz | default 30 }}"
+          ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

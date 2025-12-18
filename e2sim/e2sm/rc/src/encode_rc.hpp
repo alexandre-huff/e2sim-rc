@@ -33,6 +33,7 @@ extern "C" {
     #include "RANFunctionDefinition-Control.h"
     #include "RANFunctionDefinition-Control-Item.h"
     #include "RANFunctionDefinition-Control-Action-Item.h"
+    #include "ControlAction-RANParameter-Item.h"
     #include "RIC-Format-Type.h"
     #include "E2SM-RC-IndicationMessage-Format5.h"
     #include "E2SM-RC-IndicationMessage-Format5-Item.h"
@@ -51,7 +52,21 @@ extern "C" {
 
 // void encode_kpm_bak(E2SM_KPM_IndicationMessage_t* indicationmessage);
 
+/**
+ * Encode E2SM-RC RAN Function Definition
+ * Includes vendor-specific capacity parameters (60001-60007) for PRB control
+ * @param ranfunc_def Output structure to populate
+ */
 void encode_rc_function_definition(E2SM_RC_RANFunctionDefinition_t* ranfunc_def);
+
+/**
+ * Add a vendor-specific capacity RAN Parameter to Control Action
+ * @param ctrl_act_item Control Action Item to add parameter to
+ * @param param_id RAN Parameter ID (60001-60007)
+ * @param param_name Human-readable parameter name
+ */
+void add_capacity_ran_parameter(RANFunctionDefinition_Control_Action_Item_t *ctrl_act_item,
+                                 long param_id, const char *param_name);
 
 void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIdentity_t *plmn_id, BIT_STRING_t *gnb_id);
 

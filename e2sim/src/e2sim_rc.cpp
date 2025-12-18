@@ -89,9 +89,18 @@ int main(int argc, char *argv[]) {
     node_capacity.total_prb_ul = cmd_args.total_prb_ul;
     node_capacity.allocated_prb_dl = 0;
     node_capacity.allocated_prb_ul = 0;
+    node_capacity.max_dl_capacity_kbps = cmd_args.max_dl_capacity_kbps;
+    node_capacity.max_ul_capacity_kbps = cmd_args.max_ul_capacity_kbps;
+    node_capacity.bandwidth_mhz = cmd_args.bandwidth_mhz;
+    node_capacity.num_prbs = cmd_args.num_prbs;
+    node_capacity.subcarrier_spacing_khz = cmd_args.subcarrier_spacing_khz;
 
     logger_force(LOGGER_INFO, "Starting E2 Simulator for E2SM-RC");
     logger_force(LOGGER_INFO, "PRB Capacity Limits - DL: %d%%, UL: %d%%", node_capacity.total_prb_dl, node_capacity.total_prb_ul);
+    logger_force(LOGGER_INFO, "Cell Configuration - BW: %ld MHz, PRBs: %ld, SCS: %ld kHz",
+                 node_capacity.bandwidth_mhz, node_capacity.num_prbs, node_capacity.subcarrier_spacing_khz);
+    logger_force(LOGGER_INFO, "Cell Capacity - DL: %ld kbps, UL: %ld kbps",
+                 node_capacity.max_dl_capacity_kbps, node_capacity.max_ul_capacity_kbps);
 
     init_prometheus(metrics);
     start_http_listener();
@@ -164,6 +173,12 @@ args_t parse_input_options(int argc, char *argv[]) {
     args.mnc = "01";
     args.total_prb_dl = 100;    // Default: no capacity limit (100%)
     args.total_prb_ul = 100;    // Default: no capacity limit (100%)
+    // Default cell capacity values (typical 100 MHz 5G NR cell)
+    args.max_dl_capacity_kbps = 2500000;    // ~2.5 Gbps DL peak
+    args.max_ul_capacity_kbps = 1000000;    // ~1 Gbps UL peak
+    args.bandwidth_mhz = 100;               // 100 MHz bandwidth
+    args.num_prbs = 273;                    // PRBs for 100 MHz with 30 kHz SCS
+    args.subcarrier_spacing_khz = 30;       // 30 kHz SCS
 
     static struct option long_options[] =
     {
@@ -177,6 +192,11 @@ args_t parse_input_options(int argc, char *argv[]) {
         {"simulation", required_argument, 0, 's'},
         {"total-prb-dl", required_argument, 0, 'd'},
         {"total-prb-ul", required_argument, 0, 'u'},
+        {"max-dl-capacity", required_argument, 0, 'D'},
+        {"max-ul-capacity", required_argument, 0, 'U'},
+        {"bandwidth", required_argument, 0, 'B'},
+        {"num-prbs", required_argument, 0, 'N'},
+        {"scs", required_argument, 0, 'S'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
     };
@@ -184,7 +204,7 @@ args_t parse_input_options(int argc, char *argv[]) {
     int c;
     while(1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "i:p:w:n:b:m:c:s:d:u:h", long_options, &option_index);
+        c = getopt_long(argc, argv, "i:p:w:n:b:m:c:s:d:u:D:U:B:N:S:h", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -224,6 +244,26 @@ args_t parse_input_options(int argc, char *argv[]) {
                 if (args.total_prb_ul < 0) args.total_prb_ul = 0;
                 if (args.total_prb_ul > 100) args.total_prb_ul = 100;
                 break;
+            case 'D':
+                args.max_dl_capacity_kbps = strtol(optarg, NULL, 10);
+                if (args.max_dl_capacity_kbps < 0) args.max_dl_capacity_kbps = 0;
+                break;
+            case 'U':
+                args.max_ul_capacity_kbps = strtol(optarg, NULL, 10);
+                if (args.max_ul_capacity_kbps < 0) args.max_ul_capacity_kbps = 0;
+                break;
+            case 'B':
+                args.bandwidth_mhz = strtol(optarg, NULL, 10);
+                if (args.bandwidth_mhz < 0) args.bandwidth_mhz = 0;
+                break;
+            case 'N':
+                args.num_prbs = strtol(optarg, NULL, 10);
+                if (args.num_prbs < 0) args.num_prbs = 0;
+                break;
+            case 'S':
+                args.subcarrier_spacing_khz = strtol(optarg, NULL, 10);
+                if (args.subcarrier_spacing_khz < 0) args.subcarrier_spacing_khz = 0;
+                break;
             case 'w':
                 args.report_wait = atoi(optarg);
                 if (args.num2send == UNLIMITED_MESSAGES) {
@@ -236,18 +276,23 @@ args_t parse_input_options(int argc, char *argv[]) {
                 fprintf(stderr,
                     "\nUsage: %s [options] e2term-address\n\n"
                     "Options:\n"
-                    "  -p  --port          E2Term SCTP port number\n"
-                    "  -n  --num2send      Number of messages to send\n"
-                    "  -i  --interval      Interval in milliseconds between sending each message to the RIC\n"
-                    "  -m  --mcc           gNodeB Mobile Country Code\n"
-                    "  -c  --mnc           gNodeB Mobile Network Code\n"
-                    "  -b  --nodebid       gNodeB Identity 0..2^29-1 (e.g. 15 or 0xF)\n"
-                    "  -d  --total-prb-dl  Total DL PRB capacity limit (0-100%%, default 100)\n"
-                    "  -u  --total-prb-ul  Total UL PRB capacity limit (0-100%%, default 100)\n"
-                    "  -w  --wait4report   Wait seconds for draining replies and generate the final report\n"
-                    "                      Requires --num2send argument\n"
-                    "  -s  --simulation    Simulation ID for prometheus reports (0..2^32-1)\n"
-                    "  -h  --help          Display this information and quit\n\n", argv[0]);
+                    "  -p  --port            E2Term SCTP port number\n"
+                    "  -n  --num2send        Number of messages to send\n"
+                    "  -i  --interval        Interval in milliseconds between sending each message to the RIC\n"
+                    "  -m  --mcc             gNodeB Mobile Country Code\n"
+                    "  -c  --mnc             gNodeB Mobile Network Code\n"
+                    "  -b  --nodebid         gNodeB Identity 0..2^29-1 (e.g. 15 or 0xF)\n"
+                    "  -d  --total-prb-dl    Total DL PRB capacity limit (0-100%%, default 100)\n"
+                    "  -u  --total-prb-ul    Total UL PRB capacity limit (0-100%%, default 100)\n"
+                    "  -D  --max-dl-capacity Maximum DL capacity in kbps (default 2500000)\n"
+                    "  -U  --max-ul-capacity Maximum UL capacity in kbps (default 1000000)\n"
+                    "  -B  --bandwidth       Cell bandwidth in MHz (default 100)\n"
+                    "  -N  --num-prbs        Number of PRBs (default 273)\n"
+                    "  -S  --scs             Subcarrier spacing in kHz (default 30)\n"
+                    "  -w  --wait4report     Wait seconds for draining replies and generate the final report\n"
+                    "                        Requires --num2send argument\n"
+                    "  -s  --simulation      Simulation ID for prometheus reports (0..2^32-1)\n"
+                    "  -h  --help            Display this information and quit\n\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
