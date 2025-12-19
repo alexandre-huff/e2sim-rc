@@ -20,7 +20,7 @@ find_package(cpprestsdk REQUIRED)
 
 add_executable( e2sim-rc e2sim_rc.cpp )
 
-target_link_libraries( e2sim-rc PRIVATE e2ap_asn1_objects
+target_link_libraries( e2sim-rc PRIVATE e2ap
                                         e2sm_rc_asn1_objects
                                         base_objects
                                         logger_objects

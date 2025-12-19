@@ -21,10 +21,11 @@
 #
 add_library( encoding_objects OBJECT encode_e2ap.cpp)
 
-target_link_libraries(encoding_objects PRIVATE e2ap_asn1_objects logger_objects)
+target_link_libraries(encoding_objects PRIVATE e2ap logger_objects)
 
 target_include_directories (encoding_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../ASN1c>
   $<INSTALL_INTERFACE:include>
   PRIVATE src )
 

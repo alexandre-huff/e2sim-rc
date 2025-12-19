@@ -24,7 +24,7 @@ add_library( messagerouting_objects OBJECT
          e2ap_asn1c_codec.c
 	 )
 
-target_link_libraries( messagerouting_objects PRIVATE logger_objects encoding_objects e2ap_asn1_objects sctp_objects def_objects )
+target_link_libraries( messagerouting_objects PRIVATE logger_objects encoding_objects e2ap sctp_objects def_objects )
 
 target_include_directories (messagerouting_objects PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

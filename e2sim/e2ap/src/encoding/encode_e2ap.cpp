@@ -39,6 +39,9 @@ extern "C" {
 #include "UnsuccessfulOutcome.h"
 #include "RICcontrolAcknowledge.h"
 #include "RICcontrolFailure.h"
+#include "RICQueryRequest.h"
+#include "RICQueryResponse.h"
+#include "RICQueryFailure.h"
 #include "GlobalE2node-ID.h"
 #include "GlobalE2node-gNB-ID.h"
 #include "GlobalgNB-ID.h"
@@ -1428,6 +1431,161 @@ void encoding::generate_e2ap_control_failure(E2AP_PDU_t *e2ap_pdu, long reqReque
   int ret_fail = asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf_fail, &errlen_fail);
   if (ret_fail != 0) {
     logger_error("E2AP_PDU (ControlFailure) check constraints failed. error length = %lu, error buf = %s", errlen_fail, error_buf_fail);
+  }
+
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
+  }
+}
+
+long encoding::get_function_id_from_query(E2AP_PDU_t *e2ap_pdu) {
+  logger_trace("in function %s", __func__);
+
+  RICQueryRequest_t orig_req =
+    e2ap_pdu->choice.initiatingMessage->value.choice.RICQueryRequest;
+
+  int count = orig_req.protocolIEs.list.count;
+  int size = orig_req.protocolIEs.list.size;
+
+  RICQueryRequest_IEs_t **ies = (RICQueryRequest_IEs_t**)orig_req.protocolIEs.list.array;
+
+  logger_debug("RICQueryRequest_IEs count = %d, size = %d", count, size);
+
+  RICQueryRequest_IEs__value_PR pres;
+
+  long func_id = 0;
+
+  for (int i=0; i < count; i++) {
+    RICQueryRequest_IEs_t *next_ie = ies[i];
+    pres = next_ie->value.present;
+
+    logger_debug("next present value %d", pres);
+
+    if (pres == RICQueryRequest_IEs__value_PR_RANfunctionID) {
+      func_id = next_ie->value.choice.RANfunctionID;
+      break;
+    }
+  }
+
+  logger_debug("After loop, query func_id is %ld", func_id);
+
+  return func_id;
+}
+
+void encoding::generate_e2ap_query_response(E2AP_PDU_t *e2ap_pdu, long reqRequestorId, long reqInstanceId,
+                                             long ranFunctionId, OCTET_STRING_t *queryOutcome) {
+  logger_trace("in function %s", __func__);
+
+  // RIC Request ID
+  RICQueryResponse_IEs_t *ricReqId =
+    (RICQueryResponse_IEs_t*)calloc(1, sizeof(RICQueryResponse_IEs_t));
+  ricReqId->id = ProtocolIE_ID_id_RICrequestID;
+  ricReqId->criticality = Criticality_reject;
+  ricReqId->value.present = RICQueryResponse_IEs__value_PR_RICrequestID;
+  ricReqId->value.choice.RICrequestID.ricRequestorID = reqRequestorId;
+  ricReqId->value.choice.RICrequestID.ricInstanceID = reqInstanceId;
+
+  // RAN Function ID
+  RICQueryResponse_IEs_t *funcId =
+    (RICQueryResponse_IEs_t*)calloc(1, sizeof(RICQueryResponse_IEs_t));
+  funcId->id = ProtocolIE_ID_id_RANfunctionID;
+  funcId->criticality = Criticality_reject;
+  funcId->value.present = RICQueryResponse_IEs__value_PR_RANfunctionID;
+  funcId->value.choice.RANfunctionID = ranFunctionId;
+
+  RICQueryResponse_t *ricQueryResp = (RICQueryResponse_t*)calloc(1, sizeof(RICQueryResponse_t));
+  ASN_SEQUENCE_ADD(&ricQueryResp->protocolIEs.list, ricReqId);
+  ASN_SEQUENCE_ADD(&ricQueryResp->protocolIEs.list, funcId);
+
+  // RIC Query Outcome (optional but we always include it)
+  if (queryOutcome != NULL) {
+    RICQueryResponse_IEs_t *outcome =
+      (RICQueryResponse_IEs_t*)calloc(1, sizeof(RICQueryResponse_IEs_t));
+    outcome->id = ProtocolIE_ID_id_RICqueryOutcome;
+    outcome->criticality = Criticality_reject;
+    outcome->value.present = RICQueryResponse_IEs__value_PR_RICqueryOutcome;
+    OCTET_STRING_fromBuf(&outcome->value.choice.RICqueryOutcome, (const char*)queryOutcome->buf, queryOutcome->size);
+    ASN_SEQUENCE_ADD(&ricQueryResp->protocolIEs.list, outcome);
+  }
+
+  SuccessfulOutcome_t *successoutcome = (SuccessfulOutcome_t*)calloc(1, sizeof(SuccessfulOutcome_t));
+  successoutcome->procedureCode = ProcedureCode_id_RICquery;
+  successoutcome->criticality = Criticality_reject;
+  successoutcome->value.present = SuccessfulOutcome__value_PR_RICQueryResponse;
+  successoutcome->value.choice.RICQueryResponse = *ricQueryResp;
+  if (ricQueryResp) free(ricQueryResp);
+
+  e2ap_pdu->present = E2AP_PDU_PR_successfulOutcome;
+  e2ap_pdu->choice.successfulOutcome = successoutcome;
+
+  char error_buf[300] = {0, };
+  size_t errlen = 0;
+
+  int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf, &errlen);
+  if (ret != 0) {
+    logger_error("E2AP_PDU (QueryResponse) check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+  }
+
+  if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+    xer_fprint(stderr, &asn_DEF_E2AP_PDU, e2ap_pdu);
+  }
+}
+
+void encoding::generate_e2ap_query_failure(E2AP_PDU_t *e2ap_pdu, long reqRequestorId, long reqInstanceId,
+                                            long ranFunctionId, Cause_t *cause) {
+  logger_trace("in function %s", __func__);
+
+  // RIC Request ID
+  RICQueryFailure_IEs_t *ricReqId =
+    (RICQueryFailure_IEs_t*)calloc(1, sizeof(RICQueryFailure_IEs_t));
+  ricReqId->id = ProtocolIE_ID_id_RICrequestID;
+  ricReqId->criticality = Criticality_reject;
+  ricReqId->value.present = RICQueryFailure_IEs__value_PR_RICrequestID;
+  ricReqId->value.choice.RICrequestID.ricRequestorID = reqRequestorId;
+  ricReqId->value.choice.RICrequestID.ricInstanceID = reqInstanceId;
+
+  // RAN Function ID
+  RICQueryFailure_IEs_t *funcId =
+    (RICQueryFailure_IEs_t*)calloc(1, sizeof(RICQueryFailure_IEs_t));
+  funcId->id = ProtocolIE_ID_id_RANfunctionID;
+  funcId->criticality = Criticality_reject;
+  funcId->value.present = RICQueryFailure_IEs__value_PR_RANfunctionID;
+  funcId->value.choice.RANfunctionID = ranFunctionId;
+
+  // Cause
+  RICQueryFailure_IEs_t *causeIe =
+    (RICQueryFailure_IEs_t*)calloc(1, sizeof(RICQueryFailure_IEs_t));
+  causeIe->id = ProtocolIE_ID_id_Cause;
+  causeIe->criticality = Criticality_ignore;
+  causeIe->value.present = RICQueryFailure_IEs__value_PR_Cause;
+  if (cause != NULL) {
+    causeIe->value.choice.Cause = *cause;
+  } else {
+    causeIe->value.choice.Cause.present = Cause_PR_ricRequest;
+    causeIe->value.choice.Cause.choice.ricRequest = CauseRICrequest_unspecified;
+  }
+
+  RICQueryFailure_t *ricQueryFail = (RICQueryFailure_t*)calloc(1, sizeof(RICQueryFailure_t));
+  ASN_SEQUENCE_ADD(&ricQueryFail->protocolIEs.list, ricReqId);
+  ASN_SEQUENCE_ADD(&ricQueryFail->protocolIEs.list, funcId);
+  ASN_SEQUENCE_ADD(&ricQueryFail->protocolIEs.list, causeIe);
+
+  UnsuccessfulOutcome_t *unsuccessoutcome = (UnsuccessfulOutcome_t*)calloc(1, sizeof(UnsuccessfulOutcome_t));
+  unsuccessoutcome->procedureCode = ProcedureCode_id_RICquery;
+  unsuccessoutcome->criticality = Criticality_reject;
+  unsuccessoutcome->value.present = UnsuccessfulOutcome__value_PR_RICQueryFailure;
+  unsuccessoutcome->value.choice.RICQueryFailure = *ricQueryFail;
+  if (ricQueryFail) free(ricQueryFail);
+
+  e2ap_pdu->present = E2AP_PDU_PR_unsuccessfulOutcome;
+  e2ap_pdu->choice.unsuccessfulOutcome = unsuccessoutcome;
+
+  char error_buf[300] = {0, };
+  size_t errlen = 0;
+
+  int ret = asn_check_constraints(&asn_DEF_E2AP_PDU, e2ap_pdu, error_buf, &errlen);
+  if (ret != 0) {
+    logger_error("E2AP_PDU (QueryFailure) check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
   }
 
   if (LOGGER_LEVEL >= LOGGER_DEBUG) {

@@ -322,6 +322,38 @@ void e2ap_handle_sctp_data(int &socket_fd, sctp_buffer_t &data, E2Sim *e2sim, st
     }
     break;
 
+  case ProcedureCode_id_RICquery:
+    switch (index) {
+      case E2AP_PDU_PR_initiatingMessage:
+      {
+        logger_info("[E2AP] Received RIC-QUERY-REQUEST");
+        long func_id = encoding::get_function_id_from_query(pdu);
+        logger_debug("Function Id of query message is %ld", func_id);
+        QueryCallback cb;
+
+        try {
+          cb = e2sim->get_query_callback(func_id);
+          logger_trace("Calling query callback function");
+          cb(pdu);
+        } catch (const std::out_of_range &e) {
+          logger_error("No RAN Function with ID %ld registered for Query", func_id);
+        }
+        break;
+      }
+      case E2AP_PDU_PR_successfulOutcome:
+        logger_info("[E2AP] Received RIC-QUERY-RESPONSE");
+        break;
+
+      case E2AP_PDU_PR_unsuccessfulOutcome:
+        logger_warn("[E2AP] Received RIC-QUERY-FAILURE");
+        break;
+
+      default:
+        logger_error("[E2AP] Invalid message index=%d for RIC-QUERY", index);
+        break;
+    }
+    break;
+
   default:
 
     logger_error("[E2AP] No available handler for procedureCode=%d", procedureCode);

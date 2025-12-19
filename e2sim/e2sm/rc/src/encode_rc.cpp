@@ -413,3 +413,180 @@ void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header, PLMNIde
 
     logger_trace("end of %s", __func__);
 }
+
+// Include for E2SM-RC Query Outcome encoding
+extern "C" {
+    #include "E2SM-RC-QueryOutcome.h"
+    #include "E2SM-RC-QueryOutcome-Format1.h"
+    #include "E2SM-RC-QueryOutcome-Format1-ItemCell.h"
+    #include "RANParameter-ValueType.h"
+    #include "RANParameter-Value.h"
+    #include "RANParameter-STRUCTURE.h"
+    #include "RANParameter-STRUCTURE-Item.h"
+    #include "RANParameter-Testing-Item.h"
+    #include "RANParameter-Testing-Item-Choice-ElementFalse.h"
+}
+
+#include "e2sim_rc.hpp"  // For node_capacity_t
+
+/**
+ * Helper function to add a RAN Parameter with INTEGER value to the Query Outcome
+ */
+static void add_ran_parameter_int(E2SM_RC_QueryOutcome_Format1_ItemCell_t *cell_item,
+                                   long param_id, long value) {
+    RANParameter_Testing_Item_t *param = (RANParameter_Testing_Item_t *) calloc(1, sizeof(RANParameter_Testing_Item_t));
+    if (!param) return;
+
+    param->ranParameter_ID = param_id;
+
+    // Set value type to Element (elementary value)
+    param->ranParameter_Type.present = RANParameter_Testing_Item__ranParameter_Type_PR_ranP_Choice_ElementFalse;
+    param->ranParameter_Type.choice.ranP_Choice_ElementFalse =
+        (RANParameter_Testing_Item_Choice_ElementFalse_t *) calloc(1, sizeof(RANParameter_Testing_Item_Choice_ElementFalse_t));
+
+    if (param->ranParameter_Type.choice.ranP_Choice_ElementFalse) {
+        param->ranParameter_Type.choice.ranP_Choice_ElementFalse->ranParameter_Value =
+            (RANParameter_Value_t *) calloc(1, sizeof(RANParameter_Value_t));
+
+        if (param->ranParameter_Type.choice.ranP_Choice_ElementFalse->ranParameter_Value) {
+            param->ranParameter_Type.choice.ranP_Choice_ElementFalse->ranParameter_Value->present = RANParameter_Value_PR_valueInt;
+            param->ranParameter_Type.choice.ranP_Choice_ElementFalse->ranParameter_Value->choice.valueInt = value;
+        }
+    }
+
+    ASN_SEQUENCE_ADD(&cell_item->ranP_List.list, param);
+}
+
+int encode_e2sm_rc_query_outcome_fmt1(OCTET_STRING_t *outcome_ostr, node_capacity_t *capacity,
+                                       PLMNIdentity_t *plmn_id, BIT_STRING_t *gnb_id) {
+    logger_trace("in %s function", __func__);
+
+    if (!outcome_ostr || !capacity) {
+        logger_error("Invalid arguments to encode_e2sm_rc_query_outcome_fmt1");
+        return -1;
+    }
+
+    E2SM_RC_QueryOutcome_t *outcome = (E2SM_RC_QueryOutcome_t *) calloc(1, sizeof(E2SM_RC_QueryOutcome_t));
+    if (!outcome) {
+        logger_error("Failed to allocate E2SM_RC_QueryOutcome");
+        return -1;
+    }
+
+    // Set to Format 1
+    outcome->ric_queryOutcome_formats.present = E2SM_RC_QueryOutcome__ric_queryOutcome_formats_PR_queryOutcome_Format1;
+    outcome->ric_queryOutcome_formats.choice.queryOutcome_Format1 =
+        (E2SM_RC_QueryOutcome_Format1_t *) calloc(1, sizeof(E2SM_RC_QueryOutcome_Format1_t));
+
+    if (!outcome->ric_queryOutcome_formats.choice.queryOutcome_Format1) {
+        logger_error("Failed to allocate E2SM_RC_QueryOutcome_Format1");
+        ASN_STRUCT_FREE(asn_DEF_E2SM_RC_QueryOutcome, outcome);
+        return -1;
+    }
+
+    E2SM_RC_QueryOutcome_Format1_t *fmt1 = outcome->ric_queryOutcome_formats.choice.queryOutcome_Format1;
+
+    // Create a cell item with NR-CGI and RAN parameters
+    E2SM_RC_QueryOutcome_Format1_ItemCell_t *cell_item =
+        (E2SM_RC_QueryOutcome_Format1_ItemCell_t *) calloc(1, sizeof(E2SM_RC_QueryOutcome_Format1_ItemCell_t));
+
+    if (!cell_item) {
+        logger_error("Failed to allocate E2SM_RC_QueryOutcome_Format1_ItemCell");
+        ASN_STRUCT_FREE(asn_DEF_E2SM_RC_QueryOutcome, outcome);
+        return -1;
+    }
+
+    // Set NR-CGI (NR Cell Global Identity) - new API uses pointers
+    cell_item->cellGlobal_ID.present = CGI_PR_nR_CGI;
+    cell_item->cellGlobal_ID.choice.nR_CGI = (struct NR_CGI *) calloc(1, sizeof(struct NR_CGI));
+
+    if (!cell_item->cellGlobal_ID.choice.nR_CGI) {
+        logger_error("Failed to allocate NR_CGI");
+        ASN_STRUCT_FREE(asn_DEF_E2SM_RC_QueryOutcome, outcome);
+        free(cell_item);
+        return -1;
+    }
+
+    struct NR_CGI *nr_cgi = cell_item->cellGlobal_ID.choice.nR_CGI;
+
+    if (plmn_id && plmn_id->buf) {
+        nr_cgi->pLMNIdentity.buf = (uint8_t *) calloc(plmn_id->size, sizeof(uint8_t));
+        memcpy(nr_cgi->pLMNIdentity.buf, plmn_id->buf, plmn_id->size);
+        nr_cgi->pLMNIdentity.size = plmn_id->size;
+    } else {
+        // Default PLMN (001-01)
+        nr_cgi->pLMNIdentity.buf = (uint8_t *) calloc(3, sizeof(uint8_t));
+        nr_cgi->pLMNIdentity.buf[0] = 0x00;
+        nr_cgi->pLMNIdentity.buf[1] = 0xF1;
+        nr_cgi->pLMNIdentity.buf[2] = 0x10;
+        nr_cgi->pLMNIdentity.size = 3;
+    }
+
+    // NR Cell Identity (36 bits)
+    nr_cgi->nRCellIdentity.buf = (uint8_t *) calloc(5, sizeof(uint8_t));
+    nr_cgi->nRCellIdentity.size = 5;
+    nr_cgi->nRCellIdentity.bits_unused = 4;
+    if (gnb_id && gnb_id->buf) {
+        // Copy gNB ID (29 bits) and add cell ID (7 bits)
+        memcpy(nr_cgi->nRCellIdentity.buf, gnb_id->buf, 4);
+        nr_cgi->nRCellIdentity.buf[4] = 0x00;  // Cell ID = 0
+    } else {
+        // Default cell ID
+        nr_cgi->nRCellIdentity.buf[0] = 0x00;
+        nr_cgi->nRCellIdentity.buf[1] = 0x00;
+        nr_cgi->nRCellIdentity.buf[2] = 0x00;
+        nr_cgi->nRCellIdentity.buf[3] = 0x08;  // gNB ID = 1
+        nr_cgi->nRCellIdentity.buf[4] = 0x00;
+    }
+
+    // Add RAN Parameters with actual values (IDs 60001-60007)
+    add_ran_parameter_int(cell_item, PARAM_ID_MAX_DL_CAPACITY_KBPS, capacity->max_dl_capacity_kbps);
+    add_ran_parameter_int(cell_item, PARAM_ID_MAX_UL_CAPACITY_KBPS, capacity->max_ul_capacity_kbps);
+    add_ran_parameter_int(cell_item, PARAM_ID_TOTAL_PRB_DL, capacity->total_prb_dl);
+    add_ran_parameter_int(cell_item, PARAM_ID_TOTAL_PRB_UL, capacity->total_prb_ul);
+    add_ran_parameter_int(cell_item, PARAM_ID_BANDWIDTH_MHZ, capacity->bandwidth_mhz);
+    add_ran_parameter_int(cell_item, PARAM_ID_NUM_PRBS, capacity->num_prbs);
+    add_ran_parameter_int(cell_item, PARAM_ID_SUBCARRIER_SPACING, capacity->subcarrier_spacing_khz);
+
+    // Add cell item to the list
+    ASN_SEQUENCE_ADD(&fmt1->cellInfo_List.list, cell_item);
+
+    logger_info("Encoded E2SM-RC Query Outcome Format 1 with capacity: DL=%ld kbps, UL=%ld kbps, BW=%ld MHz, PRBs=%ld",
+                capacity->max_dl_capacity_kbps, capacity->max_ul_capacity_kbps,
+                capacity->bandwidth_mhz, capacity->num_prbs);
+
+    // Check constraints
+    char error_buf[300] = {0, };
+    size_t errlen = 0;
+
+    int ret = asn_check_constraints(&asn_DEF_E2SM_RC_QueryOutcome, outcome, error_buf, &errlen);
+    if (ret != 0) {
+        logger_error("E2SM_RC_QueryOutcome check constraints failed. error length = %lu, error buf = %s", errlen, error_buf);
+        ASN_STRUCT_FREE(asn_DEF_E2SM_RC_QueryOutcome, outcome);
+        return -1;
+    }
+
+    if (LOGGER_LEVEL >= LOGGER_DEBUG) {
+        xer_fprint(stderr, &asn_DEF_E2SM_RC_QueryOutcome, outcome);
+    }
+
+    // Encode to OCTET_STRING using APER
+    uint8_t *buffer = NULL;
+    ssize_t encoded_size = aper_encode_to_new_buffer(&asn_DEF_E2SM_RC_QueryOutcome, NULL, outcome, (void **)&buffer);
+
+    if (encoded_size < 0 || !buffer) {
+        logger_error("Failed to APER encode E2SM_RC_QueryOutcome");
+        ASN_STRUCT_FREE(asn_DEF_E2SM_RC_QueryOutcome, outcome);
+        return -1;
+    }
+
+    // Copy to output OCTET_STRING
+    outcome_ostr->buf = buffer;
+    outcome_ostr->size = encoded_size;
+
+    logger_debug("E2SM-RC Query Outcome encoded to %zd bytes", encoded_size);
+
+    ASN_STRUCT_FREE(asn_DEF_E2SM_RC_QueryOutcome, outcome);
+
+    logger_trace("end of %s", __func__);
+    return 0;
+}

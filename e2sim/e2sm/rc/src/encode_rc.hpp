@@ -20,6 +20,8 @@
 #ifndef ENCODE_RC_HPP
 #define ENCODE_RC_HPP
 
+#include "e2sim_rc.hpp"
+
 extern "C" {
     #include "OCTET_STRING.h"
     #include "asn_application.h"
@@ -71,6 +73,19 @@ void add_capacity_ran_parameter(RANFunctionDefinition_Control_Action_Item_t *ctr
 void encode_rc_indication_message(E2SM_RC_IndicationMessage_t *ind_msg, PLMNIdentity_t *plmn_id, BIT_STRING_t *gnb_id);
 
 void encode_rc_indication_header(E2SM_RC_IndicationHeader_t *ind_header, PLMNIdentity_t *plmn_id);
+
+/**
+ * Encode E2SM-RC Query Outcome Format 1 with actual cell capacity values
+ * This provides runtime values that the RAN Function Definition only advertises as supported parameters
+ *
+ * @param outcome Output E2SM-RC Query Outcome structure to populate
+ * @param capacity Node capacity values to encode
+ * @param plmn_id PLMN Identity for NR-CGI
+ * @param gnb_id gNB ID for NR-CGI
+ * @return 0 on success, -1 on failure
+ */
+int encode_e2sm_rc_query_outcome_fmt1(OCTET_STRING_t *outcome_ostr, node_capacity_t *capacity,
+                                       PLMNIdentity_t *plmn_id, BIT_STRING_t *gnb_id);
 
 // void encode_kpm_report_style5(E2SM_KPM_IndicationMessage_t* indicationmessage);
 

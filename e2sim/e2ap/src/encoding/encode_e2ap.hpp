@@ -50,6 +50,8 @@ namespace encoding {
 
   long get_function_id_from_control(E2AP_PDU_t *e2ap_pdu);
 
+  long get_function_id_from_query(E2AP_PDU_t *e2ap_pdu);
+
   void generate_e2ap_setup_request_parameterized(E2AP_PDU_t *setup_req_pdu, const std::vector<ran_func_info>& all_funcs, PLMN_Identity_t *plmn_id, BIT_STRING_t *gnb_id);
 
   void generate_e2ap_setup_response(E2AP_PDU_t *setup_resp_pdu);
@@ -77,6 +79,10 @@ namespace encoding {
   void generate_e2ap_control_acknowledge(E2AP_PDU_t *e2ap_pdu, long reqRequestorId, long reqInstanceId, long ranFunctionId, OCTET_STRING_t *callProcessId);
 
   void generate_e2ap_control_failure(E2AP_PDU_t *e2ap_pdu, long reqRequestorId, long reqInstanceId, long ranFunctionId, OCTET_STRING_t *callProcessId, Cause_t *cause);
+
+  void generate_e2ap_query_response(E2AP_PDU_t *e2ap_pdu, long reqRequestorId, long reqInstanceId, long ranFunctionId, OCTET_STRING_t *queryOutcome);
+
+  void generate_e2ap_query_failure(E2AP_PDU_t *e2ap_pdu, long reqRequestorId, long reqInstanceId, long ranFunctionId, Cause_t *cause);
 
   PLMN_Identity_t *encodePlmnId(const char *mcc, const char *mnc);
 }

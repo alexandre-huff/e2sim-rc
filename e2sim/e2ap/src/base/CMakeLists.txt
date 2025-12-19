@@ -21,7 +21,7 @@
 
 add_library( base_objects OBJECT e2sim.cpp)
 
-target_link_libraries( base_objects PRIVATE e2ap_asn1_objects
+target_link_libraries( base_objects PRIVATE e2ap
                                             logger_objects
                                             def_objects
                                             sctp_objects

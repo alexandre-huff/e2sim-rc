@@ -56,4 +56,14 @@ void callback_rc_subscription_delete_request(E2AP_PDU_t *pdu, E2Sim *e2sim, vola
 
 void callback_rc_control_request(E2AP_PDU_t *pdu, struct timespec *recv_ts, unsigned long num2send, Histogram *histogram, Gauge *gauge, std::unordered_map<unsigned int, unsigned long> *sent_ts_map, std::unordered_map<unsigned int, unsigned long> *recv_ts_map, E2Sim *e2sim);
 
+/**
+ * Callback for E2SM-RC Query Request
+ * Returns actual cell capacity values that the xApp can use for PRB ratio computation
+ * This provides runtime values that the RAN Function Definition only advertises as supported parameters
+ *
+ * @param query_pdu The incoming RIC Query Request PDU
+ * @param e2sim E2Sim instance for sending the response
+ */
+void callback_rc_query_request(E2AP_PDU_t *query_pdu, E2Sim *e2sim);
+
 #endif

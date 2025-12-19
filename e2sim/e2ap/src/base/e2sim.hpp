@@ -42,6 +42,7 @@ typedef struct {
 typedef std::function<void(E2AP_PDU_t*)> SubscriptionCallback;
 typedef std::function<void(E2AP_PDU_t*)> SubscriptionDeleteCallback;
 typedef std::function<void(E2AP_PDU_t*, struct timespec*)> ControlCallback;
+typedef std::function<void(E2AP_PDU_t*)> QueryCallback;
 
 class E2Sim {
 
@@ -51,6 +52,7 @@ private:
   std::unordered_map<long, SubscriptionCallback> subscription_callbacks;
   std::unordered_map<long, SubscriptionDeleteCallback> subscription_delete_callbacks;
   std::unordered_map<long, ControlCallback> control_callbacks;
+  std::unordered_map<long, QueryCallback> query_callbacks;
   PLMN_Identity_t *plmn_id;
   BIT_STRING_t gnb_id;
 
@@ -94,6 +96,10 @@ public:
   void register_subscription_delete_callback(long func_id, SubscriptionDeleteCallback cb);
 
   void register_control_callback(long func_id, ControlCallback cb);
+
+  void register_query_callback(long func_id, QueryCallback cb);
+
+  QueryCallback get_query_callback(long func_id);
 
   void encode_and_send_sctp_data(E2AP_PDU_t* pdu, struct timespec *ts);
 

@@ -43,6 +43,7 @@ extern "C"
     #include "ProtocolIE-SingleContainer.h"
     #include "InitiatingMessage.h"
     #include "RICcontrolAckRequest.h"
+    #include "RICQueryRequest.h"
     #include "Cause.h"
 }
 
@@ -585,4 +586,122 @@ void callback_rc_control_request(E2AP_PDU_t *ctrl_req_pdu, struct timespec *recv
     }
 
     logger_trace("After Processing Control Request");
+}
+
+void callback_rc_query_request(E2AP_PDU_t *query_pdu, E2Sim *e2sim) {
+    logger_trace("Calling %s", __func__);
+
+    if (!query_pdu || !e2sim) {
+        logger_error("Invalid arguments to callback_rc_query_request");
+        return;
+    }
+
+    RICQueryRequest_t orig_req =
+        query_pdu->choice.initiatingMessage->value.choice.RICQueryRequest;
+
+    int count = orig_req.protocolIEs.list.count;
+    RICQueryRequest_IEs_t **ies = (RICQueryRequest_IEs_t **)orig_req.protocolIEs.list.array;
+
+    logger_debug("RICQueryRequest count=%d", count);
+
+    // Extract request identifiers
+    long reqRequestorId = -1;
+    long reqInstanceId = -1;
+    long ranFunctionId = -1;
+
+    for (int i = 0; i < count; i++) {
+        RICQueryRequest_IEs_t *next_ie = ies[i];
+        RICQueryRequest_IEs__value_PR pres = next_ie->value.present;
+
+        switch (pres) {
+            case RICQueryRequest_IEs__value_PR_RICrequestID:
+                reqRequestorId = next_ie->value.choice.RICrequestID.ricRequestorID;
+                reqInstanceId = next_ie->value.choice.RICrequestID.ricInstanceID;
+                logger_debug("RIC Request ID: requestor=%ld, instance=%ld", reqRequestorId, reqInstanceId);
+                break;
+
+            case RICQueryRequest_IEs__value_PR_RANfunctionID:
+                ranFunctionId = next_ie->value.choice.RANfunctionID;
+                logger_debug("RAN Function ID: %ld", ranFunctionId);
+                break;
+
+            case RICQueryRequest_IEs__value_PR_RICqueryHeader:
+                logger_debug("Received RIC Query Header (not decoded - using default parameters)");
+                break;
+
+            case RICQueryRequest_IEs__value_PR_RICqueryDefinition:
+                logger_debug("Received RIC Query Definition (requesting capacity parameters)");
+                break;
+
+            default:
+                logger_trace("Unknown IE present value: %d", pres);
+                break;
+        }
+    }
+
+    if (reqRequestorId < 0 || reqInstanceId < 0 || ranFunctionId < 0) {
+        logger_error("Missing required IEs in RIC Query Request");
+        return;
+    }
+
+    // Get node capacity and encode Query Outcome
+    node_capacity_t *capacity = get_node_capacity();
+    if (!capacity) {
+        logger_error("Failed to get node capacity");
+
+        // Send Query Failure
+        E2AP_PDU_t *fail_pdu = (E2AP_PDU_t *)calloc(1, sizeof(E2AP_PDU_t));
+        Cause_t cause;
+        cause.present = Cause_PR_ricRequest;
+        cause.choice.ricRequest = CauseRICrequest_unspecified;
+        encoding::generate_e2ap_query_failure(fail_pdu, reqRequestorId, reqInstanceId, ranFunctionId, &cause);
+        logger_warn("Sending RIC-QUERY-FAILURE: node capacity unavailable");
+        e2sim->encode_and_send_sctp_data(fail_pdu, NULL);
+        return;
+    }
+
+    // Get PLMN ID and gNB ID from e2sim
+    PLMN_Identity_t *plmn_id = e2sim->get_plmn_id_cpy();
+    BIT_STRING_t *gnb_id = e2sim->get_gnb_id_cpy();
+
+    // Encode Query Outcome with actual capacity values
+    OCTET_STRING_t query_outcome;
+    memset(&query_outcome, 0, sizeof(OCTET_STRING_t));
+
+    int ret = encode_e2sm_rc_query_outcome_fmt1(&query_outcome, capacity, plmn_id, gnb_id);
+
+    // Free the copies
+    ASN_STRUCT_FREE(asn_DEF_PLMN_Identity, plmn_id);
+    ASN_STRUCT_FREE(asn_DEF_BIT_STRING, gnb_id);
+
+    if (ret != 0) {
+        logger_error("Failed to encode E2SM-RC Query Outcome");
+
+        // Send Query Failure
+        E2AP_PDU_t *fail_pdu = (E2AP_PDU_t *)calloc(1, sizeof(E2AP_PDU_t));
+        Cause_t cause;
+        cause.present = Cause_PR_ricRequest;
+        cause.choice.ricRequest = CauseRICrequest_unspecified;
+        encoding::generate_e2ap_query_failure(fail_pdu, reqRequestorId, reqInstanceId, ranFunctionId, &cause);
+        logger_warn("Sending RIC-QUERY-FAILURE: encoding error");
+        e2sim->encode_and_send_sctp_data(fail_pdu, NULL);
+        return;
+    }
+
+    // Send Query Response with actual values
+    E2AP_PDU_t *resp_pdu = (E2AP_PDU_t *)calloc(1, sizeof(E2AP_PDU_t));
+    encoding::generate_e2ap_query_response(resp_pdu, reqRequestorId, reqInstanceId, ranFunctionId, &query_outcome);
+
+    logger_info("Sending RIC-QUERY-RESPONSE with actual capacity values: DL=%ld kbps, UL=%ld kbps, BW=%ld MHz, PRBs=%ld",
+                capacity->max_dl_capacity_kbps, capacity->max_ul_capacity_kbps,
+                capacity->bandwidth_mhz, capacity->num_prbs);
+
+    e2sim->encode_and_send_sctp_data(resp_pdu, NULL);
+
+    // Free the query outcome buffer
+    if (query_outcome.buf) {
+        free(query_outcome.buf);
+    }
+
+    logger_trace("After Processing Query Request");
 }

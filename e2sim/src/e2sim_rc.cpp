@@ -122,6 +122,9 @@ int main(int argc, char *argv[]) {
 
     ControlCallback control_request_cb = std::bind(&callback_rc_control_request, _1, _2, cmd_args.num2send, metrics.histogram, metrics.gauge, &sent_ts_map, &recv_ts_map, e2sim);
     e2sim->register_control_callback(1, control_request_cb);
+
+    QueryCallback query_request_cb = std::bind(&callback_rc_query_request, _1, e2sim);
+    e2sim->register_query_callback(1, query_request_cb);
     // TODO e2sim->register_e2ap_removal_callback...
 
     e2sim->run(cmd_args.server_ip.c_str(), cmd_args.server_port);

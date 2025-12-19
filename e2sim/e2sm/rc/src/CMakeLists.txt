@@ -17,7 +17,7 @@
 
 add_library( rc_objects OBJECT encode_rc.cpp decode_rc.cpp rc_callbacks.cpp )
 
-target_link_libraries( rc_objects PRIVATE e2ap_asn1_objects
+target_link_libraries( rc_objects PRIVATE e2ap
                                         e2sm_rc_asn1_objects
                                         logger_objects
                                         base_objects

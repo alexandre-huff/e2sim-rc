@@ -158,6 +158,23 @@ ControlCallback E2Sim::get_control_callback(long func_id) {
 
 }
 
+void E2Sim::register_query_callback(long func_id, QueryCallback cb) {
+  logger_debug("about to register callback for query for func id %ld", func_id);
+  query_callbacks[func_id] = cb;
+}
+
+QueryCallback E2Sim::get_query_callback(long func_id) {
+  logger_debug("we are getting the query callback for func id %ld", func_id);
+  QueryCallback cb;
+
+  try {
+    cb = query_callbacks.at(func_id);
+  } catch(const std::out_of_range& e) {
+    throw std::out_of_range("Function ID is not registered for Query");
+  }
+  return cb;
+}
+
 /*
   Return a copy of the PLMN Indentity.
   It is the caller responsibility to free the returned pointer.
